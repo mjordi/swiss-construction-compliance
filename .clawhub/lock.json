@@ -4,6 +4,10 @@
     "gifgrep": {
       "version": "1.0.1",
       "installedAt": 1770157226361
+    },
+    "vercel": {
+      "version": "1.0.1",
+      "installedAt": 1770198069240
     }
   }
 }
