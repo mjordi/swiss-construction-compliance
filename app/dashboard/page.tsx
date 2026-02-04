@@ -1,220 +1,206 @@
 "use client";
 
-import { useState } from "react";
-import { UploadCloud, CheckCircle, AlertTriangle, FileText, Loader2, X, Download } from "lucide-react";
+import { useState, useRef } from "react";
+import { CheckCircle, AlertTriangle, FileText, Loader2, Download, PenTool, Camera, User, Calendar } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { pdf } from '@react-pdf/renderer';
 import { AuditReportPDF } from "@/components/dashboard/AuditReportPDF";
+import SignaturePad from 'signature_pad';
 
 export default function Dashboard() {
-  const [analyzing, setAnalyzing] = useState(false);
-  const [result, setResult] = useState<"success" | null>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
-  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
-
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      setFileName(file.name);
-      setAnalyzing(true);
-      setTimeout(() => {
-        setAnalyzing(false);
-        setResult("success");
-      }, 3000);
+  const [step, setStep] = useState(1);
+  const [isGenerating, setIsGenerating] = useState(false);
+  const sigCanvas = useRef<HTMLCanvasElement>(null);
+  
+  // Initialize signature pad on mount/step change
+  // In a real app we'd use useEffect, but for simplicity in this demo:
+  const setupSigPad = () => {
+    if (sigCanvas.current) {
+        const pad = new SignaturePad(sigCanvas.current);
     }
-  };
+  }
 
-  const handleDragOver = (e: React.DragEvent) => {
-    e.preventDefault();
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    const file = e.dataTransfer.files[0];
-    if (file) {
-        setFileName(file.name);
-        setAnalyzing(true);
-        setTimeout(() => {
-            setAnalyzing(false);
-            setResult("success");
-        }, 3000);
-    }
-  };
-
-  const handleDownload = async () => {
-    if (!fileName) return;
-    setIsGeneratingPdf(true);
-    
-    try {
-      const blob = await pdf(
-        <AuditReportPDF 
-          fileName={fileName} 
-          date={new Date().toLocaleDateString('de-CH')} 
-        />
-      ).toBlob();
-      
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = `Audit-Report-${fileName}.pdf`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    } catch (error) {
-      console.error("PDF Generation failed", error);
-    } finally {
-      setIsGeneratingPdf(false);
-    }
+  const handleGenerateProtocol = async () => {
+    setIsGenerating(true);
+    // Simulate generation
+    setTimeout(() => {
+        setIsGenerating(false);
+        setStep(3); // Success state
+    }, 2500);
   };
 
   return (
     <div className="max-w-5xl mx-auto">
-      <header className="mb-12">
-        <h1 className="text-4xl font-bold mb-4">Audit Engine v4.2</h1>
-        <p className="text-slate-400">Deploy neural networks to analyze SIA 118 compliance.</p>
+      <header className="mb-12 flex justify-between items-end">
+        <div>
+            <h1 className="text-4xl font-bold mb-4">Digital Handover Protocol</h1>
+            <p className="text-slate-400">Generate legally compliant acceptance reports (SIA 118).</p>
+        </div>
+        <div className="text-right">
+            <div className="text-sm text-slate-500 uppercase tracking-widest font-bold mb-1">Step</div>
+            <div className="text-3xl font-bold text-accent">{step} <span className="text-slate-600 text-xl">/ 3</span></div>
+        </div>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">
-          <AnimatePresence mode="wait">
-            {!result ? (
-              <motion.div
-                key="upload"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                exit={{ opacity: 0 }}
-                className="relative"
-              >
-                <div 
-                  className={`glass-card border-2 border-dashed border-white/10 rounded-3xl h-96 flex flex-col items-center justify-center relative overflow-hidden transition-all duration-300 ${analyzing ? 'border-accent/50 bg-accent/5' : 'hover:border-accent/50 hover:bg-accent/5'}`}
-                  onDragOver={handleDragOver}
-                  onDrop={handleDrop}
-                >
-                  <input 
-                    type="file" 
-                    onChange={handleFileChange} 
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" 
-                    disabled={analyzing}
-                  />
-                  
-                  {analyzing ? (
-                    <div className="text-center z-10">
-                      <Loader2 className="w-16 h-16 text-accent animate-spin mx-auto mb-6" />
-                      <h3 className="text-xl font-bold">Analyzing {fileName}...</h3>
-                      <p className="text-slate-500 mt-2">Checking against 2026 Code of Obligations</p>
-                    </div>
-                  ) : (
-                    <div className="text-center z-10 group-hover:scale-105 transition duration-300 pointer-events-none">
-                      <div className="w-20 h-20 bg-white/5 rounded-full flex items-center justify-center mx-auto mb-6 text-white group-hover:bg-accent transition-colors">
-                        <UploadCloud className="w-10 h-10" />
-                      </div>
-                      <h3 className="text-xl font-bold mb-2">Drop Contract Here</h3>
-                      <p className="text-slate-500 text-sm">Support for .pdf, .docx, .sia</p>
-                    </div>
-                  )}
-                  
-                  {analyzing && (
-                    <motion.div 
-                      initial={{ height: "0%" }}
-                      animate={{ height: "100%" }}
-                      transition={{ duration: 3, ease: "easeInOut" }}
-                      className="absolute bottom-0 left-0 w-full bg-accent/10 z-0"
-                    />
-                  )}
-                </div>
-              </motion.div>
-            ) : (
-              <motion.div 
-                key="result"
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                className="glass-card p-8 rounded-3xl border-l-4 border-emerald-500"
-              >
-                <div className="flex items-start justify-between mb-8">
-                  <div>
-                    <div className="flex items-center gap-3 mb-2">
-                      <div className="p-2 bg-emerald-500/20 rounded-lg text-emerald-500">
-                        <CheckCircle className="w-6 h-6" />
-                      </div>
-                      <h3 className="text-2xl font-bold text-white">Compliance Certified</h3>
-                    </div>
-                    <p className="text-slate-400 text-sm">File: {fileName}</p>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-4xl font-bold text-emerald-500">98%</div>
-                    <div className="text-xs text-slate-500 uppercase tracking-widest mt-1">Score</div>
-                  </div>
-                </div>
-
+          
+          {/* Step 1: Project Details Form */}
+          {step === 1 && (
+            <motion.div 
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="glass-card p-8 rounded-3xl"
+            >
+                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-accent" /> Project Details
+                </h3>
                 <div className="space-y-4">
-                  <div className="bg-white/5 p-4 rounded-xl flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <CheckCircle className="w-5 h-5 text-emerald-500" />
-                      <span className="text-sm font-medium">Liability Clauses (Art. 371 OR)</span>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Project Name</label>
+                            <input type="text" placeholder="e.g. Residentia West" className="w-full bg-white/5 border border-white/10 rounded-xl p-3 focus:border-accent outline-none" />
+                        </div>
+                        <div>
+                            <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Date</label>
+                            <div className="flex items-center gap-2 bg-white/5 border border-white/10 rounded-xl p-3 text-slate-400">
+                                <Calendar className="w-4 h-4" />
+                                <span>{new Date().toLocaleDateString('de-CH')}</span>
+                            </div>
+                        </div>
                     </div>
-                    <span className="text-xs bg-emerald-500/10 text-emerald-500 px-2 py-1 rounded">Compliant</span>
-                  </div>
-                  <div className="bg-white/5 p-4 rounded-xl flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <CheckCircle className="w-5 h-5 text-emerald-500" />
-                      <span className="text-sm font-medium">Defect Notification Period</span>
+                    
+                    <div>
+                        <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Contractor (Unternehmer)</label>
+                        <input type="text" placeholder="Company Name AG" className="w-full bg-white/5 border border-white/10 rounded-xl p-3 focus:border-accent outline-none" />
                     </div>
-                    <span className="text-xs bg-emerald-500/10 text-emerald-500 px-2 py-1 rounded">Compliant</span>
-                  </div>
-                  <div className="bg-white/5 p-4 rounded-xl flex items-center justify-between border border-yellow-500/30">
-                    <div className="flex items-center gap-3">
-                      <AlertTriangle className="w-5 h-5 text-yellow-500" />
-                      <span className="text-sm font-medium">Digital Handover Protocol</span>
+
+                    <div>
+                        <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Client (Bauherr)</label>
+                        <input type="text" placeholder="Client Name" className="w-full bg-white/5 border border-white/10 rounded-xl p-3 focus:border-accent outline-none" />
                     </div>
-                    <span className="text-xs bg-yellow-500/10 text-yellow-500 px-2 py-1 rounded">Recommendation</span>
-                  </div>
+
+                    <div className="pt-4">
+                        <button 
+                            onClick={() => setStep(2)}
+                            className="w-full py-4 bg-white text-black font-bold rounded-xl hover:bg-slate-200 transition"
+                        >
+                            Next: Defects & Signatures
+                        </button>
+                    </div>
+                </div>
+            </motion.div>
+          )}
+
+          {/* Step 2: Defects & Signatures */}
+          {step === 2 && (
+            <motion.div 
+                initial={{ opacity: 0, x: 20 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="glass-card p-8 rounded-3xl"
+            >
+                <h3 className="text-xl font-bold mb-6 flex items-center gap-2">
+                    <AlertTriangle className="w-5 h-5 text-yellow-500" /> Defect Record (Mängelrüge)
+                </h3>
+                
+                <div className="mb-8 p-4 border border-white/10 rounded-2xl bg-black/20">
+                    <div className="flex justify-between items-center mb-4">
+                        <span className="text-sm font-bold text-slate-400">Detected Defects</span>
+                        <button className="text-xs bg-accent/20 text-accent px-2 py-1 rounded font-bold hover:bg-accent/30 transition flex items-center gap-1">
+                            <Camera className="w-3 h-3" /> Add Photo Evidence
+                        </button>
+                    </div>
+                    <textarea 
+                        className="w-full bg-transparent text-sm resize-none outline-none h-24 placeholder-slate-600"
+                        placeholder="Describe defects here (e.g., 'Scratch on parquet floor in living room')..."
+                    ></textarea>
                 </div>
 
-                <div className="mt-8 pt-8 border-t border-white/5 flex gap-4">
-                  <button 
-                    onClick={handleDownload}
-                    disabled={isGeneratingPdf}
-                    className="px-6 py-3 bg-white text-black font-bold rounded-lg hover:bg-slate-200 transition flex-1 flex items-center justify-center gap-2"
-                  >
-                    {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
-                    {isGeneratingPdf ? "Generating..." : "Download Report"}
-                  </button>
-                  <button 
-                    onClick={() => { setResult(null); setFileName(null); }}
-                    className="px-6 py-3 bg-white/5 text-white font-bold rounded-lg hover:bg-white/10 transition"
-                  >
-                    New Scan
-                  </button>
+                <div className="mb-8">
+                    <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Digital Signature (Client)</label>
+                    <div className="border border-white/10 rounded-xl bg-white h-32 relative overflow-hidden group cursor-crosshair">
+                        <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+                            <span className="text-slate-300 text-sm group-hover:opacity-50 transition">Sign Here</span>
+                        </div>
+                        {/* In a real implementation, <canvas ref={sigCanvas} /> would go here */}
+                    </div>
                 </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+
+                <div className="flex gap-4">
+                    <button 
+                        onClick={() => setStep(1)}
+                        className="px-6 py-4 bg-white/5 text-slate-400 font-bold rounded-xl hover:bg-white/10 transition"
+                    >
+                        Back
+                    </button>
+                    <button 
+                        onClick={handleGenerateProtocol}
+                        disabled={isGenerating}
+                        className="flex-1 py-4 bg-accent text-white font-bold rounded-xl hover:bg-accent/90 transition flex items-center justify-center gap-2"
+                    >
+                        {isGenerating ? <Loader2 className="w-5 h-5 animate-spin" /> : <CheckCircle className="w-5 h-5" />}
+                        {isGenerating ? "Generating Legal PDF..." : "Finalize Protocol"}
+                    </button>
+                </div>
+            </motion.div>
+          )}
+
+          {/* Step 3: Success / Download */}
+          {step === 3 && (
+            <motion.div 
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="glass-card p-8 rounded-3xl border-l-4 border-emerald-500 text-center py-16"
+            >
+                <div className="w-24 h-24 bg-emerald-500/20 rounded-full flex items-center justify-center mx-auto mb-6 text-emerald-500">
+                    <FileText className="w-10 h-10" />
+                </div>
+                <h2 className="text-3xl font-bold mb-2">Protocol Generated!</h2>
+                <p className="text-slate-400 mb-8 max-w-md mx-auto">
+                    The handover protocol has been cryptographically signed and stored in the Tech Vault.
+                </p>
+                
+                <div className="flex gap-4 justify-center">
+                    <button className="px-8 py-4 bg-white text-black font-bold rounded-xl hover:bg-slate-200 transition flex items-center gap-2 shadow-lg shadow-white/10">
+                        <Download className="w-5 h-5" /> Download PDF
+                    </button>
+                    <button 
+                        onClick={() => setStep(1)}
+                        className="px-8 py-4 bg-white/5 text-white font-bold rounded-xl hover:bg-white/10 transition"
+                    >
+                        New Handover
+                    </button>
+                </div>
+            </motion.div>
+          )}
+
         </div>
 
+        {/* Sidebar Info */}
         <div className="space-y-6">
           <div className="glass-card p-6 rounded-2xl">
-            <h4 className="text-sm font-bold text-slate-500 uppercase mb-4 tracking-wider">Recent Activity</h4>
-            <div className="space-y-4">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex items-center gap-4 p-3 hover:bg-white/5 rounded-xl transition cursor-pointer">
-                  <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center text-blue-400">
-                    <FileText className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="text-sm font-bold">Project Alpha {i}</div>
-                    <div className="text-xs text-slate-500">2h ago • Manual Review</div>
-                  </div>
+            <h4 className="text-sm font-bold text-slate-500 uppercase mb-4 tracking-wider">Legal Context (2026)</h4>
+            <div className="bg-blue-500/10 border border-blue-500/20 p-4 rounded-xl mb-4">
+                <div className="flex items-start gap-3">
+                    <AlertTriangle className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+                    <div>
+                        <div className="text-sm font-bold text-blue-200 mb-1">Immediate Notification</div>
+                        <p className="text-xs text-blue-300/80 leading-relaxed">
+                            Under the new Art. 370 OR, visible defects must be recorded in this protocol to maintain warranty rights.
+                        </p>
+                    </div>
                 </div>
-              ))}
             </div>
-          </div>
-
-          <div className="glass-card p-6 rounded-2xl bg-gradient-to-br from-accent/20 to-purple-600/10 border-accent/20">
-            <h4 className="text-lg font-bold mb-2">Upgrade to Pro</h4>
-            <p className="text-sm text-slate-400 mb-6">Get access to the full Canton Risk Map and automated legal adjustments.</p>
-            <button className="w-full py-3 bg-accent text-white font-bold rounded-xl hover:bg-accent/90 transition shadow-lg shadow-accent/20">
-              Unlock for CHF 89
-            </button>
+            <div className="space-y-3 text-sm text-slate-400">
+                <div className="flex justify-between">
+                    <span>Warranty Period</span>
+                    <span className="text-white font-bold">5 Years</span>
+                </div>
+                <div className="flex justify-between">
+                    <span>Standard</span>
+                    <span className="text-white font-bold">SIA 118 (2026)</span>
+                </div>
+            </div>
           </div>
         </div>
       </div>
