@@ -1,19 +1,21 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { Lock, Loader2 } from "lucide-react";
+import { useAuth } from "@/context/AuthContext";
 
 export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
-  const router = useRouter();
+  const [email, setEmail] = useState("demo@baucompliance.ch");
+  const { login } = useAuth();
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    
     // Simulate network delay
     setTimeout(() => {
-      router.push("/dashboard");
+      login(email);
     }, 1500);
   };
 
@@ -35,7 +37,8 @@ export default function Login() {
             <label className="block text-xs font-bold uppercase text-slate-500 mb-2">Work Email</label>
             <input 
               type="email" 
-              defaultValue="demo@baucompliance.ch"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
               className="w-full bg-black/20 border border-white/10 rounded-xl p-4 text-white placeholder-slate-500 focus:outline-none focus:border-accent transition"
             />
           </div>
