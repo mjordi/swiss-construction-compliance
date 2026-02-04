@@ -1,20 +1,22 @@
 "use client";
 
 import { useState } from "react";
-import { UploadCloud, CheckCircle, AlertTriangle, FileText, Loader2, X } from "lucide-react";
+import { UploadCloud, CheckCircle, AlertTriangle, FileText, Loader2, X, Download } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
+import { pdf } from '@react-pdf/renderer';
+import { AuditReportPDF } from "@/components/dashboard/AuditReportPDF";
 
 export default function Dashboard() {
   const [analyzing, setAnalyzing] = useState(false);
   const [result, setResult] = useState<"success" | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
+  const [isGeneratingPdf, setIsGeneratingPdf] = useState(false);
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       setFileName(file.name);
       setAnalyzing(true);
-      // Simulate analysis delay
       setTimeout(() => {
         setAnalyzing(false);
         setResult("success");
@@ -36,6 +38,32 @@ export default function Dashboard() {
             setAnalyzing(false);
             setResult("success");
         }, 3000);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!fileName) return;
+    setIsGeneratingPdf(true);
+    
+    try {
+      const blob = await pdf(
+        <AuditReportPDF 
+          fileName={fileName} 
+          date={new Date().toLocaleDateString('de-CH')} 
+        />
+      ).toBlob();
+      
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Audit-Report-${fileName}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    } catch (error) {
+      console.error("PDF Generation failed", error);
+    } finally {
+      setIsGeneratingPdf(false);
     }
   };
 
@@ -143,8 +171,13 @@ export default function Dashboard() {
                 </div>
 
                 <div className="mt-8 pt-8 border-t border-white/5 flex gap-4">
-                  <button className="px-6 py-3 bg-white text-black font-bold rounded-lg hover:bg-slate-200 transition flex-1">
-                    Download Report
+                  <button 
+                    onClick={handleDownload}
+                    disabled={isGeneratingPdf}
+                    className="px-6 py-3 bg-white text-black font-bold rounded-lg hover:bg-slate-200 transition flex-1 flex items-center justify-center gap-2"
+                  >
+                    {isGeneratingPdf ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                    {isGeneratingPdf ? "Generating..." : "Download Report"}
                   </button>
                   <button 
                     onClick={() => { setResult(null); setFileName(null); }}
