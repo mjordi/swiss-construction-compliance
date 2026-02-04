@@ -29,7 +29,7 @@ export default function Sidebar() {
           return (
             <Link
               key={item.href}
-              href="#"
+              href={item.href}
               className={clsx(
                 "flex items-center gap-4 px-6 py-4 rounded-xl transition font-medium",
                 isActive 
