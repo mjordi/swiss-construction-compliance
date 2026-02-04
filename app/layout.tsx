@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Outfit, Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+import { AuthProvider } from "@/context/AuthContext";
 
 const outfit = Outfit({
   variable: "--font-outfit",
@@ -28,8 +29,10 @@ export default function RootLayout({
         className={`${outfit.variable} ${jakarta.variable} antialiased`}
         style={{ fontFamily: "var(--font-jakarta)" }}
       >
-        <div className="blob" />
-        {children}
+        <AuthProvider>
+          <div className="blob" />
+          {children}
+        </AuthProvider>
       </body>
     </html>
   );
