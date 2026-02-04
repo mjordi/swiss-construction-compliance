@@ -3,11 +3,13 @@
 import { useState } from "react";
 import { Lock, Loader2 } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 
 export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
   const [email, setEmail] = useState("demo@baucompliance.ch");
   const { login } = useAuth();
+  const { t } = useLanguage();
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
@@ -28,7 +30,7 @@ export default function Login() {
           <div className="w-16 h-16 bg-accent/10 rounded-2xl flex items-center justify-center mx-auto mb-6">
             <Lock className="w-8 h-8 text-accent" />
           </div>
-          <h1 className="text-3xl font-bold mb-2">Welcome Back</h1>
+          <h1 className="text-3xl font-bold mb-2">{t("btn-login")}</h1>
           <p className="text-slate-400">Access your compliance dashboard</p>
         </div>
 
@@ -58,7 +60,7 @@ export default function Login() {
             {isLoading ? (
               <><Loader2 className="w-5 h-5 animate-spin" /> Authenticating...</>
             ) : (
-              "Secure Login"
+              t("btn-login")
             )}
           </button>
         </form>

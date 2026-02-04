@@ -1,0 +1,1 @@
+- **BauCompliance.ch (2026)**: Built a Next.js/Tailwind SaaS MVP for Swiss construction law compliance (2026 OR revision). Features: Digital Handover Protocol, PDF Generation, Canton Risk Map, Auth Context. Hosted on Vercel.
