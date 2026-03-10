@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import type { de } from "@/locales";
 
 const navItems = [
   { icon: FileText, label: "menu-audit", href: "/dashboard" },
@@ -43,7 +44,7 @@ export default function Sidebar() {
               )}
             >
               <item.icon className="w-5 h-5" />
-              {t(item.label as any)}
+              {t(item.label as keyof typeof de)}
             </Link>
           );
         })}
