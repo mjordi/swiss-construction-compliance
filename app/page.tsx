@@ -3,12 +3,55 @@
 import Link from "next/link";
 import { ArrowRight, ShieldCheck, FileText, Lock, Check, Zap, Building2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
+import Script from "next/script";
+
+const jsonLd = {
+  "@context": "https://schema.org",
+  "@type": "SoftwareApplication",
+  name: "BauCompliance.ch",
+  url: "https://baucompliance.ch",
+  description:
+    "Automatische Mängelrüge-Fristen nach OR Art. 370a. Digitale Abnahmeprotokolle und Risiko-Matrix für das Schweizer Baurecht 2026.",
+  applicationCategory: "BusinessApplication",
+  operatingSystem: "Web",
+  offers: [
+    {
+      "@type": "Offer",
+      name: "Starter",
+      price: "0",
+      priceCurrency: "CHF",
+    },
+    {
+      "@type": "Offer",
+      name: "Professional",
+      price: "89",
+      priceCurrency: "CHF",
+    },
+  ],
+  publisher: {
+    "@type": "Organization",
+    name: "BauCompliance.ch",
+    url: "https://baucompliance.ch",
+    address: {
+      "@type": "PostalAddress",
+      addressLocality: "Zürich",
+      addressCountry: "CH",
+    },
+  },
+  keywords:
+    "Mängelrüge Frist 2026, OR Revision Baurecht, Abnahmeprotokoll digital Schweiz, BauCompliance, OR Art. 370a",
+};
 
 export default function Home() {
   const { t, lang, setLanguage } = useLanguage();
 
   return (
     <div className="min-h-screen flex flex-col">
+      <Script
+        id="json-ld-software"
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       <header className="glass sticky top-0 z-50 px-8 py-5 flex justify-between items-center">
         <div className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 font-[family-name:var(--font-outfit)]">
           Bau<span className="text-accent">Compliance</span>
