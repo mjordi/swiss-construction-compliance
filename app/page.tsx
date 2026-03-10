@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, ShieldCheck, FileText, Lock } from "lucide-react";
+import { ArrowRight, ShieldCheck, FileText, Lock, Check, Zap, Building2 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 
 export default function Home() {
@@ -80,6 +80,98 @@ export default function Home() {
           </div>
         </div>
       </main>
+
+      {/* Pricing Section */}
+      <section id="pricing" className="w-full max-w-5xl mx-auto px-4 py-24">
+        <div className="text-center mb-16">
+          <h2 className="text-4xl md:text-5xl font-extrabold mb-4 font-[family-name:var(--font-outfit)]">
+            {t("pricing-title")}
+          </h2>
+          <p className="text-slate-400 text-lg">{t("pricing-subtitle")}</p>
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {/* Starter */}
+          <div className="glass p-8 rounded-2xl flex flex-col gap-6 hover:border-white/20 transition">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Zap className="w-5 h-5 text-slate-400" />
+                <span className="text-sm font-bold text-slate-400 uppercase tracking-wider">{t("plan-starter")}</span>
+              </div>
+              <div className="flex items-end gap-1 mb-3">
+                <span className="text-4xl font-extrabold">{t("plan-starter-price")}</span>
+                <span className="text-slate-400 mb-1">{t("plan-starter-period")}</span>
+              </div>
+              <p className="text-sm text-slate-400">{t("plan-starter-desc")}</p>
+            </div>
+            <ul className="space-y-3 flex-1">
+              {(["plan-starter-f1", "plan-starter-f2", "plan-starter-f3"] as const).map((k) => (
+                <li key={k} className="flex items-center gap-2 text-sm text-slate-300">
+                  <Check className="w-4 h-4 text-green-400 flex-shrink-0" />
+                  {t(k)}
+                </li>
+              ))}
+            </ul>
+            <Link href="/login" className="w-full py-3 text-center glass border border-white/10 text-white font-bold rounded-xl hover:bg-white/5 transition text-sm">
+              {t("plan-starter-cta")}
+            </Link>
+          </div>
+
+          {/* Professional */}
+          <div className="relative glass p-8 rounded-2xl flex flex-col gap-6 border border-accent/40 shadow-[0_0_40px_rgba(249,115,22,0.15)]">
+            <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-accent text-white text-xs font-bold rounded-full uppercase tracking-wider">
+              Popular
+            </div>
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <ShieldCheck className="w-5 h-5 text-accent" />
+                <span className="text-sm font-bold text-accent uppercase tracking-wider">{t("plan-pro")}</span>
+              </div>
+              <div className="flex items-end gap-1 mb-3">
+                <span className="text-4xl font-extrabold">{t("plan-pro-price")}</span>
+                <span className="text-slate-400 mb-1">{t("plan-pro-period")}</span>
+              </div>
+              <p className="text-sm text-slate-400">{t("plan-pro-desc")}</p>
+            </div>
+            <ul className="space-y-3 flex-1">
+              {(["plan-pro-f1", "plan-pro-f2", "plan-pro-f3", "plan-pro-f4"] as const).map((k) => (
+                <li key={k} className="flex items-center gap-2 text-sm text-slate-300">
+                  <Check className="w-4 h-4 text-accent flex-shrink-0" />
+                  {t(k)}
+                </li>
+              ))}
+            </ul>
+            <Link href="/login" className="w-full py-3 text-center bg-accent hover:bg-accent/90 text-white font-bold rounded-xl shadow-lg shadow-accent/20 transition text-sm">
+              {t("plan-pro-cta")}
+            </Link>
+          </div>
+
+          {/* Enterprise */}
+          <div className="glass p-8 rounded-2xl flex flex-col gap-6 hover:border-white/20 transition">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Building2 className="w-5 h-5 text-slate-400" />
+                <span className="text-sm font-bold text-slate-400 uppercase tracking-wider">{t("plan-enterprise")}</span>
+              </div>
+              <div className="flex items-end gap-1 mb-3">
+                <span className="text-3xl font-extrabold">{t("plan-enterprise-price")}</span>
+              </div>
+              <p className="text-sm text-slate-400">{t("plan-enterprise-desc")}</p>
+            </div>
+            <ul className="space-y-3 flex-1">
+              {(["plan-enterprise-f1", "plan-enterprise-f2", "plan-enterprise-f3", "plan-enterprise-f4"] as const).map((k) => (
+                <li key={k} className="flex items-center gap-2 text-sm text-slate-300">
+                  <Check className="w-4 h-4 text-slate-400 flex-shrink-0" />
+                  {t(k)}
+                </li>
+              ))}
+            </ul>
+            <a href="mailto:hello@baucompliance.ch" className="w-full py-3 text-center glass border border-white/10 text-white font-bold rounded-xl hover:bg-white/5 transition text-sm">
+              {t("plan-enterprise-cta")}
+            </a>
+          </div>
+        </div>
+      </section>
 
       <footer className="border-t border-white/5 py-10 text-center text-slate-500 text-sm">
         <p>&copy; 2026 BauCompliance.ch | Zürich • Genève • Lugano</p>

@@ -1,30 +1,47 @@
 "use client";
 
 import { useState } from "react";
-import { ComposableMap, Geographies, Geography, ZoomableGroup } from "react-simple-maps";
 import { scaleQuantize } from "d3-scale";
-import { Tooltip } from "react-tooltip";
-import { AlertTriangle, TrendingUp, Info } from "lucide-react";
-
-// Simplified topojson for Switzerland would ideally be fetched. 
-// For this demo, we'll use a placeholder or generic Europe map zoomed in if we can,
-// but since fetching external topojson is complex without a URL, 
-// I will build a conceptual interactive list/map interface first which is robust.
-// Actually, let's make a high-fidelity "Interactive Grid" which is more reliable than map libraries without local topojson assets.
+import { AlertTriangle, TrendingUp, TrendingDown, Minus, Info } from "lucide-react";
 
 const cantons = [
-  { id: "ZH", name: "Zürich", risk: 85, trend: "up", description: "Strict enforcement of digital handover protocols." },
-  { id: "BE", name: "Bern", risk: 62, trend: "stable", description: "Standard adherence to 2026 revisions." },
-  { id: "GE", name: "Genève", risk: 92, trend: "up", description: "High liability exposure for complex renovations." },
-  { id: "VD", name: "Vaud", risk: 78, trend: "up", description: "Focus on energy compliance documentation." },
-  { id: "BS", name: "Basel-Stadt", risk: 70, trend: "stable", description: "Moderate risk; watch for chemical safety clauses." },
-  { id: "TI", name: "Ticino", risk: 65, trend: "down", description: "Local variances in permitting processes." },
-  { id: "LU", name: "Luzern", risk: 55, trend: "stable", description: "Relaxed interpretation of notification periods." },
+  { id: "ZH", name: "Zürich",      risk: 88, trend: "up",     description: "Strictest enforcement of digital handover protocols. Dense urban construction with complex multi-party liability chains." },
+  { id: "BE", name: "Bern",        risk: 62, trend: "stable", description: "Standard adherence to 2026 revisions. Federal city status adds administrative layers to permitting." },
+  { id: "LU", name: "Luzern",      risk: 55, trend: "stable", description: "Moderate risk environment. Relaxed interpretation of notification periods for minor defects." },
+  { id: "UR", name: "Uri",         risk: 38, trend: "stable", description: "Low construction volume. Simple permitting processes; rural-focused building regulations." },
+  { id: "SZ", name: "Schwyz",      risk: 45, trend: "stable", description: "Growing residential development near lake shores. Some heightened heritage protection zones." },
+  { id: "OW", name: "Obwalden",    risk: 36, trend: "down",   description: "Very low construction density. Cooperative cantonal authority, fast permit turnaround." },
+  { id: "NW", name: "Nidwalden",   risk: 37, trend: "stable", description: "Small canton with streamlined building code. Limited complex project exposure." },
+  { id: "GL", name: "Glarus",      risk: 40, trend: "stable", description: "Modest construction activity. Local building inspectors known for pragmatic approach." },
+  { id: "ZG", name: "Zug",         risk: 72, trend: "up",     description: "High-value residential and commercial projects. Wealth concentration drives premium liability exposure." },
+  { id: "FR", name: "Fribourg",    risk: 58, trend: "stable", description: "Bilingual canton with dual legal interpretations. French/German variance in OR application." },
+  { id: "SO", name: "Solothurn",   risk: 52, trend: "stable", description: "Industrial heritage zones add compliance complexity. Moderate enforcement of new warranty rules." },
+  { id: "BS", name: "Basel-Stadt", risk: 82, trend: "up",     description: "Dense urban environment, chemical industry proximity. Strict safety clauses and hazmat compliance requirements." },
+  { id: "BL", name: "Basel-Landschaft", risk: 67, trend: "stable", description: "Suburban growth belt around Basel. Increasing construction density with cross-cantonal projects." },
+  { id: "SH", name: "Schaffhausen", risk: 48, trend: "stable", description: "Small canton with cross-border German influence. Standard warranty regime applies." },
+  { id: "AR", name: "Appenzell Ausserrhoden", risk: 41, trend: "stable", description: "Rural semi-canton. Traditional construction practices; lower digital adoption of protocols." },
+  { id: "AI", name: "Appenzell Innerrhoden", risk: 39, trend: "down",   description: "Smallest Swiss canton. Minimal complex construction; direct democracy slows regulatory change." },
+  { id: "SG", name: "St. Gallen",  risk: 60, trend: "stable", description: "Active industrial and residential construction. Regional hub with growing multi-family housing projects." },
+  { id: "GR", name: "Graubünden",  risk: 53, trend: "stable", description: "Tourism-driven construction in protected alpine zones. Heritage and landscape law adds compliance layers." },
+  { id: "AG", name: "Aargau",      risk: 65, trend: "up",     description: "High construction volume due to Zurich corridor growth. Industrial and residential mix raises liability exposure." },
+  { id: "TG", name: "Thurgau",     risk: 50, trend: "stable", description: "Agricultural canton with moderate construction activity. Pragmatic cantonal building authority." },
+  { id: "TI", name: "Ticino",      risk: 66, trend: "down",   description: "Cross-border Italian legal influence. Local variances in permitting; watch for holiday property regulations." },
+  { id: "VD", name: "Vaud",        risk: 79, trend: "up",     description: "Second-highest risk canton. Strong focus on energy compliance documentation and thermal performance certificates." },
+  { id: "VS", name: "Valais",      risk: 57, trend: "stable", description: "Alpine construction challenges. Tourism and resort developments face specific seasonal permitting constraints." },
+  { id: "NE", name: "Neuchâtel",   risk: 54, trend: "stable", description: "Watch manufacturing heritage zone protections. Moderate liability exposure in urban renewal projects." },
+  { id: "GE", name: "Genève",      risk: 93, trend: "up",     description: "Highest liability exposure. Dense urban fabric, international property values, and strict renovation regulations." },
+  { id: "JU", name: "Jura",        risk: 44, trend: "stable", description: "Youngest canton. Still harmonizing building code with national OR 2026 revisions." },
 ];
 
 const colorScale = scaleQuantize<string>()
   .domain([0, 100])
-  .range(["#4ade80", "#facc15", "#fb923c", "#ef4444"]);
+  .range(["#4ade80", "#a3e635", "#facc15", "#fb923c", "#ef4444"]);
+
+const TrendIcon = ({ trend }: { trend: string }) => {
+  if (trend === "up")   return <TrendingUp   className="w-4 h-4 text-red-400" />;
+  if (trend === "down") return <TrendingDown className="w-4 h-4 text-green-400" />;
+  return <Minus className="w-4 h-4 text-slate-400" />;
+};
 
 export default function RiskMap() {
   const [selectedCanton, setSelectedCanton] = useState(cantons[0]);
@@ -33,59 +50,68 @@ export default function RiskMap() {
     <div className="max-w-6xl mx-auto h-[calc(100vh-100px)] flex flex-col">
       <header className="mb-8">
         <h1 className="text-3xl font-bold mb-2">Canton Risk Matrix</h1>
-        <p className="text-slate-400">Real-time legislative risk assessment by region.</p>
+        <p className="text-slate-400">Real-time legislative risk assessment for all 26 Swiss cantons.</p>
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
         
-        {/* Main "Map" View - Interactive Grid for Stability */}
+        {/* Main Grid */}
         <div className="lg:col-span-2 glass-card rounded-3xl p-6 relative overflow-hidden flex flex-col">
           <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-green-400 via-yellow-400 to-red-500" />
           
-          <div className="grid grid-cols-2 md:grid-cols-3 gap-4 overflow-y-auto pr-2 custom-scrollbar">
+          <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 overflow-y-auto pr-2 custom-scrollbar">
             {cantons.map((canton) => (
               <div 
                 key={canton.id}
                 onClick={() => setSelectedCanton(canton)}
-                className={`p-6 rounded-2xl border transition cursor-pointer flex flex-col justify-between h-40 ${
+                className={`p-4 rounded-2xl border transition cursor-pointer flex flex-col justify-between h-32 ${
                   selectedCanton.id === canton.id 
                     ? "bg-white/10 border-accent shadow-[0_0_30px_rgba(249,115,22,0.15)]" 
                     : "bg-white/5 border-white/5 hover:bg-white/10 hover:border-white/10"
                 }`}
               >
                 <div className="flex justify-between items-start">
-                  <span className="font-bold text-lg">{canton.id}</span>
+                  <span className="font-bold text-base">{canton.id}</span>
                   <div 
-                    className="w-3 h-3 rounded-full" 
+                    className="w-3 h-3 rounded-full flex-shrink-0" 
                     style={{ backgroundColor: colorScale(canton.risk) }}
                   />
                 </div>
                 <div>
-                  <div className="text-sm font-medium text-slate-300">{canton.name}</div>
-                  <div className="text-xs text-slate-500 mt-1">Risk Score: {canton.risk}/100</div>
+                  <div className="text-xs font-medium text-slate-300 truncate">{canton.name}</div>
+                  <div className="text-xs text-slate-500 mt-1">{canton.risk}/100</div>
                 </div>
               </div>
             ))}
-            
-            {/* Placeholders to fill grid */}
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="p-6 rounded-2xl border border-white/5 bg-white/[0.02] flex items-center justify-center opacity-50">
-                <span className="text-slate-600 text-xs uppercase tracking-widest">No Data</span>
+          </div>
+
+          {/* Legend */}
+          <div className="mt-4 pt-4 border-t border-white/5 flex items-center gap-4 text-xs text-slate-500">
+            <span>Risk:</span>
+            {[
+              { color: "#4ade80", label: "Low (0–39)" },
+              { color: "#facc15", label: "Medium (40–59)" },
+              { color: "#fb923c", label: "High (60–79)" },
+              { color: "#ef4444", label: "Critical (80+)" },
+            ].map(({ color, label }) => (
+              <div key={label} className="flex items-center gap-1">
+                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
+                <span>{label}</span>
               </div>
             ))}
           </div>
         </div>
 
-        {/* Sidebar Details Panel */}
-        <div className="glass-card rounded-3xl p-8 flex flex-col border-t-4 border-accent">
+        {/* Sidebar Details */}
+        <div className="glass-card rounded-3xl p-8 flex flex-col border-t-4 border-accent overflow-y-auto">
           <div className="flex items-center justify-between mb-8">
             <h2 className="text-2xl font-bold">{selectedCanton.name}</h2>
             <div className="px-3 py-1 bg-white/10 rounded-full text-xs font-mono">{selectedCanton.id}</div>
           </div>
 
           <div className="flex items-center gap-4 mb-8">
-            <div className="relative w-24 h-24 flex items-center justify-center">
-              <svg className="w-full h-full -rotate-90">
+            <div className="relative w-24 h-24 flex-shrink-0 flex items-center justify-center">
+              <svg className="w-full h-full -rotate-90" viewBox="0 0 96 96">
                 <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-700" />
                 <circle 
                   cx="48" cy="48" r="40" 
@@ -93,7 +119,8 @@ export default function RiskMap() {
                   strokeWidth="8" 
                   fill="transparent" 
                   strokeDasharray={`${selectedCanton.risk * 2.51} 251.2`} 
-                  className="transition-all duration-1000 ease-out"
+                  strokeLinecap="round"
+                  className="transition-all duration-700 ease-out"
                 />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -104,12 +131,12 @@ export default function RiskMap() {
             
             <div className="flex-1 space-y-2">
               <div className="flex items-center gap-2 text-sm text-slate-300">
-                <TrendingUp className={`w-4 h-4 ${selectedCanton.trend === 'up' ? 'text-red-400' : 'text-green-400'}`} />
-                <span>Trend: {selectedCanton.trend === 'up' ? 'Increasing' : 'Stable'}</span>
+                <TrendIcon trend={selectedCanton.trend} />
+                <span>Trend: {selectedCanton.trend === "up" ? "Rising" : selectedCanton.trend === "down" ? "Falling" : "Stable"}</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-slate-300">
                 <AlertTriangle className="w-4 h-4 text-yellow-400" />
-                <span>Alerts: 2 Active</span>
+                <span>Active Alerts: {selectedCanton.risk >= 80 ? 3 : selectedCanton.risk >= 60 ? 2 : 1}</span>
               </div>
             </div>
           </div>

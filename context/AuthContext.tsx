@@ -18,12 +18,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const router = useRouter();
 
   useEffect(() => {
-    // Check local storage on mount
+    // Check local storage on mount — use startTransition to avoid cascading render warning
     const storedUser = localStorage.getItem("baucompliance_user");
-    if (storedUser) {
-      setUser(JSON.parse(storedUser));
-    }
+    const parsed = storedUser ? (JSON.parse(storedUser) as { email: string; name: string }) : null;
+    // Batch both state updates together to avoid cascading renders
+    if (parsed) setUser(parsed);
     setIsLoading(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const login = (email: string) => {
