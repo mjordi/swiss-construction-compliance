@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, ShieldCheck, FileText, Lock, Check, Zap, Building2 } from "lucide-react";
+import { ArrowRight, ShieldCheck, FileText, Lock, Check, Zap, Building2, Users, AlertTriangle, Calculator } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import Script from "next/script";
 
@@ -19,6 +19,12 @@ const jsonLd = {
       "@type": "Offer",
       name: "Starter",
       price: "0",
+      priceCurrency: "CHF",
+    },
+    {
+      "@type": "Offer",
+      name: "Team",
+      price: "29",
       priceCurrency: "CHF",
     },
     {
@@ -101,12 +107,12 @@ export default function Home() {
           <Link href="/login" className="px-8 py-4 bg-accent text-white rounded-full font-bold text-lg hover:bg-accent/90 transition shadow-[0_10px_30px_rgba(249,115,22,0.4)] flex items-center justify-center gap-2">
             {t("btn-secure")} <ArrowRight className="w-5 h-5" />
           </Link>
-          <button className="px-8 py-4 glass text-white rounded-full font-bold text-lg hover:bg-white/5 transition">
+          <Link href="/tools/ruegefrist-rechner" className="px-8 py-4 glass text-white rounded-full font-bold text-lg hover:bg-white/5 transition text-center">
             {t("btn-law")}
-          </button>
+          </Link>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-32 max-w-5xl w-full text-left">
+        <div id="features" className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-32 max-w-5xl w-full text-left">
           <div className="glass p-8 rounded-2xl hover:border-accent/50 transition group">
             <FileText className="w-10 h-10 text-accent mb-4 group-hover:scale-110 transition" />
             <h3 className="text-xl font-bold mb-2">{t("feat-handover-title")}</h3>
@@ -125,6 +131,55 @@ export default function Home() {
         </div>
       </main>
 
+      {/* What's at stake */}
+      <section className="w-full max-w-5xl mx-auto px-4 py-24">
+        <div className="text-center mb-12">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-red-500/10 border border-red-500/20 text-red-400 text-xs font-bold mb-6 uppercase tracking-wider">
+            <AlertTriangle className="w-3 h-3" />
+            {t("stakes-title")}
+          </div>
+          <p className="text-lg text-slate-400 max-w-2xl mx-auto">{t("stakes-desc")}</p>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          {([
+            { value: "stakes-stat1-value", unit: "stakes-stat1-unit", label: "stakes-stat1-label" },
+            { value: "stakes-stat2-value", unit: "stakes-stat2-unit", label: "stakes-stat2-label" },
+            { value: "stakes-stat3-value", unit: "stakes-stat3-unit", label: "stakes-stat3-label" },
+          ] as const).map((stat) => (
+            <div key={stat.label} className="glass p-8 rounded-2xl text-center">
+              <div className="text-5xl font-extrabold text-white font-[family-name:var(--font-outfit)]">
+                {t(stat.value)}{" "}
+                {t(stat.unit) && <span className="text-2xl text-accent">{t(stat.unit)}</span>}
+              </div>
+              <p className="text-slate-400 text-sm mt-3">{t(stat.label)}</p>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* Free calculator promo */}
+      <section className="w-full max-w-5xl mx-auto px-4 pb-24">
+        <div className="glass rounded-2xl p-8 md:p-12 border border-accent/20 flex flex-col md:flex-row items-center gap-8">
+          <div className="flex-shrink-0">
+            <div className="w-16 h-16 rounded-2xl bg-accent/10 flex items-center justify-center">
+              <Calculator className="w-8 h-8 text-accent" />
+            </div>
+          </div>
+          <div className="flex-1 text-center md:text-left">
+            <h3 className="text-2xl font-bold mb-2">{t("calc-promo-title")}</h3>
+            <p className="text-slate-400">{t("calc-promo-desc")}</p>
+          </div>
+          <Link href="/tools/ruegefrist-rechner" className="px-8 py-4 bg-accent text-white rounded-full font-bold hover:bg-accent/90 transition shadow-[0_10px_30px_rgba(249,115,22,0.3)] flex items-center gap-2 whitespace-nowrap">
+            {t("calc-promo-cta")} <ArrowRight className="w-5 h-5" />
+          </Link>
+        </div>
+      </section>
+
+      {/* Social proof */}
+      <section className="w-full max-w-3xl mx-auto px-4 pb-16 text-center">
+        <p className="text-slate-500 text-sm">{t("social-proof")}</p>
+      </section>
+
       {/* Pricing Section */}
       <section id="pricing" className="w-full max-w-5xl mx-auto px-4 py-24">
         <div className="text-center mb-16">
@@ -134,7 +189,7 @@ export default function Home() {
           <p className="text-slate-400 text-lg">{t("pricing-subtitle")}</p>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
           {/* Starter */}
           <div className="glass p-8 rounded-2xl flex flex-col gap-6 hover:border-white/20 transition">
             <div>
@@ -161,10 +216,36 @@ export default function Home() {
             </Link>
           </div>
 
+          {/* Team */}
+          <div className="glass p-8 rounded-2xl flex flex-col gap-6 hover:border-white/20 transition">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <Users className="w-5 h-5 text-slate-400" />
+                <span className="text-sm font-bold text-slate-400 uppercase tracking-wider">{t("plan-team")}</span>
+              </div>
+              <div className="flex items-end gap-1 mb-3">
+                <span className="text-4xl font-extrabold">{t("plan-team-price")}</span>
+                <span className="text-slate-400 mb-1">{t("plan-team-period")}</span>
+              </div>
+              <p className="text-sm text-slate-400">{t("plan-team-desc")}</p>
+            </div>
+            <ul className="space-y-3 flex-1">
+              {(["plan-team-f1", "plan-team-f2", "plan-team-f3", "plan-team-f4"] as const).map((k) => (
+                <li key={k} className="flex items-center gap-2 text-sm text-slate-300">
+                  <Check className="w-4 h-4 text-green-400 flex-shrink-0" />
+                  {t(k)}
+                </li>
+              ))}
+            </ul>
+            <Link href="/login" className="w-full py-3 text-center glass border border-white/10 text-white font-bold rounded-xl hover:bg-white/5 transition text-sm">
+              {t("plan-team-cta")}
+            </Link>
+          </div>
+
           {/* Professional */}
           <div className="relative glass p-8 rounded-2xl flex flex-col gap-6 border border-accent/40 shadow-[0_0_40px_rgba(249,115,22,0.15)]">
             <div className="absolute -top-3 left-1/2 -translate-x-1/2 px-4 py-1 bg-accent text-white text-xs font-bold rounded-full uppercase tracking-wider">
-              Popular
+              {t("pricing-popular")}
             </div>
             <div>
               <div className="flex items-center gap-2 mb-2">
@@ -218,7 +299,11 @@ export default function Home() {
       </section>
 
       <footer className="border-t border-white/5 py-10 text-center text-slate-500 text-sm">
-        <p>&copy; 2026 BauCompliance.ch | Zürich • Genève • Lugano</p>
+        <p>&copy; 2026 BauCompliance.ch | Zürich &bull; Genève &bull; Lugano</p>
+        <div className="flex justify-center gap-6 mt-4">
+          <a href="/impressum" className="hover:text-white transition">{t("footer-impressum")}</a>
+          <a href="/datenschutz" className="hover:text-white transition">{t("footer-datenschutz")}</a>
+        </div>
       </footer>
     </div>
   );

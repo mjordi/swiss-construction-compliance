@@ -14,7 +14,7 @@ describe("locales", () => {
 
   it("no locale has empty string values (except intentionally empty period fields)", () => {
     // Some keys are intentionally empty (e.g. plan-enterprise-period has no billing period)
-    const allowEmpty = new Set(["plan-enterprise-period"]);
+    const allowEmpty = new Set(["plan-enterprise-period", "stakes-stat3-unit"]);
     for (const [lang, translations] of Object.entries(locales)) {
       for (const [key, value] of Object.entries(translations)) {
         if (allowEmpty.has(key)) continue;
