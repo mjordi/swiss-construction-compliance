@@ -179,10 +179,10 @@ export default function DeadlinesPage() {
   return (
     <div className="max-w-4xl mx-auto">
       {/* Header */}
-      <div className="mb-10">
-        <div className="flex items-center gap-3 mb-3">
-          <Clock className="w-7 h-7 text-accent" />
-          <h1 className="text-3xl font-[family-name:var(--font-display)] italic text-cream">
+      <div className="mb-8">
+        <div className="flex items-center gap-2.5 mb-2">
+          <Clock className="w-6 h-6 text-accent" />
+          <h1 className="text-2xl font-[family-name:var(--font-display)] italic text-cream">
             {t("deadlines-title")}
           </h1>
         </div>

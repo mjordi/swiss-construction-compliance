@@ -16,9 +16,9 @@ export default function DashboardLayout({
       {/* Top accent line */}
       <div className="h-[2px] bg-gradient-to-r from-accent via-accent/40 to-transparent" />
 
-      {/* Header — matches home page */}
+      {/* Header */}
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#0a0f1c]/80 border-b border-white/[0.04]">
-        <div className="px-6 md:px-10 py-4 flex justify-between items-center">
+        <div className="px-6 py-3.5 flex justify-between items-center">
           <Link href="/" className="flex items-center gap-3">
             <div className="w-8 h-8 rounded bg-accent/10 border border-accent/20 flex items-center justify-center">
               <div className="w-3 h-3 rounded-sm bg-accent" />
@@ -34,7 +34,7 @@ export default function DashboardLayout({
                 <button
                   key={l}
                   onClick={() => setLanguage(l)}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide transition-all duration-300 ${
+                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide transition-all duration-200 ${
                     lang === l
                       ? "bg-accent/15 text-accent"
                       : "text-muted hover:text-cream"
@@ -48,11 +48,11 @@ export default function DashboardLayout({
         </div>
       </header>
 
-      {/* Body: sidebar + content */}
+      {/* Body */}
       <div className="flex flex-1">
         <Sidebar />
-        <main className="flex-1 min-w-0 p-10 relative overflow-hidden">
-          <div className="absolute top-0 left-0 w-full h-[400px] bg-gradient-to-b from-accent/[0.03] to-transparent pointer-events-none" />
+        <main className="flex-1 min-w-0 px-8 py-8 relative overflow-hidden">
+          <div className="absolute top-0 left-0 w-full h-[300px] bg-gradient-to-b from-accent/[0.02] to-transparent pointer-events-none" />
           <div className="relative">{children}</div>
         </main>
       </div>

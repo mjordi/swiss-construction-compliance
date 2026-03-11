@@ -14,10 +14,10 @@ export default function TechVault() {
   const [activeTab, setActiveTab] = useState("projects");
 
   return (
-    <div className="max-w-6xl mx-auto h-[calc(100vh-137px)] flex flex-col">
-      <header className="mb-8 flex justify-between items-end">
+    <div className="max-w-6xl mx-auto h-[calc(100vh-125px)] flex flex-col">
+      <header className="mb-6 flex justify-between items-end">
         <div>
-          <h1 className="text-3xl font-[family-name:var(--font-display)] italic text-cream mb-2">Technical Vault</h1>
+          <h1 className="text-2xl font-[family-name:var(--font-display)] italic text-cream mb-1.5">Technical Vault</h1>
           <p className="text-muted text-sm">Secure, compliant storage for 2026 mandated documentation.</p>
         </div>
         <button className="bg-white/[0.04] hover:bg-white/[0.06] text-cream px-4 py-2.5 rounded-lg flex items-center gap-2 transition-all duration-300 text-[13px] font-semibold border border-white/[0.06]">

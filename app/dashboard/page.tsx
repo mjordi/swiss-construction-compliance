@@ -79,17 +79,17 @@ export default function Dashboard() {
 
   return (
     <div className="max-w-5xl mx-auto">
-      <header className="mb-12 flex justify-between items-end">
+      <header className="mb-8 flex justify-between items-end">
         <div>
-          <h1 className="text-4xl font-[family-name:var(--font-display)] italic text-cream mb-3">
+          <h1 className="text-2xl font-[family-name:var(--font-display)] italic text-cream mb-1.5">
             {t("wizard-title")}
           </h1>
           <p className="text-muted text-sm">{t("wizard-subtitle")}</p>
         </div>
         <div className="text-right">
-          <div className="text-[11px] text-muted uppercase tracking-[0.12em] font-semibold mb-1">{t("step")}</div>
-          <div className="text-3xl font-[family-name:var(--font-display)] italic text-accent">
-            {step} <span className="text-muted/40 text-xl">/ 3</span>
+          <div className="text-[10px] text-muted uppercase tracking-[0.12em] font-semibold mb-1">{t("step")}</div>
+          <div className="text-2xl font-[family-name:var(--font-display)] italic text-accent">
+            {step} <span className="text-muted/40 text-base">/ 3</span>
           </div>
         </div>
       </header>
