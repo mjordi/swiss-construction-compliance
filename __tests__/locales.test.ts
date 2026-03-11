@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { de, fr, it as itLocale, rm, en } from "../locales/index";
+import { de, fr, it as itLocale, en } from "../locales/index";
 
-const locales = { de, fr, it: itLocale, rm, en };
+const locales = { de, fr, it: itLocale, en };
 const referenceKeys = Object.keys(de).sort();
 
 describe("locales", () => {

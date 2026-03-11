@@ -104,7 +104,7 @@ export default function Home() {
             </nav>
 
             <div className="flex bg-white/[0.03] border border-white/[0.06] rounded-lg p-0.5">
-              {(['de', 'fr', 'it', 'rm', 'en'] as const).map((l) => (
+              {(['de', 'fr', 'it', 'en'] as const).map((l) => (
                 <button
                   key={l}
                   onClick={() => setLanguage(l)}
