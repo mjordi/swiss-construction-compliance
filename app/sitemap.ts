@@ -5,11 +5,6 @@ const BASE_URL = "https://baucompliance.ch";
 const staticRoutes = [
   { path: "/", priority: 1.0, changeFreq: "weekly" as const },
   { path: "/login", priority: 0.8, changeFreq: "monthly" as const },
-  { path: "/dashboard", priority: 0.7, changeFreq: "weekly" as const },
-  { path: "/dashboard/risk", priority: 0.7, changeFreq: "weekly" as const },
-  { path: "/dashboard/vault", priority: 0.6, changeFreq: "monthly" as const },
-  { path: "/dashboard/settings", priority: 0.5, changeFreq: "monthly" as const },
-  { path: "/dashboard/deadlines", priority: 0.9, changeFreq: "weekly" as const },
 ];
 
 const languages = ["de", "fr", "it", "rm", "en"];
