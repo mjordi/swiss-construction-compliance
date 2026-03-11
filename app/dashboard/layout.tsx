@@ -53,7 +53,7 @@ export default function DashboardLayout({
         <Sidebar />
         <main className="flex-1 min-w-0 px-8 py-8 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-[300px] bg-gradient-to-b from-accent/[0.02] to-transparent pointer-events-none" />
-          <div className="relative">{children}</div>
+          <div className="relative max-w-6xl">{children}</div>
         </main>
       </div>
     </div>

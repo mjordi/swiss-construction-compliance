@@ -47,7 +47,7 @@ export default function RiskMap() {
   const [selectedCanton, setSelectedCanton] = useState(cantons[0]);
 
   return (
-    <div className="max-w-6xl mx-auto h-[calc(100vh-125px)] flex flex-col">
+    <div className="h-[calc(100vh-125px)] flex flex-col">
       <header className="mb-6">
         <h1 className="text-2xl font-[family-name:var(--font-display)] italic text-cream mb-1.5">Canton Risk Matrix</h1>
         <p className="text-muted text-sm">Real-time legislative risk assessment for all 26 Swiss cantons.</p>

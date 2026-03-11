@@ -78,7 +78,7 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="max-w-5xl mx-auto">
+    <div>
       <header className="mb-8 flex justify-between items-end">
         <div>
           <h1 className="text-2xl font-[family-name:var(--font-display)] italic text-cream mb-1.5">

@@ -4,7 +4,7 @@ import { User, Bell, Shield, CreditCard, LogOut } from "lucide-react";
 
 export default function Settings() {
   return (
-    <div className="max-w-4xl mx-auto">
+    <div>
       <header className="mb-6">
         <h1 className="text-2xl font-[family-name:var(--font-display)] italic text-cream mb-1.5">Account Settings</h1>
         <p className="text-muted text-sm">Manage your subscription and preferences.</p>

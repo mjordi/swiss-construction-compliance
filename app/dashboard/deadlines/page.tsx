@@ -177,7 +177,7 @@ export default function DeadlinesPage() {
   const maxDays = 1825;
 
   return (
-    <div className="max-w-4xl mx-auto">
+    <div>
       {/* Header */}
       <div className="mb-8">
         <div className="flex items-center gap-2.5 mb-2">
