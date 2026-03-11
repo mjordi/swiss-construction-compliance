@@ -145,54 +145,53 @@ export default function DeadlinesPage() {
 
   const statusConfig = {
     ok: {
-      bg: "bg-green-500/10 border-green-500/30",
+      bg: "bg-green-500/[0.06] border-green-500/20",
       text: "text-green-400",
       bar: "bg-green-500",
       icon: CheckCircle,
       label: t("deadlines-status-ok"),
     },
     warning: {
-      bg: "bg-yellow-500/10 border-yellow-500/30",
+      bg: "bg-yellow-500/[0.06] border-yellow-500/20",
       text: "text-yellow-400",
       bar: "bg-yellow-500",
       icon: AlertTriangle,
       label: t("deadlines-status-warning"),
     },
     urgent: {
-      bg: "bg-red-500/10 border-red-500/30",
+      bg: "bg-red-500/[0.06] border-red-500/20",
       text: "text-red-400",
       bar: "bg-red-500",
       icon: AlertTriangle,
       label: t("deadlines-status-urgent"),
     },
     expired: {
-      bg: "bg-slate-500/10 border-slate-500/30",
-      text: "text-slate-400",
-      bar: "bg-slate-500",
+      bg: "bg-white/[0.02] border-white/[0.06]",
+      text: "text-muted",
+      bar: "bg-muted",
       icon: XCircle,
       label: t("deadlines-expired"),
     },
   };
 
-  // Timeline bar: max 5 years = 1825 days
   const maxDays = 1825;
 
   return (
-    <div className="max-w-3xl mx-auto p-8">
+    <div>
       {/* Header */}
-      <div className="mb-10">
-        <div className="flex items-center gap-3 mb-3">
-          <Clock className="w-8 h-8 text-accent" />
-          <h1 className="text-3xl font-extrabold font-[family-name:var(--font-outfit)]">
+      <div className="mb-8">
+        <div className="flex items-center gap-2.5 mb-2">
+          <Clock className="w-6 h-6 text-accent" />
+          <h1 className="text-2xl font-[family-name:var(--font-display)] italic text-cream">
             {t("deadlines-title")}
           </h1>
         </div>
-        <p className="text-slate-400 text-sm">{t("deadlines-subtitle")}</p>
+        <p className="text-muted text-sm">{t("deadlines-subtitle")}</p>
       </div>
 
       {/* Input form */}
-      <div className="glass p-6 rounded-2xl mb-8">
-        <label className="block text-sm font-medium text-slate-300 mb-2">
+      <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05] mb-8">
+        <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-2">
           {t("deadlines-input-label")}
         </label>
         <div className="flex gap-4 flex-col sm:flex-row">
@@ -200,12 +199,12 @@ export default function DeadlinesPage() {
             type="date"
             value={acceptanceDate}
             onChange={(e) => setAcceptanceDate(e.target.value)}
-            className="flex-1 bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-accent/50 transition [color-scheme:dark]"
+            className="flex-1 bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-3 text-cream focus:outline-none focus:border-accent/40 transition-colors duration-300 [color-scheme:dark]"
           />
           <button
             onClick={calculate}
             disabled={!acceptanceDate}
-            className="px-6 py-3 bg-accent hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold rounded-xl transition flex items-center gap-2"
+            className="px-6 py-3 bg-accent hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors duration-300 flex items-center gap-2"
           >
             <Clock className="w-4 h-4" />
             {t("deadlines-calculate")}
@@ -213,7 +212,7 @@ export default function DeadlinesPage() {
           {deadlines && (
             <button
               onClick={reset}
-              className="px-4 py-3 glass border border-white/10 text-slate-400 hover:text-white font-medium rounded-xl transition flex items-center gap-2"
+              className="px-4 py-3 bg-white/[0.03] border border-white/[0.06] text-muted hover:text-cream font-medium rounded-lg transition-all duration-300 flex items-center gap-2"
             >
               <RotateCcw className="w-4 h-4" />
               {t("deadlines-reset")}
@@ -226,10 +225,10 @@ export default function DeadlinesPage() {
       {deadlines && (
         <div className="space-y-5">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-bold">{t("deadlines-result-title")}</h2>
+            <h2 className="text-lg font-semibold text-cream">{t("deadlines-result-title")}</h2>
             <button
               onClick={downloadICS}
-              className="flex items-center gap-2 px-4 py-2 glass border border-white/10 hover:border-accent/40 text-slate-300 hover:text-accent text-sm font-medium rounded-xl transition"
+              className="flex items-center gap-2 px-4 py-2 bg-white/[0.03] border border-white/[0.06] hover:border-accent/30 text-muted hover:text-accent text-[13px] font-medium rounded-lg transition-all duration-300"
             >
               <Download className="w-4 h-4" />
               {t("deadlines-download-ics")}
@@ -237,12 +236,10 @@ export default function DeadlinesPage() {
           </div>
 
           {/* Timeline visualization */}
-          <div className="glass p-5 rounded-2xl mb-6 relative overflow-hidden">
-            <div className="text-xs text-slate-500 mb-4 font-medium uppercase tracking-wider">Zeitleiste</div>
+          <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/[0.05] mb-6 relative overflow-hidden">
+            <div className="text-[11px] text-muted uppercase tracking-[0.12em] font-semibold mb-4">Zeitleiste</div>
             <div className="relative">
-              {/* Base track */}
-              <div className="w-full h-2 bg-white/10 rounded-full mb-1" />
-              {/* Colored segments */}
+              <div className="w-full h-1.5 bg-white/[0.04] rounded-full mb-1" />
               {deadlines.map((d, i) => {
                 const pct = Math.min(
                   100,
@@ -251,16 +248,16 @@ export default function DeadlinesPage() {
                 const cfg = statusConfig[d.status];
                 return (
                   <div key={i} className="flex items-center gap-3 mt-4">
-                    <div className="w-32 text-xs text-slate-400 text-right">{formatDate(d.date)}</div>
+                    <div className="w-32 text-[12px] text-muted text-right">{formatDate(d.date)}</div>
                     <div className="flex-1 relative">
-                      <div className="w-full h-2 bg-white/10 rounded-full overflow-hidden">
+                      <div className="w-full h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
                         <div
                           className={`h-full rounded-full ${cfg.bar} transition-all duration-700`}
                           style={{ width: `${100 - pct}%` }}
                         />
                       </div>
                     </div>
-                    <div className={`w-20 text-xs font-bold ${cfg.text} text-right`}>
+                    <div className={`w-20 text-[12px] font-semibold ${cfg.text} text-right`}>
                       {d.daysRemaining < 0
                         ? t("deadlines-expired")
                         : `${d.daysRemaining}d`}
@@ -276,29 +273,29 @@ export default function DeadlinesPage() {
             const cfg = statusConfig[d.status];
             const Icon = cfg.icon;
             return (
-              <div key={i} className={`glass border p-6 rounded-2xl ${cfg.bg} transition`}>
+              <div key={i} className={`border p-6 rounded-2xl bg-white/[0.02] ${cfg.bg} transition-all duration-300`}>
                 <div className="flex items-start justify-between gap-4">
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <Icon className={`w-5 h-5 ${cfg.text}`} />
-                      <span className="font-bold text-base">{t(d.titleKey as Parameters<typeof t>[0])}</span>
-                      <span className={`text-xs font-bold px-2 py-0.5 rounded-full bg-current/10 ${cfg.text}`}>
+                      <span className="font-semibold text-cream">{t(d.titleKey as Parameters<typeof t>[0])}</span>
+                      <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${cfg.text} bg-current/[0.06]`}>
                         {cfg.label}
                       </span>
                     </div>
-                    <p className="text-sm text-slate-400 mb-3">
+                    <p className="text-sm text-muted mb-3">
                       {t(d.descKey as Parameters<typeof t>[0])}
                     </p>
                     <div className="flex items-center gap-2 text-sm">
-                      <span className="text-slate-500">{t("deadlines-deadline-date")}:</span>
-                      <span className="font-semibold text-white">{formatDate(d.date)}</span>
+                      <span className="text-muted/60">{t("deadlines-deadline-date")}:</span>
+                      <span className="font-semibold text-cream">{formatDate(d.date)}</span>
                     </div>
                   </div>
                   <div className={`text-right ${cfg.text}`}>
-                    <div className="text-3xl font-extrabold">
+                    <div className="text-3xl font-[family-name:var(--font-display)] italic">
                       {d.daysRemaining < 0 ? "—" : d.daysRemaining}
                     </div>
-                    <div className="text-xs text-slate-400">
+                    <div className="text-[11px] text-muted">
                       {d.daysRemaining < 0 ? t("deadlines-expired") : t("deadlines-days-remaining")}
                     </div>
                   </div>

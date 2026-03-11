@@ -21,16 +21,32 @@ export default function Sidebar() {
   const { user, logout } = useAuth();
   const { t } = useLanguage();
 
-  return (
-    <aside className="w-72 bg-card/30 backdrop-blur-xl border-r border-white/5 flex flex-col fixed h-full left-0 top-0 z-40">
-      <div className="p-8">
-        <div className="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 font-[family-name:var(--font-outfit)]">
-          Bau<span className="text-accent">Compliance</span>
-        </div>
-        {user && <div className="text-xs text-slate-500 mt-2 font-medium">{t("menu-logged-in")} {user.name}</div>}
-      </div>
+  const initials = user?.name
+    ? user.name
+        .split(" ")
+        .map((n) => n[0])
+        .join("")
+        .toUpperCase()
+    : "?";
 
-      <nav className="flex-1 px-4 space-y-2">
+  return (
+    <aside className="w-56 shrink-0 bg-white/[0.01] border-r border-white/[0.04] flex flex-col sticky top-[59px] h-[calc(100vh-59px)]">
+      {/* User */}
+      {user && (
+        <div className="px-5 pt-5 pb-4 border-b border-white/[0.04]">
+          <div className="flex items-center gap-3">
+            <div className="w-8 h-8 rounded-lg bg-accent/[0.08] border border-accent/15 flex items-center justify-center text-[11px] font-semibold text-accent">
+              {initials}
+            </div>
+            <div className="min-w-0">
+              <div className="text-[13px] font-medium text-cream truncate">{user.name}</div>
+              <div className="text-[10px] text-muted/60 truncate">{user.email}</div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <nav className="flex-1 px-3 py-3 space-y-0.5">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           return (
@@ -38,25 +54,25 @@ export default function Sidebar() {
               key={item.href}
               href={item.href}
               className={clsx(
-                "flex items-center gap-4 px-6 py-4 rounded-xl transition font-medium",
-                isActive 
-                  ? "bg-accent/10 text-accent" 
-                  : "text-slate-400 hover:text-white hover:bg-white/5"
+                "flex items-center gap-3 px-3 py-2 rounded-lg transition-all duration-200 text-[13px] font-medium",
+                isActive
+                  ? "bg-accent/[0.08] text-accent"
+                  : "text-muted hover:text-cream hover:bg-white/[0.03]"
               )}
             >
-              <item.icon className="w-5 h-5" />
+              <item.icon className="w-4 h-4 shrink-0" />
               {t(item.label as keyof typeof de)}
             </Link>
           );
         })}
       </nav>
 
-      <div className="p-8 border-t border-white/5">
-        <button 
+      <div className="px-5 py-4 border-t border-white/[0.04]">
+        <button
           onClick={logout}
-          className="flex items-center gap-4 text-slate-500 hover:text-red-400 transition text-sm font-medium w-full"
+          className="flex items-center gap-3 text-muted hover:text-red-400 transition-colors duration-200 text-[13px] font-medium w-full"
         >
-          <LogOut className="w-5 h-5" />
+          <LogOut className="w-4 h-4" />
           {t("menu-logout")}
         </button>
       </div>
