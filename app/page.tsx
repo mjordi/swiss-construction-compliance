@@ -59,6 +59,7 @@ export default function Home() {
         <div className="flex gap-6 items-center">
           <nav className="hidden md:flex gap-6 text-sm font-medium text-slate-400">
             <a href="#features" className="hover:text-white transition">{t("nav-home")}</a>
+            <Link href="/tools/ruegefrist-rechner" className="hover:text-white transition">{t("nav-tools")}</Link>
             <a href="#pricing" className="hover:text-white transition">{t("nav-pricing")}</a>
           </nav>
           
