@@ -183,7 +183,7 @@ export default function DeadlinesPage() {
       <div className="mb-10">
         <div className="flex items-center gap-3 mb-3">
           <Clock className="w-8 h-8 text-accent" />
-          <h1 className="text-3xl font-extrabold font-[family-name:var(--font-outfit)]">
+          <h1 className="text-3xl font-extrabold font-[family-name:var(--font-display)]">
             {t("deadlines-title")}
           </h1>
         </div>

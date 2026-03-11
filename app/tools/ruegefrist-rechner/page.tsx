@@ -14,7 +14,7 @@ export default function RuegefristRechnerPage() {
       <header className="glass sticky top-0 z-50 px-8 py-5 flex justify-between items-center">
         <Link
           href="/"
-          className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 font-[family-name:var(--font-outfit)]"
+          className="text-2xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 font-[family-name:var(--font-display)]"
         >
           Bau<span className="text-accent">Compliance</span>
         </Link>
@@ -59,7 +59,7 @@ export default function RuegefristRechnerPage() {
             <Scale className="w-3 h-3" />
             {t("calc-badge")}
           </div>
-          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4 font-[family-name:var(--font-outfit)] bg-clip-text text-transparent bg-gradient-to-b from-white to-slate-500">
+          <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4 font-[family-name:var(--font-display)] bg-clip-text text-transparent bg-gradient-to-b from-white to-slate-500">
             {t("calc-title")}
           </h1>
           <p className="text-lg text-slate-400 max-w-xl mx-auto">

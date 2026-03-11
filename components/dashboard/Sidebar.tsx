@@ -24,7 +24,7 @@ export default function Sidebar() {
   return (
     <aside className="w-72 bg-card/30 backdrop-blur-xl border-r border-white/5 flex flex-col fixed h-full left-0 top-0 z-40">
       <div className="p-8">
-        <div className="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 font-[family-name:var(--font-outfit)]">
+        <div className="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 font-[family-name:var(--font-display)]">
           Bau<span className="text-accent">Compliance</span>
         </div>
         {user && <div className="text-xs text-slate-500 mt-2 font-medium">{t("menu-logged-in")} {user.name}</div>}

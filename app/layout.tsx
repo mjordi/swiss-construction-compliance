@@ -1,16 +1,17 @@
 import type { Metadata } from "next";
-import { Outfit, Plus_Jakarta_Sans } from "next/font/google";
+import { Instrument_Serif, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 
-const outfit = Outfit({
-  variable: "--font-outfit",
+const instrumentSerif = Instrument_Serif({
+  variable: "--font-display",
   subsets: ["latin"],
+  weight: "400",
 });
 
-const jakarta = Plus_Jakarta_Sans({
-  variable: "--font-jakarta",
+const dmSans = DM_Sans({
+  variable: "--font-body",
   subsets: ["latin"],
 });
 
@@ -99,12 +100,11 @@ export default function RootLayout({
   return (
     <html lang="de">
       <body
-        className={`${outfit.variable} ${jakarta.variable} antialiased`}
-        style={{ fontFamily: "var(--font-jakarta)" }}
+        className={`${instrumentSerif.variable} ${dmSans.variable} antialiased`}
+        style={{ fontFamily: "var(--font-body)" }}
       >
         <LanguageProvider>
           <AuthProvider>
-            <div className="blob" />
             {children}
           </AuthProvider>
         </LanguageProvider>
