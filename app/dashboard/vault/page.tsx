@@ -14,7 +14,7 @@ export default function TechVault() {
   const [activeTab, setActiveTab] = useState("projects");
 
   return (
-    <div className="max-w-6xl mx-auto h-[calc(100vh-100px)] flex flex-col">
+    <div className="max-w-6xl mx-auto h-[calc(100vh-137px)] flex flex-col">
       <header className="mb-8 flex justify-between items-end">
         <div>
           <h1 className="text-3xl font-[family-name:var(--font-display)] italic text-cream mb-2">Technical Vault</h1>

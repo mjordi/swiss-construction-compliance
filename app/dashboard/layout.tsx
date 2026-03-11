@@ -51,7 +51,7 @@ export default function DashboardLayout({
       {/* Body: sidebar + content */}
       <div className="flex flex-1">
         <Sidebar />
-        <main className="flex-1 ml-64 p-10 relative overflow-hidden">
+        <main className="flex-1 min-w-0 p-10 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-[400px] bg-gradient-to-b from-accent/[0.03] to-transparent pointer-events-none" />
           <div className="relative">{children}</div>
         </main>
