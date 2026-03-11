@@ -1,24 +1,60 @@
 export const de = {
   // Navigation
-  "nav-home": "Intelligenz",
-  "nav-tools": "Ökosystem",
+  "nav-home": "Funktionen",
+  "nav-tools": "Gratis-Rechner",
   "nav-pricing": "Preise",
   "btn-login": "Anmelden",
   
   // Hero
-  "hero-badge": "Live: Revision Gewährleistungsrecht 2026",
-  "hero-title": "Der Haftungs-Schutzschild",
-  "hero-subtitle": "Schützen Sie Ihr Bauunternehmen vor den Revisionen des Obligationenrechts 2026. Erstellen Sie sofort rechtssichere digitale Abnahmeprotokolle.",
-  "btn-secure": "Projekte sichern",
-  "btn-law": "Gesetzestext ansehen",
+  "hero-badge": "Neu seit 1.1.2026: 60-Tage-Rügefrist nach Art. 370 nOR",
+  "hero-title": "Nie wieder Fristen verpassen",
+  "hero-subtitle": "Seit dem 1. Januar 2026 verlieren Bauherren ihre Mängelrechte, wenn sie Mängel nicht innert 60 Tagen rügen. BauCompliance berechnet Fristen automatisch, erstellt rechtssichere Abnahmeprotokolle und sichert Beweismittel digital.",
+  "btn-secure": "Kostenlos starten",
+  "btn-law": "Rügefrist berechnen",
   
   // Features
-  "feat-handover-title": "Digitale Abnahme",
-  "feat-handover-desc": "Erstellen Sie rechtssichere Abnahmeprotokolle direkt vor Ort.",
-  "feat-warranty-title": "Garantie-Tracker",
-  "feat-warranty-desc": "Verfolgen Sie die neuen 5-Jahres-Mängelhaftungsfristen pro Projekt mit automatischen Warnungen.",
+  "feat-handover-title": "Digitale Abnahmeprotokolle",
+  "feat-handover-desc": "Erstellen Sie SIA-118-konforme Abnahmeprotokolle direkt auf der Baustelle — mit digitaler Unterschrift und kryptografisch signiertem PDF.",
+  "feat-warranty-title": "Automatische Fristüberwachung",
+  "feat-warranty-desc": "Die neue 5-Jahres-Verjährungsfrist und 60-Tage-Rügefrist pro Projekt im Blick — mit Warnungen bevor es zu spät ist.",
   "feat-evidence-title": "Beweis-Tresor",
-  "feat-evidence-desc": "Geo-getaggte Fotobeweise zur Abwehr unberechtigter Mängelansprüche.",
+  "feat-evidence-desc": "Geo-getaggte Fotos mit Zeitstempel als Beweismittel. Schützen Sie sich gegen unberechtigte Mängelansprüche.",
+
+  // What's at stake
+  "stakes-title": "Was auf dem Spiel steht",
+  "stakes-desc": "Wer die 60-Tage-Frist verpasst, verliert sämtliche Mängelrechte — unabhängig von der Schwere des Mangels. Kein Nachbesserungsanspruch, keine Minderung, kein Schadenersatz.",
+  "stakes-stat1-value": "60",
+  "stakes-stat1-unit": "Tage",
+  "stakes-stat1-label": "Rügefrist ab Entdeckung",
+  "stakes-stat2-value": "5",
+  "stakes-stat2-unit": "Jahre",
+  "stakes-stat2-label": "Verjährungsfrist Bauwerke",
+  "stakes-stat3-value": "100%",
+  "stakes-stat3-unit": "",
+  "stakes-stat3-label": "Rechtsverlust bei Fristversäumnis",
+
+  // Social proof
+  "social-proof": "Entwickelt für Schweizer Bauunternehmen, Architekten und Bauherren — in allen 26 Kantonen.",
+
+  // Free calculator promo
+  "calc-promo-title": "Rügefrist jetzt kostenlos berechnen",
+  "calc-promo-desc": "Unser Gratis-Rechner zeigt sofort, ob Alt- oder Neurecht gilt und wann Ihre Frist abläuft.",
+  "calc-promo-cta": "Zum Rügefrist-Rechner",
+
+  // Footer
+  "footer-impressum": "Impressum",
+  "footer-datenschutz": "Datenschutz",
+
+  // Team plan
+  "plan-team": "Team",
+  "plan-team-price": "CHF 29",
+  "plan-team-period": "/Monat",
+  "plan-team-desc": "Für kleine Baufirmen mit mehreren Projekten.",
+  "plan-team-f1": "5 Projekte",
+  "plan-team-f2": "Fristüberwachung mit Warnungen",
+  "plan-team-f3": "PDF-Signatur",
+  "plan-team-f4": "E-Mail-Support",
+  "plan-team-cta": "Team starten",
 
   // Dashboard Sidebar
   "menu-audit": "Abnahme-Engine",
@@ -99,6 +135,7 @@ export const de = {
   "plan-starter-f1": "1 Projekt",
   "plan-starter-f2": "Basis-Abnahmeprotokoll",
   "plan-starter-f3": "PDF-Export",
+  "pricing-popular": "Beliebt",
   "plan-starter-cta": "Kostenlos starten",
   "plan-pro": "Professional",
   "plan-pro-price": "CHF 89",
@@ -152,25 +189,61 @@ export const de = {
 
 export const fr = {
   // Navigation
-  "nav-home": "Intelligence",
-  "nav-tools": "Écosystème",
+  "nav-home": "Fonctionnalités",
+  "nav-tools": "Calculateur gratuit",
   "nav-pricing": "Tarifs",
   "btn-login": "Connexion",
   
   // Hero
-  "hero-badge": "En direct : Révision Droit de Garantie 2026",
-  "hero-title": "Le Bouclier de Responsabilité",
-  "hero-subtitle": "Protégez votre entreprise de construction contre les révisions du Code des obligations 2026. Générez instantanément des protocoles de réception numériques juridiquement sûrs.",
-  "btn-secure": "Sécuriser les projets",
-  "btn-law": "Voir la loi",
+  "hero-badge": "Nouveau depuis 1.1.2026 : délai de notification de 60 jours (Art. 370 nCO)",
+  "hero-title": "Ne manquez plus aucun délai",
+  "hero-subtitle": "Depuis le 1er janvier 2026, les maîtres d'ouvrage perdent leurs droits pour défauts s'ils ne notifient pas dans les 60 jours. BauCompliance calcule les délais automatiquement, génère des protocoles de réception conformes et sécurise les preuves numériquement.",
+  "btn-secure": "Commencer gratuitement",
+  "btn-law": "Calculer le délai",
   
   // Features
-  "feat-handover-title": "Réception Numérique",
-  "feat-handover-desc": "Générez des protocoles de réception juridiquement conformes directement sur site.",
-  "feat-warranty-title": "Suivi de Garantie",
-  "feat-warranty-desc": "Suivez les nouveaux délais de responsabilité de 5 ans par projet avec des alertes automatiques.",
+  "feat-handover-title": "Protocoles de réception numériques",
+  "feat-handover-desc": "Générez des protocoles conformes SIA 118 directement sur le chantier — avec signature numérique et PDF signé cryptographiquement.",
+  "feat-warranty-title": "Surveillance automatique des délais",
+  "feat-warranty-desc": "La nouvelle prescription de 5 ans et le délai de notification de 60 jours par projet sous contrôle — avec alertes avant qu'il ne soit trop tard.",
   "feat-evidence-title": "Coffre de Preuves",
-  "feat-evidence-desc": "Preuves photo géolocalisées pour se défendre contre les réclamations injustifiées.",
+  "feat-evidence-desc": "Photos géolocalisées avec horodatage comme moyens de preuve. Protégez-vous contre les réclamations injustifiées.",
+
+  // What's at stake
+  "stakes-title": "Ce qui est en jeu",
+  "stakes-desc": "Si vous manquez le délai de 60 jours, vous perdez tous vos droits pour défauts — quelle que soit la gravité du défaut. Pas de réparation, pas de réduction, pas de dommages-intérêts.",
+  "stakes-stat1-value": "60",
+  "stakes-stat1-unit": "jours",
+  "stakes-stat1-label": "Délai de notification dès découverte",
+  "stakes-stat2-value": "5",
+  "stakes-stat2-unit": "ans",
+  "stakes-stat2-label": "Prescription ouvrages",
+  "stakes-stat3-value": "100%",
+  "stakes-stat3-unit": "",
+  "stakes-stat3-label": "Perte de droits si délai manqué",
+
+  // Social proof
+  "social-proof": "Conçu pour les entreprises de construction, architectes et maîtres d'ouvrage suisses — dans les 26 cantons.",
+
+  // Free calculator promo
+  "calc-promo-title": "Calculez votre délai gratuitement",
+  "calc-promo-desc": "Notre calculateur gratuit détermine immédiatement si l'ancien ou le nouveau droit s'applique et quand votre délai expire.",
+  "calc-promo-cta": "Accéder au calculateur",
+
+  // Footer
+  "footer-impressum": "Mentions légales",
+  "footer-datenschutz": "Protection des données",
+
+  // Team plan
+  "plan-team": "Team",
+  "plan-team-price": "CHF 29",
+  "plan-team-period": "/mois",
+  "plan-team-desc": "Pour les petites entreprises avec plusieurs projets.",
+  "plan-team-f1": "5 projets",
+  "plan-team-f2": "Surveillance des délais avec alertes",
+  "plan-team-f3": "Signature PDF",
+  "plan-team-f4": "Support par e-mail",
+  "plan-team-cta": "Démarrer Team",
 
   // Dashboard Sidebar
   "menu-audit": "Moteur de Réception",
@@ -251,6 +324,7 @@ export const fr = {
   "plan-starter-f1": "1 projet",
   "plan-starter-f2": "Protocole de réception basique",
   "plan-starter-f3": "Export PDF",
+  "pricing-popular": "Populaire",
   "plan-starter-cta": "Commencer gratuitement",
   "plan-pro": "Professional",
   "plan-pro-price": "CHF 89",
@@ -304,25 +378,61 @@ export const fr = {
 
 export const it = {
   // Navigation
-  "nav-home": "Intelligenza",
-  "nav-tools": "Ecosistema",
+  "nav-home": "Funzionalità",
+  "nav-tools": "Calcolatore gratuito",
   "nav-pricing": "Prezzi",
   "btn-login": "Accedi",
   
   // Hero
-  "hero-badge": "Live: Revisione Diritto di Garanzia 2026",
-  "hero-title": "Lo Scudo di Responsabilità",
-  "hero-subtitle": "Proteggi la tua impresa edile dalle revisioni del Codice delle Obbligazioni 2026. Genera istantaneamente protocolli di collaudo digitali legalmente sicuri.",
-  "btn-secure": "Proteggi Progetti",
-  "btn-law": "Vedi la legge",
+  "hero-badge": "Nuovo dal 1.1.2026: termine di notifica di 60 giorni (Art. 370 nCO)",
+  "hero-title": "Mai più scadenze mancate",
+  "hero-subtitle": "Dal 1° gennaio 2026, i committenti perdono i diritti per difetti se non notificano entro 60 giorni. BauCompliance calcola i termini automaticamente, genera protocolli di collaudo conformi e protegge le prove digitalmente.",
+  "btn-secure": "Inizia gratuitamente",
+  "btn-law": "Calcola il termine",
   
   // Features
-  "feat-handover-title": "Collaudo Digitale",
-  "feat-handover-desc": "Genera protocolli di collaudo legalmente conformi direttamente in loco.",
-  "feat-warranty-title": "Tracker Garanzia",
-  "feat-warranty-desc": "Traccia i nuovi periodi di responsabilità per difetti di 5 anni per progetto con avvisi automatici.",
+  "feat-handover-title": "Protocolli di collaudo digitali",
+  "feat-handover-desc": "Genera protocolli conformi SIA 118 direttamente in cantiere — con firma digitale e PDF firmato crittograficamente.",
+  "feat-warranty-title": "Sorveglianza automatica dei termini",
+  "feat-warranty-desc": "La nuova prescrizione di 5 anni e il termine di notifica di 60 giorni per progetto sotto controllo — con avvisi prima che sia troppo tardi.",
   "feat-evidence-title": "Caveau Prove",
-  "feat-evidence-desc": "Prove fotografiche geo-taggate per difendersi da reclami ingiustificati.",
+  "feat-evidence-desc": "Foto geo-taggate con marca temporale come mezzi di prova. Proteggiti contro reclami ingiustificati.",
+
+  // What's at stake
+  "stakes-title": "Cosa è in gioco",
+  "stakes-desc": "Chi manca il termine di 60 giorni perde tutti i diritti per difetti — indipendentemente dalla gravità del difetto. Nessuna riparazione, nessuna riduzione, nessun risarcimento.",
+  "stakes-stat1-value": "60",
+  "stakes-stat1-unit": "giorni",
+  "stakes-stat1-label": "Termine di notifica dalla scoperta",
+  "stakes-stat2-value": "5",
+  "stakes-stat2-unit": "anni",
+  "stakes-stat2-label": "Prescrizione opere",
+  "stakes-stat3-value": "100%",
+  "stakes-stat3-unit": "",
+  "stakes-stat3-label": "Perdita diritti se termine mancato",
+
+  // Social proof
+  "social-proof": "Sviluppato per imprese edili, architetti e committenti svizzeri — in tutti i 26 cantoni.",
+
+  // Free calculator promo
+  "calc-promo-title": "Calcola il tuo termine gratuitamente",
+  "calc-promo-desc": "Il nostro calcolatore gratuito determina immediatamente se si applica il vecchio o il nuovo diritto e quando scade il termine.",
+  "calc-promo-cta": "Vai al calcolatore",
+
+  // Footer
+  "footer-impressum": "Impressum",
+  "footer-datenschutz": "Protezione dei dati",
+
+  // Team plan
+  "plan-team": "Team",
+  "plan-team-price": "CHF 29",
+  "plan-team-period": "/mese",
+  "plan-team-desc": "Per piccole imprese con più progetti.",
+  "plan-team-f1": "5 progetti",
+  "plan-team-f2": "Sorveglianza termini con avvisi",
+  "plan-team-f3": "Firma PDF",
+  "plan-team-f4": "Supporto e-mail",
+  "plan-team-cta": "Inizia Team",
 
   // Dashboard Sidebar
   "menu-audit": "Motore Collaudo",
@@ -403,6 +513,7 @@ export const it = {
   "plan-starter-f1": "1 progetto",
   "plan-starter-f2": "Protocollo base",
   "plan-starter-f3": "Export PDF",
+  "pricing-popular": "Popolare",
   "plan-starter-cta": "Inizia gratuitamente",
   "plan-pro": "Professional",
   "plan-pro-price": "CHF 89",
@@ -456,25 +567,61 @@ export const it = {
 
 export const rm = {
   // Navigation
-  "nav-home": "Intelligenza",
-  "nav-tools": "Ecosistem",
-  "nav-pricing": "Pretsch",
+  "nav-home": "Funcziuns",
+  "nav-tools": "Calculatur gratuit",
+  "nav-pricing": "Pretschs",
   "btn-login": "S'annunziar",
   
   // Hero
-  "hero-badge": "Live: Revisiun Dretg da Garanzia 2026",
-  "hero-title": "Il Scut da Responsabladad",
-  "hero-subtitle": "Protegiai vossa interpresa da construcziun cunter las revisiuns dal Cudesch d'obligaziuns 2026. Generai immediat protocols da surdada digitals segirs.",
-  "btn-secure": "Segirar Projects",
-  "btn-law": "Vair la lescha",
+  "hero-badge": "Nov dapi il 1.1.2026: termin d'avis da 60 dis (Art. 370 nCO)",
+  "hero-title": "Mai pli termins manchads",
+  "hero-subtitle": "Dapi il 1. da schaner 2026 perdan patrun da construcziun lur dretgs per defects, sche els n'annunzian betg entaifer 60 dis. BauCompliance calculescha termins automaticamain, creescha protocols da surdada conforms e segirescha cumprovas digitalmain.",
+  "btn-secure": "Cumenzar gratuit",
+  "btn-law": "Calcular il termin",
   
   // Features
-  "feat-handover-title": "Surdada Digitala",
-  "feat-handover-desc": "Generai protocols da surdada legalmain conform directamain sin il lieu.",
-  "feat-warranty-title": "Tracker da Garanzia",
-  "feat-warranty-desc": "Persequitai ils novs termins da responsabladad per defects da 5 onns per project cun avis automatics.",
+  "feat-handover-title": "Protocols da surdada digitals",
+  "feat-handover-desc": "Generai protocols conforms a SIA 118 directamain sin la plazza da construcziun — cun suttascripziun digitala e PDF suttascrit criptograficamain.",
+  "feat-warranty-title": "Surveglianza automatica dals termins",
+  "feat-warranty-desc": "La nova prescripziun da 5 onns e il termin d'avis da 60 dis per project sut controlla — cun avis avant ch'i saja memia tard.",
   "feat-evidence-title": "Tresor da Cumprovas",
-  "feat-evidence-desc": "Cumprovas fotograficas geo-taggadas per sa defender cunter pretensiuns nungiustifitgadas.",
+  "feat-evidence-desc": "Fotos geo-taggadas cun marcatura da temp sco meds da cumprova. Protegiai Vus cunter pretensiuns nungiustifitgadas.",
+
+  // What's at stake
+  "stakes-title": "Tge ch'è en ristga",
+  "stakes-desc": "Tgi che manca il termin da 60 dis perda tuts ils dretgs per defects — independentamain da la gravitad dal defect. Nagina reparaziun, nagina reducziun, nagin indemnisaziun.",
+  "stakes-stat1-value": "60",
+  "stakes-stat1-unit": "dis",
+  "stakes-stat1-label": "Termin d'avis da la scuverta",
+  "stakes-stat2-value": "5",
+  "stakes-stat2-unit": "onns",
+  "stakes-stat2-label": "Prescripziun ovras",
+  "stakes-stat3-value": "100%",
+  "stakes-stat3-unit": "",
+  "stakes-stat3-label": "Perdita da dretgs sche termin manchà",
+
+  // Social proof
+  "social-proof": "Sviluppà per interpresas da construcziun, architects e patruns da construcziun svizzers — en tuts 26 chantuns.",
+
+  // Free calculator promo
+  "calc-promo-title": "Calculai voss termin gratuitamain",
+  "calc-promo-desc": "Noss calculatur gratuit mussa immediat sch'il dretg vegl u nov vala e cura voss termin scada.",
+  "calc-promo-cta": "Tar il calculatur",
+
+  // Footer
+  "footer-impressum": "Impressum",
+  "footer-datenschutz": "Protecziun da datas",
+
+  // Team plan
+  "plan-team": "Team",
+  "plan-team-price": "CHF 29",
+  "plan-team-period": "/mais",
+  "plan-team-desc": "Per pitschnas interpresas cun plirs projects.",
+  "plan-team-f1": "5 projects",
+  "plan-team-f2": "Surveglianza da termins cun avis",
+  "plan-team-f3": "Suttascripziun PDF",
+  "plan-team-f4": "Support via e-mail",
+  "plan-team-cta": "Cumenzar Team",
 
   // Dashboard Sidebar
   "menu-audit": "Maschina da Surdada",
@@ -555,6 +702,7 @@ export const rm = {
   "plan-starter-f1": "1 project",
   "plan-starter-f2": "Protocol da basa",
   "plan-starter-f3": "Export PDF",
+  "pricing-popular": "Popular",
   "plan-starter-cta": "Cumenzar gratuit",
   "plan-pro": "Professional",
   "plan-pro-price": "CHF 89",
@@ -608,25 +756,61 @@ export const rm = {
 
 export const en = {
   // Navigation
-  "nav-home": "Intelligence",
-  "nav-tools": "Ecosystem",
+  "nav-home": "Features",
+  "nav-tools": "Free Calculator",
   "nav-pricing": "Pricing",
   "btn-login": "Login",
   
   // Hero
-  "hero-badge": "Live: 2026 Warranty Rights Reform",
-  "hero-title": "The Liability Shield",
-  "hero-subtitle": "Protect your construction firm from the 2026 Code of Obligations warranty revisions. Generate watertight digital handover protocols instantly.",
-  "btn-secure": "Secure Your Projects",
-  "btn-law": "See the Law",
+  "hero-badge": "New since 1.1.2026: 60-day defect notice deadline (Art. 370 nCO)",
+  "hero-title": "Never Miss a Deadline Again",
+  "hero-subtitle": "Since January 1, 2026, property owners lose their defect rights if they fail to notify within 60 days. BauCompliance calculates deadlines automatically, generates legally compliant handover protocols, and secures evidence digitally.",
+  "btn-secure": "Start for Free",
+  "btn-law": "Calculate Deadline",
   
   // Features
-  "feat-handover-title": "Digital Handover",
-  "feat-handover-desc": "Generate legally compliant acceptance protocols (Abnahmeprotokolle) on-site.",
-  "feat-warranty-title": "Warranty Tracker",
-  "feat-warranty-desc": "Track the new 5-year defect liability periods per project with automated alerts.",
+  "feat-handover-title": "Digital Handover Protocols",
+  "feat-handover-desc": "Generate SIA 118-compliant acceptance protocols on-site — with digital signatures and cryptographically signed PDFs.",
+  "feat-warranty-title": "Automatic Deadline Monitoring",
+  "feat-warranty-desc": "The new 5-year limitation period and 60-day notice deadline per project under control — with alerts before it's too late.",
   "feat-evidence-title": "Evidence Vault",
-  "feat-evidence-desc": "Geo-tagged photo evidence to defend against unjustified defect claims.",
+  "feat-evidence-desc": "Geo-tagged photos with timestamps as evidence. Protect yourself against unjustified defect claims.",
+
+  // What's at stake
+  "stakes-title": "What's at Stake",
+  "stakes-desc": "Miss the 60-day deadline and you lose all defect rights — regardless of severity. No repair claims, no price reduction, no damages.",
+  "stakes-stat1-value": "60",
+  "stakes-stat1-unit": "days",
+  "stakes-stat1-label": "Notice period from discovery",
+  "stakes-stat2-value": "5",
+  "stakes-stat2-unit": "years",
+  "stakes-stat2-label": "Limitation period for structures",
+  "stakes-stat3-value": "100%",
+  "stakes-stat3-unit": "",
+  "stakes-stat3-label": "Rights lost if deadline missed",
+
+  // Social proof
+  "social-proof": "Built for Swiss construction firms, architects, and property owners — across all 26 cantons.",
+
+  // Free calculator promo
+  "calc-promo-title": "Calculate your deadline for free",
+  "calc-promo-desc": "Our free calculator instantly determines whether old or new law applies and when your deadline expires.",
+  "calc-promo-cta": "Open Deadline Calculator",
+
+  // Footer
+  "footer-impressum": "Legal Notice",
+  "footer-datenschutz": "Privacy Policy",
+
+  // Team plan
+  "plan-team": "Team",
+  "plan-team-price": "CHF 29",
+  "plan-team-period": "/mo",
+  "plan-team-desc": "For small firms with multiple projects.",
+  "plan-team-f1": "5 projects",
+  "plan-team-f2": "Deadline monitoring with alerts",
+  "plan-team-f3": "PDF signing",
+  "plan-team-f4": "Email support",
+  "plan-team-cta": "Start Team",
 
   // Dashboard Sidebar
   "menu-audit": "Handover Engine",
@@ -707,6 +891,7 @@ export const en = {
   "plan-starter-f1": "1 project",
   "plan-starter-f2": "Basic handover protocol",
   "plan-starter-f3": "PDF export",
+  "pricing-popular": "Popular",
   "plan-starter-cta": "Start for free",
   "plan-pro": "Professional",
   "plan-pro-price": "CHF 89",
