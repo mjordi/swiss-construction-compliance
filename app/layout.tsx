@@ -44,14 +44,14 @@ export const metadata: Metadata = {
       "de-CH": "/",
       "fr-CH": "/?lang=fr",
       "it-CH": "/?lang=it",
-
-      "en": "/?lang=en",
+      "rm-CH": "/?lang=rm",
+      en: "/?lang=en",
     },
   },
   openGraph: {
     type: "website",
     locale: "de_CH",
-    alternateLocale: ["fr_CH", "it_CH", "en_US"],
+    alternateLocale: ["fr_CH", "it_CH", "rm_CH", "en_US"],
     url: "https://baucompliance.ch",
     siteName: "BauCompliance.ch",
     title: "BauCompliance.ch | Mängelrüge Frist 2026 – OR Revision Baurecht",
