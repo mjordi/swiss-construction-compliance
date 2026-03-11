@@ -22,15 +22,17 @@ export default function Sidebar() {
   const { t } = useLanguage();
 
   return (
-    <aside className="w-72 bg-card/30 backdrop-blur-xl border-r border-white/5 flex flex-col fixed h-full left-0 top-0 z-40">
-      <div className="p-8">
-        <div className="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 font-[family-name:var(--font-display)]">
-          Bau<span className="text-accent">Compliance</span>
+    <aside className="w-64 shrink-0 border-r border-white/[0.04] flex flex-col sticky top-[57px] h-[calc(100vh-57px)] z-40">
+      {/* User info */}
+      {user && (
+        <div className="px-6 pt-6 pb-4">
+          <div className="text-[11px] text-muted font-medium tracking-wide">
+            {t("menu-logged-in")} {user.name}
+          </div>
         </div>
-        {user && <div className="text-xs text-slate-500 mt-2 font-medium">{t("menu-logged-in")} {user.name}</div>}
-      </div>
+      )}
 
-      <nav className="flex-1 px-4 space-y-2">
+      <nav className="flex-1 px-3 py-2 space-y-1">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           return (
@@ -38,25 +40,25 @@ export default function Sidebar() {
               key={item.href}
               href={item.href}
               className={clsx(
-                "flex items-center gap-4 px-6 py-4 rounded-xl transition font-medium",
-                isActive 
-                  ? "bg-accent/10 text-accent" 
-                  : "text-slate-400 hover:text-white hover:bg-white/5"
+                "flex items-center gap-3.5 px-4 py-2.5 rounded-lg transition-all duration-300 text-[13px] font-medium",
+                isActive
+                  ? "bg-accent/[0.08] text-accent border border-accent/15"
+                  : "text-muted hover:text-cream hover:bg-white/[0.03] border border-transparent"
               )}
             >
-              <item.icon className="w-5 h-5" />
+              <item.icon className="w-[18px] h-[18px]" />
               {t(item.label as keyof typeof de)}
             </Link>
           );
         })}
       </nav>
 
-      <div className="p-8 border-t border-white/5">
-        <button 
+      <div className="px-6 py-6 border-t border-white/[0.04]">
+        <button
           onClick={logout}
-          className="flex items-center gap-4 text-slate-500 hover:text-red-400 transition text-sm font-medium w-full"
+          className="flex items-center gap-3 text-muted hover:text-red-400 transition-colors duration-300 text-[13px] font-medium w-full"
         >
-          <LogOut className="w-5 h-5" />
+          <LogOut className="w-[18px] h-[18px]" />
           {t("menu-logout")}
         </button>
       </div>
