@@ -8,7 +8,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import type { de } from "@/locales";
 
-const navItems = [
+export const navItems = [
   { icon: FileText, label: "menu-audit", href: "/dashboard" },
   { icon: Shield, label: "menu-risk", href: "/dashboard/risk" },
   { icon: Clock, label: "menu-deadlines", href: "/dashboard/deadlines" },
@@ -30,7 +30,7 @@ export default function Sidebar() {
     : "?";
 
   return (
-    <aside className="w-56 shrink-0 bg-white/[0.01] border-r border-white/[0.04] flex flex-col sticky top-[59px] h-[calc(100vh-59px)]">
+    <aside className="hidden lg:flex w-56 shrink-0 bg-white/[0.01] border-r border-white/[0.04] flex-col sticky top-[59px] h-[calc(100vh-59px)]">
       {/* User */}
       {user && (
         <div className="px-5 pt-5 pb-4 border-b border-white/[0.04]">
