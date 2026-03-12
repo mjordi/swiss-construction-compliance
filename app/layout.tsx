@@ -44,8 +44,7 @@ export const metadata: Metadata = {
       "de-CH": "/",
       "fr-CH": "/?lang=fr",
       "it-CH": "/?lang=it",
-
-      "en": "/?lang=en",
+      en: "/?lang=en",
     },
   },
   openGraph: {

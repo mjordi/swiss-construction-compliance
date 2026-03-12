@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import Sidebar from "@/components/dashboard/Sidebar";
+import MobileNav from "@/components/dashboard/MobileNav";
 import { useLanguage } from "@/context/LanguageContext";
 
 export default function DashboardLayout({
@@ -9,7 +10,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { t, lang, setLanguage } = useLanguage();
+  const { lang, setLanguage } = useLanguage();
 
   return (
     <div className="min-h-screen flex flex-col noise-overlay">
@@ -48,10 +49,12 @@ export default function DashboardLayout({
         </div>
       </header>
 
+      <MobileNav />
+
       {/* Body */}
       <div className="flex flex-1">
         <Sidebar />
-        <main className="flex-1 min-w-0 px-8 py-8 relative overflow-hidden">
+        <main className="flex-1 min-w-0 px-4 py-6 lg:px-8 lg:py-8 relative overflow-hidden">
           <div className="absolute top-0 left-0 w-full h-[300px] bg-gradient-to-b from-accent/[0.02] to-transparent pointer-events-none" />
           <div className="relative max-w-6xl">{children}</div>
         </main>
