@@ -75,6 +75,13 @@ export default function Home() {
 
   return (
     <div className="min-h-screen flex flex-col noise-overlay">
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 z-[60] px-4 py-2 rounded-md bg-accent text-white text-sm font-semibold"
+      >
+        Zum Hauptinhalt springen
+      </a>
+
       <Script
         id="json-ld-software"
         type="application/ld+json"
@@ -143,6 +150,7 @@ export default function Home() {
         </div>
       </header>
 
+      <main id="main-content">
       {/* Hero */}
       <section className="relative px-6 md:px-10 pt-20 md:pt-32 pb-24 md:pb-40 max-w-7xl mx-auto w-full">
         {/* Decorative "60" */}
@@ -473,6 +481,8 @@ export default function Home() {
           </div>
         </motion.div>
       </section>
+
+      </main>
 
       {/* Footer */}
       <footer className="mt-auto border-t border-white/[0.04] px-6 md:px-10">
