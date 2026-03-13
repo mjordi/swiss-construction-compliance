@@ -135,6 +135,9 @@ export default function Home() {
                     }`}
                   >
                     {l.toUpperCase()}
+                    {lang === l && (
+                      <span className="sr-only"> (aktuell ausgewählt)</span>
+                    )}
                   </button>
                 );
               })}
