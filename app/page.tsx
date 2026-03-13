@@ -103,20 +103,34 @@ export default function Home() {
               <a href="#pricing" className="hover:text-cream transition-colors duration-300">{t("nav-pricing")}</a>
             </nav>
 
-            <div className="flex bg-white/[0.03] border border-white/[0.06] rounded-lg p-0.5">
-              {(['de', 'fr', 'it', 'en'] as const).map((l) => (
-                <button
-                  key={l}
-                  onClick={() => setLanguage(l)}
-                  className={`px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide transition-all duration-300 ${
-                    lang === l
-                      ? "bg-accent/15 text-accent"
-                      : "text-muted hover:text-cream"
-                  }`}
-                >
-                  {l.toUpperCase()}
-                </button>
-              ))}
+            <div
+              className="flex bg-white/[0.03] border border-white/[0.06] rounded-lg p-0.5"
+              aria-label="Sprache auswählen"
+            >
+              {(['de', 'fr', 'it', 'en'] as const).map((l) => {
+                const languageLabels: Record<typeof l, string> = {
+                  de: "Deutsch",
+                  fr: "Französisch",
+                  it: "Italienisch",
+                  en: "Englisch",
+                };
+
+                return (
+                  <button
+                    key={l}
+                    onClick={() => setLanguage(l)}
+                    aria-label={`Sprache ${languageLabels[l]} auswählen`}
+                    aria-pressed={lang === l}
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold tracking-wide transition-all duration-300 ${
+                      lang === l
+                        ? "bg-accent/15 text-accent"
+                        : "text-muted hover:text-cream"
+                    }`}
+                  >
+                    {l.toUpperCase()}
+                  </button>
+                );
+              })}
             </div>
 
             <Link
