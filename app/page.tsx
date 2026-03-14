@@ -155,7 +155,11 @@ export default function Home() {
 
       <main id="main-content">
       {/* Hero */}
-      <section className="relative px-6 md:px-10 pt-20 md:pt-32 pb-24 md:pb-40 max-w-7xl mx-auto w-full">
+      <section
+        id="hero"
+        aria-labelledby="hero-title"
+        className="relative px-6 md:px-10 pt-20 md:pt-32 pb-24 md:pb-40 max-w-7xl mx-auto w-full"
+      >
         {/* Decorative "60" */}
         <div
           className="absolute -right-10 md:right-0 top-8 md:top-16 text-[280px] md:text-[420px] font-[family-name:var(--font-display)] italic text-white/[0.02] leading-none select-none pointer-events-none"
@@ -182,6 +186,7 @@ export default function Home() {
 
           {/* Title */}
           <motion.h1
+            id="hero-title"
             variants={fadeChild}
             className="text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-[family-name:var(--font-display)] italic text-cream leading-[0.95] mb-8"
           >
@@ -219,14 +224,18 @@ export default function Home() {
       </section>
 
       {/* Features */}
-      <section id="features" className="px-6 md:px-10 py-24 md:py-32 max-w-7xl mx-auto w-full">
+      <section
+        id="features"
+        aria-labelledby="features-title"
+        className="px-6 md:px-10 py-24 md:py-32 max-w-7xl mx-auto w-full"
+      >
         <motion.div
           initial="hidden"
           whileInView="visible"
           viewport={{ once: true, margin: "-100px" }}
           variants={staggerContainer}
         >
-          <motion.div variants={fadeChild} className="section-marker mb-12">
+          <motion.div id="features-title" variants={fadeChild} className="section-marker mb-12">
             {t("nav-home")}
           </motion.div>
 
@@ -258,7 +267,11 @@ export default function Home() {
       </section>
 
       {/* What's at stake */}
-      <section className="px-6 md:px-10 py-24 md:py-32 max-w-7xl mx-auto w-full">
+      <section
+        id="legal-risk"
+        aria-labelledby="legal-risk-title"
+        className="px-6 md:px-10 py-24 md:py-32 max-w-7xl mx-auto w-full"
+      >
         <motion.div
           initial="hidden"
           whileInView="visible"
@@ -268,7 +281,7 @@ export default function Home() {
           <motion.div variants={fadeChild} className="max-w-2xl mb-16">
             <div className="inline-flex items-center gap-2.5 px-3 py-1.5 rounded-lg bg-red-500/[0.06] border border-red-500/15 mb-8">
               <AlertTriangle className="w-3.5 h-3.5 text-red-400" />
-              <span className="text-[11px] font-semibold tracking-[0.12em] uppercase text-red-400">
+              <span id="legal-risk-title" className="text-[11px] font-semibold tracking-[0.12em] uppercase text-red-400">
                 {t("stakes-title")}
               </span>
             </div>
@@ -303,7 +316,11 @@ export default function Home() {
       </section>
 
       {/* Calculator promo */}
-      <section className="px-6 md:px-10 py-12 max-w-7xl mx-auto w-full">
+      <section
+        id="calculator"
+        aria-labelledby="calculator-title"
+        className="px-6 md:px-10 py-12 max-w-7xl mx-auto w-full"
+      >
         <motion.div
           initial="hidden"
           whileInView="visible"
@@ -326,7 +343,7 @@ export default function Home() {
                 <Calculator className="w-6 h-6 text-accent" />
               </div>
               <div className="flex-1">
-                <h3 className="text-xl font-semibold text-cream mb-2 tracking-tight">{t("calc-promo-title")}</h3>
+                <h3 id="calculator-title" className="text-xl font-semibold text-cream mb-2 tracking-tight">{t("calc-promo-title")}</h3>
                 <p className="text-muted text-[15px] leading-relaxed">{t("calc-promo-desc")}</p>
               </div>
               <Link
@@ -342,7 +359,11 @@ export default function Home() {
       </section>
 
       {/* Social proof */}
-      <section className="px-6 md:px-10 py-16 max-w-7xl mx-auto w-full">
+      <section
+        id="social-proof"
+        aria-label="Vertrauenssignale"
+        className="px-6 md:px-10 py-16 max-w-7xl mx-auto w-full"
+      >
         <motion.div
           initial={{ opacity: 0 }}
           whileInView={{ opacity: 1 }}
@@ -357,7 +378,11 @@ export default function Home() {
       </section>
 
       {/* Pricing */}
-      <section id="pricing" className="px-6 md:px-10 py-24 md:py-32 max-w-7xl mx-auto w-full">
+      <section
+        id="pricing"
+        aria-labelledby="pricing-title"
+        className="px-6 md:px-10 py-24 md:py-32 max-w-7xl mx-auto w-full"
+      >
         <motion.div
           initial="hidden"
           whileInView="visible"
@@ -369,7 +394,7 @@ export default function Home() {
           </motion.div>
 
           <motion.div variants={fadeChild} className="mb-16 max-w-lg">
-            <h2 className="text-4xl md:text-5xl font-[family-name:var(--font-display)] italic text-cream leading-tight mb-4">
+            <h2 id="pricing-title" className="text-4xl md:text-5xl font-[family-name:var(--font-display)] italic text-cream leading-tight mb-4">
               {t("pricing-title")}
             </h2>
             <p className="text-muted text-lg">{t("pricing-subtitle")}</p>
@@ -486,10 +511,14 @@ export default function Home() {
       </section>
 
       {/* FAQ */}
-      <section className="px-6 md:px-10 py-20 max-w-7xl mx-auto w-full">
+      <section
+        id="faq"
+        aria-labelledby="faq-title"
+        className="px-6 md:px-10 py-20 max-w-7xl mx-auto w-full"
+      >
         <div className="max-w-3xl">
           <div className="section-marker mb-6">FAQ</div>
-          <h2 className="text-3xl md:text-4xl font-[family-name:var(--font-display)] italic text-cream mb-4">
+          <h2 id="faq-title" className="text-3xl md:text-4xl font-[family-name:var(--font-display)] italic text-cream mb-4">
             Häufige Fragen zur OR-Revision 2026
           </h2>
           <p className="text-muted mb-10">
