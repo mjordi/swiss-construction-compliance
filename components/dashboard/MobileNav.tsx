@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { Menu, X, LogOut } from "lucide-react";
@@ -13,18 +13,49 @@ import { navItems } from "@/components/dashboard/Sidebar";
 export default function MobileNav() {
   const [isOpen, setIsOpen] = useState(false);
   const pathname = usePathname();
-  const { logout } = useAuth();
+  const { user, logout } = useAuth();
   const { t } = useLanguage();
 
   const closeMenu = () => setIsOpen(false);
+  const activeItem = useMemo(
+    () => navItems.find((item) => item.href === pathname),
+    [pathname]
+  );
+
+  useEffect(() => {
+    if (!isOpen) {
+      document.body.style.overflow = "";
+      return;
+    }
+
+    document.body.style.overflow = "hidden";
+
+    const handleEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") {
+        closeMenu();
+      }
+    };
+
+    window.addEventListener("keydown", handleEscape);
+
+    return () => {
+      document.body.style.overflow = "";
+      window.removeEventListener("keydown", handleEscape);
+    };
+  }, [isOpen]);
 
   return (
     <>
       <div className="lg:hidden sticky top-[59px] z-40 border-b border-white/[0.04] bg-[#0a0f1c]/95 backdrop-blur-xl">
         <div className="flex items-center justify-between px-4 py-3">
-          <span className="text-xs font-semibold uppercase tracking-[0.24em] text-muted">
-            Dashboard
-          </span>
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-[0.24em] text-muted">
+              Dashboard
+            </div>
+            <div className="mt-1 text-sm font-medium text-cream">
+              {activeItem ? t(activeItem.label as keyof typeof de) : "Navigation"}
+            </div>
+          </div>
           <button
             type="button"
             onClick={() => setIsOpen(true)}
@@ -50,18 +81,29 @@ export default function MobileNav() {
 
           <div
             id="mobile-dashboard-nav"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Dashboard navigation"
             className="absolute inset-y-0 left-0 flex w-full max-w-xs flex-col border-r border-white/[0.08] bg-[#0a0f1c] shadow-2xl"
           >
-            <div className="flex items-center justify-between border-b border-white/[0.04] px-4 py-4">
-              <span className="text-sm font-semibold tracking-tight text-cream">Navigation</span>
-              <button
-                type="button"
-                onClick={closeMenu}
-                className="rounded-lg border border-white/[0.08] p-2 text-muted transition-colors hover:text-cream hover:bg-white/[0.04]"
-                aria-label="Close navigation menu"
-              >
-                <X className="h-4 w-4" />
-              </button>
+            <div className="border-b border-white/[0.04] px-4 py-4">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-semibold tracking-tight text-cream">Navigation</span>
+                <button
+                  type="button"
+                  onClick={closeMenu}
+                  className="rounded-lg border border-white/[0.08] p-2 text-muted transition-colors hover:bg-white/[0.04] hover:text-cream"
+                  aria-label="Close navigation menu"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+              {user && (
+                <div className="mt-4 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3 py-3">
+                  <div className="truncate text-sm font-medium text-cream">{user.name}</div>
+                  <div className="mt-1 truncate text-xs text-muted">{user.email}</div>
+                </div>
+              )}
             </div>
 
             <nav className="flex-1 space-y-1 px-3 py-3">
