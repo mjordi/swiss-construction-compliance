@@ -16,6 +16,7 @@ const dmSans = DM_Sans({
 });
 
 export const metadata: Metadata = {
+  metadataBase: new URL("https://baucompliance.ch"),
   title: {
     default: "BauCompliance.ch | Mängelrüge Frist 2026 – Digitale Abnahme Schweiz",
     template: "%s | BauCompliance.ch",
@@ -37,7 +38,6 @@ export const metadata: Metadata = {
   authors: [{ name: "BauCompliance.ch", url: "https://baucompliance.ch" }],
   creator: "BauCompliance.ch",
   publisher: "BauCompliance.ch",
-  metadataBase: new URL("https://baucompliance.ch"),
   alternates: {
     canonical: "/",
     languages: {
