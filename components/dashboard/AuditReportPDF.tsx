@@ -95,9 +95,12 @@ const styles = StyleSheet.create({
 interface AuditReportProps {
   fileName: string;
   date: string;
+  caseId?: string;
+  contractor?: string;
+  client?: string;
 }
 
-export const AuditReportPDF = ({ fileName, date }: AuditReportProps) => (
+export const AuditReportPDF = ({ fileName, date, caseId, contractor, client }: AuditReportProps) => (
   <Document>
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
@@ -128,6 +131,27 @@ export const AuditReportPDF = ({ fileName, date }: AuditReportProps) => (
           <Text style={styles.itemTitle}>Scan Date</Text>
           <Text style={{ fontSize: 12 }}>{date}</Text>
         </View>
+
+        {caseId ? (
+          <View style={styles.item}>
+            <Text style={styles.itemTitle}>Case ID</Text>
+            <Text style={{ fontSize: 12 }}>{caseId}</Text>
+          </View>
+        ) : null}
+
+        {contractor ? (
+          <View style={styles.item}>
+            <Text style={styles.itemTitle}>Contractor</Text>
+            <Text style={{ fontSize: 12 }}>{contractor}</Text>
+          </View>
+        ) : null}
+
+        {client ? (
+          <View style={styles.item}>
+            <Text style={styles.itemTitle}>Client</Text>
+            <Text style={{ fontSize: 12 }}>{client}</Text>
+          </View>
+        ) : null}
 
         <View style={styles.item}>
           <Text style={styles.itemTitle}>Liability Clauses (Art. 371)</Text>

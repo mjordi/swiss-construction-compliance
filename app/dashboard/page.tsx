@@ -1,12 +1,13 @@
 "use client";
 
-import { useState, useRef, useEffect } from "react";
-import { CheckCircle, AlertTriangle, FileText, Loader2, Download, PenTool, Camera, User, Calendar } from "lucide-react";
-import { motion, AnimatePresence } from "framer-motion";
+import { useState, useRef, useEffect, useMemo } from "react";
+import { CheckCircle, AlertTriangle, FileText, Loader2, Download, Camera, Calendar } from "lucide-react";
+import { motion } from "framer-motion";
 import { pdf } from '@react-pdf/renderer';
 import { AuditReportPDF } from "@/components/dashboard/AuditReportPDF";
 import SignaturePad from 'signature_pad';
 import { useLanguage } from "@/context/LanguageContext";
+import { buildComplianceRecord } from "@/lib/compliance-record";
 
 export default function Dashboard() {
   const [step, setStep] = useState(1);
@@ -19,6 +20,21 @@ export default function Dashboard() {
     contractor: "",
     client: ""
   });
+
+  const complianceRecord = useMemo(
+    () =>
+      buildComplianceRecord(
+        {
+          projectName: projectData.name,
+          contractor: projectData.contractor,
+          client: projectData.client,
+          inspectionDate: new Date(),
+        },
+        step,
+        Boolean(sigPad && !sigPad.isEmpty())
+      ),
+    [projectData, step, sigPad]
+  );
 
   useEffect(() => {
     if (step === 2 && sigCanvas.current) {
@@ -60,6 +76,9 @@ export default function Dashboard() {
         <AuditReportPDF
           fileName={projectData.name || "Project"}
           date={new Date().toLocaleDateString('de-CH')}
+          caseId={complianceRecord.caseId}
+          contractor={projectData.contractor}
+          client={projectData.client}
         />
       ).toBlob();
 
@@ -273,6 +292,39 @@ export default function Dashboard() {
               <div className="flex justify-between">
                 <span>{t("context-standard")}</span>
                 <span className="text-cream font-semibold">SIA 118 (2026)</span>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05]">
+            <h4 className="text-[11px] font-semibold text-muted uppercase tracking-[0.12em] mb-3">Compliance Record Preview</h4>
+            <div className="text-xs text-muted mb-4">Case ID</div>
+            <div className="font-mono text-xs text-accent break-all mb-5">{complianceRecord.caseId}</div>
+
+            <div className="space-y-2.5 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-muted">Project data complete</span>
+                <span className={complianceRecord.checklist.projectData ? "text-emerald-400" : "text-muted/50"}>
+                  {complianceRecord.checklist.projectData ? "Done" : "Open"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted">Defect log captured</span>
+                <span className={complianceRecord.checklist.defectLog ? "text-emerald-400" : "text-muted/50"}>
+                  {complianceRecord.checklist.defectLog ? "Done" : "Open"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted">Signature attached</span>
+                <span className={complianceRecord.checklist.signature ? "text-emerald-400" : "text-muted/50"}>
+                  {complianceRecord.checklist.signature ? "Done" : "Open"}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted">Export-ready dossier</span>
+                <span className={complianceRecord.checklist.exportReady ? "text-emerald-400" : "text-muted/50"}>
+                  {complianceRecord.checklist.exportReady ? "Done" : "Open"}
+                </span>
               </div>
             </div>
           </div>
