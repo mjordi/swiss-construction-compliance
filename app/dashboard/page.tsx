@@ -9,6 +9,8 @@ import SignaturePad from 'signature_pad';
 import { useLanguage } from "@/context/LanguageContext";
 import { buildComplianceRecord } from "@/lib/compliance-record";
 
+const PROJECT_DRAFT_STORAGE_KEY = "baucompliance:wizard-project-draft";
+
 export default function Dashboard() {
   const [step, setStep] = useState(1);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -24,6 +26,29 @@ export default function Dashboard() {
     projectData.name.trim().length > 0 &&
     projectData.contractor.trim().length > 0 &&
     projectData.client.trim().length > 0;
+
+  useEffect(() => {
+    try {
+      const rawDraft = window.localStorage.getItem(PROJECT_DRAFT_STORAGE_KEY);
+      if (!rawDraft) {
+        return;
+      }
+
+      const parsedDraft = JSON.parse(rawDraft) as Partial<typeof projectData>;
+      setProjectData((current) => ({
+        ...current,
+        name: parsedDraft.name ?? "",
+        contractor: parsedDraft.contractor ?? "",
+        client: parsedDraft.client ?? "",
+      }));
+    } catch (error) {
+      console.warn("Unable to restore project draft", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    window.localStorage.setItem(PROJECT_DRAFT_STORAGE_KEY, JSON.stringify(projectData));
+  }, [projectData]);
 
   const complianceRecord = useMemo(
     () =>
@@ -266,7 +291,11 @@ export default function Dashboard() {
                   <Download className="w-4 h-4" /> {t("btn-download")}
                 </button>
                 <button
-                  onClick={() => setStep(1)}
+                  onClick={() => {
+                    setProjectData({ name: "", contractor: "", client: "" });
+                    window.localStorage.removeItem(PROJECT_DRAFT_STORAGE_KEY);
+                    setStep(1);
+                  }}
                   className="px-8 py-3.5 bg-white/[0.03] border border-white/[0.06] text-cream font-semibold rounded-lg hover:bg-white/[0.05] transition-all duration-300"
                 >
                   {t("btn-new")}
