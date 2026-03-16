@@ -7,7 +7,7 @@ import { clsx } from "clsx";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 
-const navItems = [
+export const navItems = [
   { icon: FileText, label: "menu-audit" as const, href: "/dashboard" },
   { icon: Shield, label: "menu-risk" as const, href: "/dashboard/risk" },
   { icon: Clock, label: "menu-deadlines" as const, href: "/dashboard/deadlines" },
@@ -29,7 +29,7 @@ export default function Sidebar() {
     : "?";
 
   return (
-    <aside className="w-56 shrink-0 bg-white/[0.015] border-r border-white/[0.04] flex flex-col sticky top-[61px] h-[calc(100vh-61px)]">
+    <aside className="hidden lg:flex w-56 shrink-0 bg-white/[0.015] border-r border-white/[0.04] flex-col sticky top-[61px] h-[calc(100vh-61px)]">
       {/* User */}
       {user && (
         <div className="px-4 pt-5 pb-4 border-b border-white/[0.04]">
