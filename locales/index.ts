@@ -12,6 +12,29 @@ export const de = {
   "btn-secure": "Kostenlos starten",
   "btn-law": "Rügefrist berechnen",
   
+  // Trust metrics
+  "trust-cantons": "Kantone abgedeckt",
+  "trust-sia": "SIA 118 konform",
+  "trust-deadline": "Tage Rügefrist",
+
+  // Hero extras
+  "hero-scroll": "Mehr erfahren",
+
+  // How it Works
+  "how-title": "So funktioniert's",
+  "how-heading": "In drei Schritten geschützt",
+  "how-step1-title": "Abnahme erstellen",
+  "how-step1-desc": "Erstellen Sie SIA-118-konforme Protokolle direkt auf der Baustelle mit digitaler Unterschrift.",
+  "how-step2-title": "Fristen überwachen",
+  "how-step2-desc": "Alle gesetzlichen Fristen werden automatisch berechnet. Sie erhalten Warnungen bevor es zu spät ist.",
+  "how-step3-title": "Beweise sichern",
+  "how-step3-desc": "Geo-getaggte Fotos und kryptografisch signierte PDFs als rechtssichere Beweismittel.",
+
+  // Final CTA
+  "cta-title": "Bereit für die OR-Revision 2026?",
+  "cta-desc": "Schützen Sie Ihr Unternehmen vor Rechtsverlust. Starten Sie noch heute — kostenlos.",
+  "cta-btn": "Jetzt kostenlos starten",
+
   // Features
   "feat-handover-title": "Digitale Abnahmeprotokolle",
   "feat-handover-desc": "Erstellen Sie SIA-118-konforme Abnahmeprotokolle direkt auf der Baustelle — mit digitaler Unterschrift und kryptografisch signiertem PDF.",
@@ -44,6 +67,14 @@ export const de = {
   // Footer
   "footer-impressum": "Impressum",
   "footer-datenschutz": "Datenschutz",
+  "footer-legal": "Recht",
+  "footer-status": "Alle Systeme betriebsbereit",
+
+  // Sidebar
+  "menu-nav": "Navigation",
+
+  // Deadline marker
+  "deadlines-marker": "Fristen",
 
   // Team plan
   "plan-team": "Team",
@@ -201,6 +232,29 @@ export const fr = {
   "btn-secure": "Commencer gratuitement",
   "btn-law": "Calculer le délai",
   
+  // Trust metrics
+  "trust-cantons": "Cantons couverts",
+  "trust-sia": "Conforme SIA 118",
+  "trust-deadline": "Jours de délai",
+
+  // Hero extras
+  "hero-scroll": "En savoir plus",
+
+  // How it Works
+  "how-title": "Comment ça marche",
+  "how-heading": "Protégé en trois étapes",
+  "how-step1-title": "Créer le protocole",
+  "how-step1-desc": "Générez des protocoles conformes SIA 118 directement sur le chantier avec signature numérique.",
+  "how-step2-title": "Surveiller les délais",
+  "how-step2-desc": "Tous les délais légaux sont calculés automatiquement. Recevez des alertes avant qu'il ne soit trop tard.",
+  "how-step3-title": "Sécuriser les preuves",
+  "how-step3-desc": "Photos géolocalisées et PDF signés cryptographiquement comme preuves juridiquement valables.",
+
+  // Final CTA
+  "cta-title": "Prêt pour la révision CO 2026 ?",
+  "cta-desc": "Protégez votre entreprise contre la perte de droits. Commencez dès aujourd'hui — gratuitement.",
+  "cta-btn": "Commencer gratuitement",
+
   // Features
   "feat-handover-title": "Protocoles de réception numériques",
   "feat-handover-desc": "Générez des protocoles conformes SIA 118 directement sur le chantier — avec signature numérique et PDF signé cryptographiquement.",
@@ -233,6 +287,14 @@ export const fr = {
   // Footer
   "footer-impressum": "Mentions légales",
   "footer-datenschutz": "Protection des données",
+  "footer-legal": "Juridique",
+  "footer-status": "Tous les systèmes opérationnels",
+
+  // Sidebar
+  "menu-nav": "Navigation",
+
+  // Deadline marker
+  "deadlines-marker": "Délais",
 
   // Team plan
   "plan-team": "Team",
@@ -390,6 +452,29 @@ export const it = {
   "btn-secure": "Inizia gratuitamente",
   "btn-law": "Calcola il termine",
   
+  // Trust metrics
+  "trust-cantons": "Cantoni coperti",
+  "trust-sia": "Conforme SIA 118",
+  "trust-deadline": "Giorni termine",
+
+  // Hero extras
+  "hero-scroll": "Scopri di più",
+
+  // How it Works
+  "how-title": "Come funziona",
+  "how-heading": "Protetto in tre passi",
+  "how-step1-title": "Creare il protocollo",
+  "how-step1-desc": "Genera protocolli conformi SIA 118 direttamente in cantiere con firma digitale.",
+  "how-step2-title": "Monitorare le scadenze",
+  "how-step2-desc": "Tutte le scadenze legali vengono calcolate automaticamente. Ricevi avvisi prima che sia troppo tardi.",
+  "how-step3-title": "Proteggere le prove",
+  "how-step3-desc": "Foto geo-taggate e PDF firmati crittograficamente come prove giuridicamente valide.",
+
+  // Final CTA
+  "cta-title": "Pronti per la revisione CO 2026?",
+  "cta-desc": "Proteggete la vostra impresa dalla perdita di diritti. Iniziate oggi — gratuitamente.",
+  "cta-btn": "Inizia gratuitamente",
+
   // Features
   "feat-handover-title": "Protocolli di collaudo digitali",
   "feat-handover-desc": "Genera protocolli conformi SIA 118 direttamente in cantiere — con firma digitale e PDF firmato crittograficamente.",
@@ -422,6 +507,14 @@ export const it = {
   // Footer
   "footer-impressum": "Impressum",
   "footer-datenschutz": "Protezione dei dati",
+  "footer-legal": "Legale",
+  "footer-status": "Tutti i sistemi operativi",
+
+  // Sidebar
+  "menu-nav": "Navigazione",
+
+  // Deadline marker
+  "deadlines-marker": "Scadenze",
 
   // Team plan
   "plan-team": "Team",
@@ -579,6 +672,29 @@ export const en = {
   "btn-secure": "Start for Free",
   "btn-law": "Calculate Deadline",
   
+  // Trust metrics
+  "trust-cantons": "Cantons covered",
+  "trust-sia": "SIA 118 compliant",
+  "trust-deadline": "Day notice period",
+
+  // Hero extras
+  "hero-scroll": "Learn more",
+
+  // How it Works
+  "how-title": "How It Works",
+  "how-heading": "Protected in three steps",
+  "how-step1-title": "Create the protocol",
+  "how-step1-desc": "Generate SIA 118-compliant acceptance protocols on-site with digital signatures.",
+  "how-step2-title": "Monitor deadlines",
+  "how-step2-desc": "All legal deadlines are calculated automatically. Get alerts before it's too late.",
+  "how-step3-title": "Secure evidence",
+  "how-step3-desc": "Geo-tagged photos and cryptographically signed PDFs as legally valid evidence.",
+
+  // Final CTA
+  "cta-title": "Ready for the CO Revision 2026?",
+  "cta-desc": "Protect your business from losing legal rights. Start today — for free.",
+  "cta-btn": "Start for free",
+
   // Features
   "feat-handover-title": "Digital Handover Protocols",
   "feat-handover-desc": "Generate SIA 118-compliant acceptance protocols on-site — with digital signatures and cryptographically signed PDFs.",
@@ -611,6 +727,14 @@ export const en = {
   // Footer
   "footer-impressum": "Legal Notice",
   "footer-datenschutz": "Privacy Policy",
+  "footer-legal": "Legal",
+  "footer-status": "All systems operational",
+
+  // Sidebar
+  "menu-nav": "Navigation",
+
+  // Deadline marker
+  "deadlines-marker": "Deadlines",
 
   // Team plan
   "plan-team": "Team",

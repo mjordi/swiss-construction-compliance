@@ -49,6 +49,7 @@ export default function RiskMap() {
   return (
     <div className="h-[calc(100vh-125px)] flex flex-col">
       <header className="mb-6">
+        <div className="section-marker mb-3">Risk Assessment</div>
         <h1 className="text-2xl font-[family-name:var(--font-display)] italic text-cream mb-1.5">Canton Risk Matrix</h1>
         <p className="text-muted text-sm">Real-time legislative risk assessment for all 26 Swiss cantons.</p>
       </header>

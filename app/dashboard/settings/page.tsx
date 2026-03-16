@@ -6,6 +6,7 @@ export default function Settings() {
   return (
     <div>
       <header className="mb-6">
+        <div className="section-marker mb-3">Account</div>
         <h1 className="text-2xl font-[family-name:var(--font-display)] italic text-cream mb-1.5">Account Settings</h1>
         <p className="text-muted text-sm">Manage your subscription and preferences.</p>
       </header>
