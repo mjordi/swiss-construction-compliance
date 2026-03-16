@@ -20,6 +20,10 @@ export default function Dashboard() {
     contractor: "",
     client: ""
   });
+  const canProceedStep1 =
+    projectData.name.trim().length > 0 &&
+    projectData.contractor.trim().length > 0 &&
+    projectData.client.trim().length > 0;
 
   const complianceRecord = useMemo(
     () =>
@@ -172,10 +176,14 @@ export default function Dashboard() {
                 <div className="pt-4">
                   <button
                     onClick={() => setStep(2)}
-                    className="w-full py-3.5 bg-cream text-background font-semibold rounded-lg hover:bg-white transition-colors duration-300"
+                    disabled={!canProceedStep1}
+                    className="w-full py-3.5 bg-cream text-background font-semibold rounded-lg hover:bg-white transition-colors duration-300 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-cream"
                   >
                     {t("btn-next")}
                   </button>
+                  {!canProceedStep1 && (
+                    <p className="mt-2 text-xs text-muted">Please fill in project, contractor, and client before continuing.</p>
+                  )}
                 </div>
               </div>
             </motion.div>
