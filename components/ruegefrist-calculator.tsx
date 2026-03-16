@@ -67,7 +67,7 @@ export default function RuegefristCalculator() {
     if (!result?.ruegefrist60) return;
     const content = generateDeadlineICS(
       result.ruegefrist60.date,
-      "BauCompliance: 60-Tage-Rügefrist (Art. 370 nOR)",
+      "BauCompliance: 60-Tage-Rügefrist (Art. 370 OR 2026)",
       `Rügefrist Ablauf\nVertragsdatum: ${formatDateCH(result.contractDate)}\nMängel entdeckt: ${formatDateCH(result.discoveryDate)}`
     );
     const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });

@@ -2,7 +2,7 @@
  * Legal utility functions for Swiss construction law deadlines.
  *
  * Key dates:
- * - 2026-01-01: OR revision enters into force (Art. 370 nOR — 60-day notice period)
+ * - 2026-01-01: OR revision enters into force (Art. 370 OR 2026 — 60-day notice period)
  * - Transitional law: Contracts signed before 2026-01-01 follow old law (immediate notice, no 60-day grace)
  */
 
@@ -48,6 +48,15 @@ export function determineLegalRegime(contractDate: Date): LegalRegime {
 }
 
 /**
+ * Add calendar years to a date.
+ */
+export function addYears(date: Date, years: number): Date {
+  const result = new Date(date);
+  result.setFullYear(result.getFullYear() + years);
+  return result;
+}
+
+/**
  * Add calendar days to a date.
  */
 export function addDays(date: Date, days: number): Date {
@@ -82,7 +91,7 @@ export function getStatus(
 /**
  * Calculate the 60-day Rügefrist (notice period) under the new OR.
  *
- * Art. 370 nOR: The client must notify the contractor of defects discovered
+ * Art. 370 OR (Revision 2026): The client must notify the contractor of defects discovered
  * after acceptance within 60 days of discovery.
  *
  * @param contractDate - Date the construction contract was signed

@@ -1,13 +1,13 @@
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
-  title: "60-Tage-Rügefrist Rechner | Art. 370 nOR",
+  title: "60-Tage-Rügefrist Rechner | Art. 370 OR (Revision 2026)",
   description:
-    "Kostenloser Rügefrist-Rechner: Berechnen Sie die 60-Tage-Frist nach Art. 370 nOR (OR-Revision 2026). Übergangsrecht-Check — Altrecht vs. Neurecht automatisch erkennen.",
+    "Kostenloser Rügefrist-Rechner: Berechnen Sie die 60-Tage-Frist nach Art. 370 OR (Revision 2026). Übergangsrecht-Check — Altrecht vs. Neurecht automatisch erkennen.",
   keywords: [
     "Rügefrist Rechner",
     "60 Tage Frist",
-    "Art. 370 nOR",
+    "Art. 370 OR Revision 2026",
     "OR Revision 2026",
     "Mängelrüge Frist berechnen",
     "Übergangsrecht Baurecht",

@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { scaleQuantize } from "d3-scale";
 import { AlertTriangle, TrendingUp, TrendingDown, Minus, Info } from "lucide-react";
+import PageHeader from "@/components/dashboard/PageHeader";
 
 const cantons = [
   { id: "ZH", name: "Zürich",      risk: 88, trend: "up",     description: "Strictest enforcement of digital handover protocols. Dense urban construction with complex multi-party liability chains." },
@@ -49,8 +50,11 @@ export default function RiskMap() {
   return (
     <div className="h-[calc(100vh-125px)] flex flex-col">
       <header className="mb-6">
-        <h1 className="text-2xl font-[family-name:var(--font-display)] italic text-cream mb-1.5">Canton Risk Matrix</h1>
-        <p className="text-muted text-sm">Real-time legislative risk assessment for all 26 Swiss cantons.</p>
+        <PageHeader
+          marker="Risk Assessment"
+          title="Canton Risk Matrix"
+          subtitle="Real-time legislative risk assessment for all 26 Swiss cantons."
+        />
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">

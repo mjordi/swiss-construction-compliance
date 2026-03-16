@@ -1,3 +1,5 @@
+export const SUPPORTED_LANGUAGES = ["de", "fr", "it", "en"] as const;
+
 export const de = {
   // Navigation
   "nav-home": "Funktionen",
@@ -6,12 +8,35 @@ export const de = {
   "btn-login": "Anmelden",
   
   // Hero
-  "hero-badge": "Neu seit 1.1.2026: 60-Tage-Rügefrist nach Art. 370 nOR",
+  "hero-badge": "Neu seit 1.1.2026: 60-Tage-Rügefrist nach Art. 370 OR 2026",
   "hero-title": "Nie wieder Fristen verpassen",
   "hero-subtitle": "Seit dem 1. Januar 2026 verlieren Bauherren ihre Mängelrechte, wenn sie Mängel nicht innert 60 Tagen rügen. BauCompliance berechnet Fristen automatisch, erstellt rechtssichere Abnahmeprotokolle und sichert Beweismittel digital.",
   "btn-secure": "Kostenlos starten",
   "btn-law": "Rügefrist berechnen",
   
+  // Trust metrics
+  "trust-cantons": "Kantone abgedeckt",
+  "trust-sia": "SIA 118 konform",
+  "trust-deadline": "Tage Rügefrist",
+
+  // Hero extras
+  "hero-scroll": "Mehr erfahren",
+
+  // How it Works
+  "how-title": "So funktioniert's",
+  "how-heading": "In drei Schritten geschützt",
+  "how-step1-title": "Abnahme erstellen",
+  "how-step1-desc": "Erstellen Sie SIA-118-konforme Protokolle direkt auf der Baustelle mit digitaler Unterschrift.",
+  "how-step2-title": "Fristen überwachen",
+  "how-step2-desc": "Alle gesetzlichen Fristen werden automatisch berechnet. Sie erhalten Warnungen bevor es zu spät ist.",
+  "how-step3-title": "Beweise sichern",
+  "how-step3-desc": "Geo-getaggte Fotos und kryptografisch signierte PDFs als rechtssichere Beweismittel.",
+
+  // Final CTA
+  "cta-title": "Bereit für die OR-Revision 2026?",
+  "cta-desc": "Schützen Sie Ihr Unternehmen vor Rechtsverlust. Starten Sie noch heute — kostenlos.",
+  "cta-btn": "Jetzt kostenlos starten",
+
   // Features
   "feat-handover-title": "Digitale Abnahmeprotokolle",
   "feat-handover-desc": "Erstellen Sie SIA-118-konforme Abnahmeprotokolle direkt auf der Baustelle — mit digitaler Unterschrift und kryptografisch signiertem PDF.",
@@ -44,6 +69,14 @@ export const de = {
   // Footer
   "footer-impressum": "Impressum",
   "footer-datenschutz": "Datenschutz",
+  "footer-legal": "Recht",
+  "footer-status": "Alle Systeme betriebsbereit",
+
+  // Sidebar
+  "menu-nav": "Navigation",
+
+  // Deadline marker
+  "deadlines-marker": "Fristen",
 
   // Team plan
   "plan-team": "Team",
@@ -160,18 +193,18 @@ export const de = {
   "calc-back": "Zurück zur Startseite",
   "calc-badge": "Kostenloses Tool",
   "calc-title": "60-Tage-Rügefrist Rechner",
-  "calc-subtitle": "Berechnen Sie die Rügefrist nach Art. 370 nOR. Automatische Erkennung ob Alt- oder Neurecht gilt.",
+  "calc-subtitle": "Berechnen Sie die Rügefrist nach Art. 370 OR 2026. Automatische Erkennung ob Alt- oder Neurecht gilt.",
   "calc-contract-date": "Vertragsdatum (Werkvertrag)",
   "calc-contract-hint": "Bestimmt ob Alt- oder Neurecht gilt (Stichtag: 1.1.2026)",
   "calc-discovery-date": "Mängel-Entdeckungsdatum",
   "calc-discovery-hint": "Wann wurde der Mangel entdeckt?",
   "calc-calculate": "Frist berechnen",
   "calc-regime-new": "Neues Recht (OR Revision 2026)",
-  "calc-regime-new-desc": "Der Werkvertrag wurde nach dem 1.1.2026 geschlossen. Es gilt die neue 60-Tage-Rügefrist nach Art. 370 nOR.",
+  "calc-regime-new-desc": "Der Werkvertrag wurde nach dem 1.1.2026 geschlossen. Es gilt die neue 60-Tage-Rügefrist nach Art. 370 OR 2026.",
   "calc-regime-old": "Altrecht (vor 1.1.2026)",
   "calc-regime-old-desc": "Der Werkvertrag wurde vor dem 1.1.2026 geschlossen. Es gilt das bisherige Recht — sofortige Rügepflicht ohne feste Frist.",
   "calc-60day-title": "60-Tage-Rügefrist",
-  "calc-60day-desc": "Art. 370 nOR — Mängelrüge innert 60 Tagen ab Entdeckung",
+  "calc-60day-desc": "Art. 370 OR 2026 — Mängelrüge innert 60 Tagen ab Entdeckung",
   "calc-discovery-label": "Entdeckung",
   "calc-deadline-label": "Fristablauf",
   "calc-days-remaining": "Tage verbleibend",
@@ -182,7 +215,7 @@ export const de = {
   "calc-old-law-detail": "Unter dem alten Recht müssen Mängel unverzüglich nach Entdeckung gerügt werden. Es gibt keine feste 60-Tage-Frist. Die Rüge sollte so schnell wie möglich erfolgen.",
   "calc-disclaimer": "Hinweis: Dieses Tool dient der Orientierung und ersetzt keine Rechtsberatung. Konsultieren Sie im Zweifelsfall einen Anwalt.",
   "calc-info-title": "Hintergrund: OR-Revision 2026",
-  "calc-info-p1": "Per 1. Januar 2026 tritt die Revision des Gewährleistungsrechts im Werkvertrag in Kraft. Die wichtigste Neuerung: Art. 370 nOR führt eine explizite 60-Tage-Rügefrist für nach der Abnahme entdeckte Mängel ein.",
+  "calc-info-p1": "Per 1. Januar 2026 tritt die Revision des Gewährleistungsrechts im Werkvertrag in Kraft. Die wichtigste Neuerung: Art. 370 OR 2026 führt eine explizite 60-Tage-Rügefrist für nach der Abnahme entdeckte Mängel ein.",
   "calc-info-p2": "Übergangsrecht: Die neue 60-Tage-Frist gilt nur für Werkverträge, die ab dem 1.1.2026 geschlossen werden. Altverträge unterliegen weiterhin der sofortigen Rügepflicht.",
   "calc-info-p3": "Wichtig: Die 60-Tage-Frist beginnt ab dem Zeitpunkt der Mängelentdeckung — nicht ab dem Abnahmedatum. Versäumen Sie die Frist, verlieren Sie Ihre Mängelrechte.",
 };
@@ -195,12 +228,35 @@ export const fr = {
   "btn-login": "Connexion",
   
   // Hero
-  "hero-badge": "Nouveau depuis 1.1.2026 : délai de notification de 60 jours (Art. 370 nCO)",
+  "hero-badge": "Nouveau depuis 1.1.2026 : délai de notification de 60 jours (Art. 370 CO 2026)",
   "hero-title": "Ne manquez plus aucun délai",
   "hero-subtitle": "Depuis le 1er janvier 2026, les maîtres d'ouvrage perdent leurs droits pour défauts s'ils ne notifient pas dans les 60 jours. BauCompliance calcule les délais automatiquement, génère des protocoles de réception conformes et sécurise les preuves numériquement.",
   "btn-secure": "Commencer gratuitement",
   "btn-law": "Calculer le délai",
   
+  // Trust metrics
+  "trust-cantons": "Cantons couverts",
+  "trust-sia": "Conforme SIA 118",
+  "trust-deadline": "Jours de délai",
+
+  // Hero extras
+  "hero-scroll": "En savoir plus",
+
+  // How it Works
+  "how-title": "Comment ça marche",
+  "how-heading": "Protégé en trois étapes",
+  "how-step1-title": "Créer le protocole",
+  "how-step1-desc": "Générez des protocoles conformes SIA 118 directement sur le chantier avec signature numérique.",
+  "how-step2-title": "Surveiller les délais",
+  "how-step2-desc": "Tous les délais légaux sont calculés automatiquement. Recevez des alertes avant qu'il ne soit trop tard.",
+  "how-step3-title": "Sécuriser les preuves",
+  "how-step3-desc": "Photos géolocalisées et PDF signés cryptographiquement comme preuves juridiquement valables.",
+
+  // Final CTA
+  "cta-title": "Prêt pour la révision CO 2026 ?",
+  "cta-desc": "Protégez votre entreprise contre la perte de droits. Commencez dès aujourd'hui — gratuitement.",
+  "cta-btn": "Commencer gratuitement",
+
   // Features
   "feat-handover-title": "Protocoles de réception numériques",
   "feat-handover-desc": "Générez des protocoles conformes SIA 118 directement sur le chantier — avec signature numérique et PDF signé cryptographiquement.",
@@ -233,6 +289,14 @@ export const fr = {
   // Footer
   "footer-impressum": "Mentions légales",
   "footer-datenschutz": "Protection des données",
+  "footer-legal": "Juridique",
+  "footer-status": "Tous les systèmes opérationnels",
+
+  // Sidebar
+  "menu-nav": "Navigation",
+
+  // Deadline marker
+  "deadlines-marker": "Délais",
 
   // Team plan
   "plan-team": "Team",
@@ -349,18 +413,18 @@ export const fr = {
   "calc-back": "Retour à l'accueil",
   "calc-badge": "Outil gratuit",
   "calc-title": "Calculateur délai de notification 60 jours",
-  "calc-subtitle": "Calculez le délai de notification selon l'Art. 370 nCO. Détection automatique ancien/nouveau droit.",
+  "calc-subtitle": "Calculez le délai de notification selon l'Art. 370 CO 2026. Détection automatique ancien/nouveau droit.",
   "calc-contract-date": "Date du contrat (contrat d'entreprise)",
   "calc-contract-hint": "Détermine si l'ancien ou le nouveau droit s'applique (date charnière : 1.1.2026)",
   "calc-discovery-date": "Date de découverte du défaut",
   "calc-discovery-hint": "Quand le défaut a-t-il été découvert ?",
   "calc-calculate": "Calculer le délai",
   "calc-regime-new": "Nouveau droit (Révision CO 2026)",
-  "calc-regime-new-desc": "Le contrat d'entreprise a été conclu après le 1.1.2026. Le nouveau délai de notification de 60 jours selon l'Art. 370 nCO s'applique.",
+  "calc-regime-new-desc": "Le contrat d'entreprise a été conclu après le 1.1.2026. Le nouveau délai de notification de 60 jours selon l'Art. 370 CO 2026 s'applique.",
   "calc-regime-old": "Ancien droit (avant 1.1.2026)",
   "calc-regime-old-desc": "Le contrat d'entreprise a été conclu avant le 1.1.2026. L'ancien droit s'applique — notification immédiate sans délai fixe.",
   "calc-60day-title": "Délai de notification 60 jours",
-  "calc-60day-desc": "Art. 370 nCO — Notification des défauts dans les 60 jours suivant la découverte",
+  "calc-60day-desc": "Art. 370 CO 2026 — Notification des défauts dans les 60 jours suivant la découverte",
   "calc-discovery-label": "Découverte",
   "calc-deadline-label": "Échéance",
   "calc-days-remaining": "jours restants",
@@ -371,7 +435,7 @@ export const fr = {
   "calc-old-law-detail": "Sous l'ancien droit, les défauts doivent être notifiés immédiatement après leur découverte. Il n'y a pas de délai fixe de 60 jours. La notification doit intervenir le plus rapidement possible.",
   "calc-disclaimer": "Avertissement : cet outil est fourni à titre indicatif et ne remplace pas un avis juridique. En cas de doute, consultez un avocat.",
   "calc-info-title": "Contexte : Révision CO 2026",
-  "calc-info-p1": "La révision du droit de garantie dans le contrat d'entreprise entre en vigueur le 1er janvier 2026. L'innovation majeure : l'Art. 370 nCO introduit un délai explicite de 60 jours pour les défauts découverts après la réception.",
+  "calc-info-p1": "La révision du droit de garantie dans le contrat d'entreprise entre en vigueur le 1er janvier 2026. L'innovation majeure : l'Art. 370 CO 2026 introduit un délai explicite de 60 jours pour les défauts découverts après la réception.",
   "calc-info-p2": "Droit transitoire : le nouveau délai de 60 jours ne s'applique qu'aux contrats d'entreprise conclus à partir du 1.1.2026. Les anciens contrats restent soumis à l'obligation de notification immédiate.",
   "calc-info-p3": "Important : le délai de 60 jours commence à la découverte du défaut — pas à la date de réception. Si vous manquez le délai, vous perdez vos droits pour défauts.",
 };
@@ -384,12 +448,35 @@ export const it = {
   "btn-login": "Accedi",
   
   // Hero
-  "hero-badge": "Nuovo dal 1.1.2026: termine di notifica di 60 giorni (Art. 370 nCO)",
+  "hero-badge": "Nuovo dal 1.1.2026: termine di notifica di 60 giorni (Art. 370 CO 2026)",
   "hero-title": "Mai più scadenze mancate",
   "hero-subtitle": "Dal 1° gennaio 2026, i committenti perdono i diritti per difetti se non notificano entro 60 giorni. BauCompliance calcola i termini automaticamente, genera protocolli di collaudo conformi e protegge le prove digitalmente.",
   "btn-secure": "Inizia gratuitamente",
   "btn-law": "Calcola il termine",
   
+  // Trust metrics
+  "trust-cantons": "Cantoni coperti",
+  "trust-sia": "Conforme SIA 118",
+  "trust-deadline": "Giorni termine",
+
+  // Hero extras
+  "hero-scroll": "Scopri di più",
+
+  // How it Works
+  "how-title": "Come funziona",
+  "how-heading": "Protetto in tre passi",
+  "how-step1-title": "Creare il protocollo",
+  "how-step1-desc": "Genera protocolli conformi SIA 118 direttamente in cantiere con firma digitale.",
+  "how-step2-title": "Monitorare le scadenze",
+  "how-step2-desc": "Tutte le scadenze legali vengono calcolate automaticamente. Ricevi avvisi prima che sia troppo tardi.",
+  "how-step3-title": "Proteggere le prove",
+  "how-step3-desc": "Foto geo-taggate e PDF firmati crittograficamente come prove giuridicamente valide.",
+
+  // Final CTA
+  "cta-title": "Pronti per la revisione CO 2026?",
+  "cta-desc": "Proteggete la vostra impresa dalla perdita di diritti. Iniziate oggi — gratuitamente.",
+  "cta-btn": "Inizia gratuitamente",
+
   // Features
   "feat-handover-title": "Protocolli di collaudo digitali",
   "feat-handover-desc": "Genera protocolli conformi SIA 118 direttamente in cantiere — con firma digitale e PDF firmato crittograficamente.",
@@ -422,6 +509,14 @@ export const it = {
   // Footer
   "footer-impressum": "Impressum",
   "footer-datenschutz": "Protezione dei dati",
+  "footer-legal": "Legale",
+  "footer-status": "Tutti i sistemi operativi",
+
+  // Sidebar
+  "menu-nav": "Navigazione",
+
+  // Deadline marker
+  "deadlines-marker": "Scadenze",
 
   // Team plan
   "plan-team": "Team",
@@ -538,18 +633,18 @@ export const it = {
   "calc-back": "Torna alla homepage",
   "calc-badge": "Strumento gratuito",
   "calc-title": "Calcolatore termine di notifica 60 giorni",
-  "calc-subtitle": "Calcola il termine di notifica secondo l'Art. 370 nCO. Rilevamento automatico vecchio/nuovo diritto.",
+  "calc-subtitle": "Calcola il termine di notifica secondo l'Art. 370 CO 2026. Rilevamento automatico vecchio/nuovo diritto.",
   "calc-contract-date": "Data del contratto (contratto d'appalto)",
   "calc-contract-hint": "Determina se si applica il vecchio o il nuovo diritto (data chiave: 1.1.2026)",
   "calc-discovery-date": "Data di scoperta del difetto",
   "calc-discovery-hint": "Quando è stato scoperto il difetto?",
   "calc-calculate": "Calcola il termine",
   "calc-regime-new": "Nuovo diritto (Revisione CO 2026)",
-  "calc-regime-new-desc": "Il contratto d'appalto è stato concluso dopo il 1.1.2026. Si applica il nuovo termine di notifica di 60 giorni secondo l'Art. 370 nCO.",
+  "calc-regime-new-desc": "Il contratto d'appalto è stato concluso dopo il 1.1.2026. Si applica il nuovo termine di notifica di 60 giorni secondo l'Art. 370 CO 2026.",
   "calc-regime-old": "Vecchio diritto (prima del 1.1.2026)",
   "calc-regime-old-desc": "Il contratto d'appalto è stato concluso prima del 1.1.2026. Si applica il vecchio diritto — notifica immediata senza termine fisso.",
   "calc-60day-title": "Termine di notifica 60 giorni",
-  "calc-60day-desc": "Art. 370 nCO — Notifica dei difetti entro 60 giorni dalla scoperta",
+  "calc-60day-desc": "Art. 370 CO 2026 — Notifica dei difetti entro 60 giorni dalla scoperta",
   "calc-discovery-label": "Scoperta",
   "calc-deadline-label": "Scadenza",
   "calc-days-remaining": "giorni rimanenti",
@@ -560,7 +655,7 @@ export const it = {
   "calc-old-law-detail": "Sotto il vecchio diritto, i difetti devono essere notificati immediatamente dopo la scoperta. Non esiste un termine fisso di 60 giorni. La notifica deve avvenire il più rapidamente possibile.",
   "calc-disclaimer": "Avvertenza: questo strumento è fornito a titolo orientativo e non sostituisce una consulenza legale. In caso di dubbio, consultare un avvocato.",
   "calc-info-title": "Contesto: Revisione CO 2026",
-  "calc-info-p1": "La revisione del diritto di garanzia nel contratto d'appalto entra in vigore il 1° gennaio 2026. La novità principale: l'Art. 370 nCO introduce un termine esplicito di 60 giorni per i difetti scoperti dopo il collaudo.",
+  "calc-info-p1": "La revisione del diritto di garanzia nel contratto d'appalto entra in vigore il 1° gennaio 2026. La novità principale: l'Art. 370 CO 2026 introduce un termine esplicito di 60 giorni per i difetti scoperti dopo il collaudo.",
   "calc-info-p2": "Diritto transitorio: il nuovo termine di 60 giorni si applica solo ai contratti d'appalto conclusi dal 1.1.2026. I vecchi contratti restano soggetti all'obbligo di notifica immediata.",
   "calc-info-p3": "Importante: il termine di 60 giorni inizia dalla scoperta del difetto — non dalla data di collaudo. Se si perde il termine, si perdono i diritti per difetti.",
 };
@@ -573,12 +668,35 @@ export const en = {
   "btn-login": "Login",
   
   // Hero
-  "hero-badge": "New since 1.1.2026: 60-day defect notice deadline (Art. 370 nCO)",
+  "hero-badge": "New since 1.1.2026: 60-day defect notice deadline (Art. 370 CO 2026)",
   "hero-title": "Never Miss a Deadline Again",
   "hero-subtitle": "Since January 1, 2026, property owners lose their defect rights if they fail to notify within 60 days. BauCompliance calculates deadlines automatically, generates legally compliant handover protocols, and secures evidence digitally.",
   "btn-secure": "Start for Free",
   "btn-law": "Calculate Deadline",
   
+  // Trust metrics
+  "trust-cantons": "Cantons covered",
+  "trust-sia": "SIA 118 compliant",
+  "trust-deadline": "Day notice period",
+
+  // Hero extras
+  "hero-scroll": "Learn more",
+
+  // How it Works
+  "how-title": "How It Works",
+  "how-heading": "Protected in three steps",
+  "how-step1-title": "Create the protocol",
+  "how-step1-desc": "Generate SIA 118-compliant acceptance protocols on-site with digital signatures.",
+  "how-step2-title": "Monitor deadlines",
+  "how-step2-desc": "All legal deadlines are calculated automatically. Get alerts before it's too late.",
+  "how-step3-title": "Secure evidence",
+  "how-step3-desc": "Geo-tagged photos and cryptographically signed PDFs as legally valid evidence.",
+
+  // Final CTA
+  "cta-title": "Ready for the CO Revision 2026?",
+  "cta-desc": "Protect your business from losing legal rights. Start today — for free.",
+  "cta-btn": "Start for free",
+
   // Features
   "feat-handover-title": "Digital Handover Protocols",
   "feat-handover-desc": "Generate SIA 118-compliant acceptance protocols on-site — with digital signatures and cryptographically signed PDFs.",
@@ -611,6 +729,14 @@ export const en = {
   // Footer
   "footer-impressum": "Legal Notice",
   "footer-datenschutz": "Privacy Policy",
+  "footer-legal": "Legal",
+  "footer-status": "All systems operational",
+
+  // Sidebar
+  "menu-nav": "Navigation",
+
+  // Deadline marker
+  "deadlines-marker": "Deadlines",
 
   // Team plan
   "plan-team": "Team",
@@ -727,18 +853,18 @@ export const en = {
   "calc-back": "Back to homepage",
   "calc-badge": "Free Tool",
   "calc-title": "60-Day Defect Notice Calculator",
-  "calc-subtitle": "Calculate the notice deadline under Art. 370 nCO. Automatic old vs. new law detection.",
+  "calc-subtitle": "Calculate the notice deadline under Art. 370 CO 2026. Automatic old vs. new law detection.",
   "calc-contract-date": "Contract date (construction contract)",
   "calc-contract-hint": "Determines whether old or new law applies (cutoff: 1.1.2026)",
   "calc-discovery-date": "Defect discovery date",
   "calc-discovery-hint": "When was the defect discovered?",
   "calc-calculate": "Calculate deadline",
   "calc-regime-new": "New Law (CO Revision 2026)",
-  "calc-regime-new-desc": "The construction contract was signed after 1.1.2026. The new 60-day notice period under Art. 370 nCO applies.",
+  "calc-regime-new-desc": "The construction contract was signed after 1.1.2026. The new 60-day notice period under Art. 370 CO 2026 applies.",
   "calc-regime-old": "Old Law (before 1.1.2026)",
   "calc-regime-old-desc": "The construction contract was signed before 1.1.2026. The old law applies — immediate notice obligation with no fixed deadline.",
   "calc-60day-title": "60-Day Notice Deadline",
-  "calc-60day-desc": "Art. 370 nCO — Notify defects within 60 days of discovery",
+  "calc-60day-desc": "Art. 370 CO 2026 — Notify defects within 60 days of discovery",
   "calc-discovery-label": "Discovery",
   "calc-deadline-label": "Deadline",
   "calc-days-remaining": "days remaining",
@@ -749,7 +875,9 @@ export const en = {
   "calc-old-law-detail": "Under the old law, defects must be notified immediately upon discovery. There is no fixed 60-day period. Notification should happen as soon as possible.",
   "calc-disclaimer": "Disclaimer: This tool is for informational purposes only and does not constitute legal advice. Consult a lawyer if in doubt.",
   "calc-info-title": "Background: CO Revision 2026",
-  "calc-info-p1": "The revision of construction warranty law under the Code of Obligations enters into force on January 1, 2026. The key change: Art. 370 nCO introduces an explicit 60-day notice period for defects discovered after acceptance.",
+  "calc-info-p1": "The revision of construction warranty law under the Code of Obligations enters into force on January 1, 2026. The key change: Art. 370 CO 2026 introduces an explicit 60-day notice period for defects discovered after acceptance.",
   "calc-info-p2": "Transitional law: The new 60-day period only applies to construction contracts signed on or after 1.1.2026. Pre-existing contracts remain subject to the immediate notice obligation.",
   "calc-info-p3": "Important: The 60-day period starts from the date of defect discovery — not from the acceptance date. If you miss the deadline, you lose your defect rights.",
 };
+
+export type TranslationKey = keyof typeof de;
