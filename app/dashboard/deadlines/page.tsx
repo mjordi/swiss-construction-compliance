@@ -3,36 +3,11 @@
 import { useState } from "react";
 import { Clock, Download, RotateCcw, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
+import { addDays, addYears, getDaysRemaining, formatDateCH } from "@/lib/legal-utils";
+import PageHeader from "@/components/dashboard/PageHeader";
+import type { TranslationKey } from "@/locales";
 
-interface Deadline {
-  key: string;
-  titleKey: string;
-  descKey: string;
-  date: Date;
-  daysRemaining: number;
-  status: "ok" | "warning" | "urgent" | "expired";
-}
-
-function addDays(date: Date, days: number): Date {
-  const result = new Date(date);
-  result.setDate(result.getDate() + days);
-  return result;
-}
-
-function addYears(date: Date, years: number): Date {
-  const result = new Date(date);
-  result.setFullYear(result.getFullYear() + years);
-  return result;
-}
-
-function getDaysRemaining(deadline: Date): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const target = new Date(deadline);
-  target.setHours(0, 0, 0, 0);
-  return Math.floor((target.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-}
-
+/** Wider thresholds than legal-utils (7/21) since this page handles multi-year deadlines */
 function getStatus(days: number): "ok" | "warning" | "urgent" | "expired" {
   if (days < 0) return "expired";
   if (days <= 14) return "urgent";
@@ -40,12 +15,13 @@ function getStatus(days: number): "ok" | "warning" | "urgent" | "expired" {
   return "ok";
 }
 
-function formatDate(date: Date): string {
-  return date.toLocaleDateString("de-CH", {
-    year: "numeric",
-    month: "long",
-    day: "numeric",
-  });
+interface Deadline {
+  key: string;
+  titleKey: TranslationKey;
+  descKey: TranslationKey;
+  date: Date;
+  daysRemaining: number;
+  status: "ok" | "warning" | "urgent" | "expired";
 }
 
 function generateICS(deadlines: Deadline[], acceptanceDate: Date): string {
@@ -180,11 +156,11 @@ export default function DeadlinesPage() {
     <div>
       {/* Header */}
       <div className="mb-8">
-        <div className="section-marker mb-3">{t("deadlines-marker" as Parameters<typeof t>[0])}</div>
-        <h1 className="text-2xl font-[family-name:var(--font-display)] italic text-cream mb-1.5">
-          {t("deadlines-title")}
-        </h1>
-        <p className="text-muted text-sm">{t("deadlines-subtitle")}</p>
+        <PageHeader
+          marker={t("deadlines-marker")}
+          title={t("deadlines-title")}
+          subtitle={t("deadlines-subtitle")}
+        />
       </div>
 
       {/* Input form */}
@@ -246,7 +222,7 @@ export default function DeadlinesPage() {
                 const cfg = statusConfig[d.status];
                 return (
                   <div key={i} className="flex items-center gap-3 mt-4">
-                    <div className="w-32 text-[12px] text-muted text-right">{formatDate(d.date)}</div>
+                    <div className="w-32 text-[12px] text-muted text-right">{formatDateCH(d.date)}</div>
                     <div className="flex-1 relative">
                       <div className="w-full h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
                         <div
@@ -276,17 +252,17 @@ export default function DeadlinesPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <Icon className={`w-5 h-5 ${cfg.text}`} />
-                      <span className="font-semibold text-cream">{t(d.titleKey as Parameters<typeof t>[0])}</span>
+                      <span className="font-semibold text-cream">{t(d.titleKey )}</span>
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${cfg.text} bg-current/[0.06]`}>
                         {cfg.label}
                       </span>
                     </div>
                     <p className="text-sm text-muted mb-3">
-                      {t(d.descKey as Parameters<typeof t>[0])}
+                      {t(d.descKey )}
                     </p>
                     <div className="flex items-center gap-2 text-sm">
                       <span className="text-muted/60">{t("deadlines-deadline-date")}:</span>
-                      <span className="font-semibold text-cream">{formatDate(d.date)}</span>
+                      <span className="font-semibold text-cream">{formatDateCH(d.date)}</span>
                     </div>
                   </div>
                   <div className={`text-right ${cfg.text}`}>

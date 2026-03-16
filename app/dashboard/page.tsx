@@ -9,6 +9,7 @@ import SignaturePad from 'signature_pad';
 import { useLanguage } from "@/context/LanguageContext";
 
 const steps = [1, 2, 3];
+const INPUT_CLASS = "w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream placeholder-muted/40 focus:border-accent/40 outline-none transition-colors duration-200";
 
 export default function Dashboard() {
   const [step, setStep] = useState(1);
@@ -135,7 +136,7 @@ export default function Dashboard() {
                     <input
                       type="text"
                       placeholder="e.g. Residentia West"
-                      className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream placeholder-muted/40 focus:border-accent/40 outline-none transition-colors duration-200"
+                      className={INPUT_CLASS}
                       value={projectData.name}
                       onChange={(e) => setProjectData({...projectData, name: e.target.value})}
                     />
@@ -154,7 +155,7 @@ export default function Dashboard() {
                   <input
                     type="text"
                     placeholder="Company Name AG"
-                    className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream placeholder-muted/40 focus:border-accent/40 outline-none transition-colors duration-200"
+                    className={INPUT_CLASS}
                     value={projectData.contractor}
                     onChange={(e) => setProjectData({...projectData, contractor: e.target.value})}
                   />
@@ -165,7 +166,7 @@ export default function Dashboard() {
                   <input
                     type="text"
                     placeholder="Client Name"
-                    className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream placeholder-muted/40 focus:border-accent/40 outline-none transition-colors duration-200"
+                    className={INPUT_CLASS}
                     value={projectData.client}
                     onChange={(e) => setProjectData({...projectData, client: e.target.value})}
                   />

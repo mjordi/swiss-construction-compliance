@@ -6,14 +6,13 @@ import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
-import type { de } from "@/locales";
 
 const navItems = [
-  { icon: FileText, label: "menu-audit", href: "/dashboard" },
-  { icon: Shield, label: "menu-risk", href: "/dashboard/risk" },
-  { icon: Clock, label: "menu-deadlines", href: "/dashboard/deadlines" },
-  { icon: Lock, label: "menu-vault", href: "/dashboard/vault" },
-  { icon: Settings, label: "menu-settings", href: "/dashboard/settings" },
+  { icon: FileText, label: "menu-audit" as const, href: "/dashboard" },
+  { icon: Shield, label: "menu-risk" as const, href: "/dashboard/risk" },
+  { icon: Clock, label: "menu-deadlines" as const, href: "/dashboard/deadlines" },
+  { icon: Lock, label: "menu-vault" as const, href: "/dashboard/vault" },
+  { icon: Settings, label: "menu-settings" as const, href: "/dashboard/settings" },
 ];
 
 export default function Sidebar() {
@@ -47,7 +46,7 @@ export default function Sidebar() {
       )}
 
       <div className="px-4 pt-4 pb-1 text-[9px] font-semibold uppercase tracking-[0.15em] text-muted/40">
-        {t("menu-nav" as keyof typeof de)}
+        {t("menu-nav")}
       </div>
 
       <nav className="flex-1 px-2 py-1 space-y-px">
@@ -68,7 +67,7 @@ export default function Sidebar() {
                 <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-accent rounded-r" />
               )}
               <item.icon className="w-4 h-4 shrink-0" />
-              {t(item.label as keyof typeof de)}
+              {t(item.label)}
             </Link>
           );
         })}

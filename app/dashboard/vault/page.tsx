@@ -1,6 +1,7 @@
 "use client";
 
 import { Folder, FileText, MoreVertical, Plus, Search, ShieldCheck } from "lucide-react";
+import PageHeader from "@/components/dashboard/PageHeader";
 import { useState } from "react";
 import { motion } from "framer-motion";
 
@@ -17,9 +18,11 @@ export default function TechVault() {
     <div className="h-[calc(100vh-125px)] flex flex-col">
       <header className="mb-6 flex justify-between items-end">
         <div>
-          <div className="section-marker mb-3">Documents</div>
-          <h1 className="text-2xl font-[family-name:var(--font-display)] italic text-cream mb-1.5">Technical Vault</h1>
-          <p className="text-muted text-sm">Secure, compliant storage for 2026 mandated documentation.</p>
+          <PageHeader
+            marker="Documents"
+            title="Technical Vault"
+            subtitle="Secure, compliant storage for 2026 mandated documentation."
+          />
         </div>
         <button className="bg-white/[0.04] hover:bg-white/[0.06] text-cream px-4 py-2.5 rounded-lg flex items-center gap-2 transition-all duration-300 text-[13px] font-semibold border border-white/[0.06]">
           <Plus className="w-4 h-4" /> New Project

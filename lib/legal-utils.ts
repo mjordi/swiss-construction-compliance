@@ -48,6 +48,15 @@ export function determineLegalRegime(contractDate: Date): LegalRegime {
 }
 
 /**
+ * Add calendar years to a date.
+ */
+export function addYears(date: Date, years: number): Date {
+  const result = new Date(date);
+  result.setFullYear(result.getFullYear() + years);
+  return result;
+}
+
+/**
  * Add calendar days to a date.
  */
 export function addDays(date: Date, days: number): Date {

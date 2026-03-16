@@ -1,3 +1,5 @@
+export const SUPPORTED_LANGUAGES = ["de", "fr", "it", "en"] as const;
+
 export const de = {
   // Navigation
   "nav-home": "Funktionen",
@@ -877,3 +879,5 @@ export const en = {
   "calc-info-p2": "Transitional law: The new 60-day period only applies to construction contracts signed on or after 1.1.2026. Pre-existing contracts remain subject to the immediate notice obligation.",
   "calc-info-p3": "Important: The 60-day period starts from the date of defect discovery — not from the acceptance date. If you miss the deadline, you lose your defect rights.",
 };
+
+export type TranslationKey = keyof typeof de;
