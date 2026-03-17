@@ -3,6 +3,7 @@ import {
   determineLegalRegime,
   calculateRuegefrist,
   addDays,
+  generateDeadlineICS,
   OR_REVISION_DATE,
 } from "../lib/legal-utils";
 
@@ -30,6 +31,29 @@ describe("addDays", () => {
     const base = new Date("2026-12-15");
     const result = addDays(base, 60);
     expect(result.toISOString().split("T")[0]).toBe("2027-02-13");
+  });
+});
+
+describe("generateDeadlineICS", () => {
+  it("uses non-inclusive DTEND for all-day single-day events", () => {
+    const ics = generateDeadlineICS(
+      new Date("2026-04-30"),
+      "Deadline",
+      "Description"
+    );
+
+    expect(ics).toContain("DTSTART;VALUE=DATE:20260430");
+    expect(ics).toContain("DTEND;VALUE=DATE:20260501");
+  });
+
+  it("creates a reminder 7 days before the deadline", () => {
+    const ics = generateDeadlineICS(
+      new Date("2026-04-30"),
+      "Deadline",
+      "Description"
+    );
+
+    expect(ics).toContain("TRIGGER;VALUE=DATE:20260423");
   });
 });
 
