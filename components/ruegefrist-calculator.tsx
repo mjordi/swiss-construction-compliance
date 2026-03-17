@@ -16,6 +16,7 @@ import {
   calculateRuegefrist,
   formatDateCH,
   generateDeadlineICS,
+  validateRuegefristInput,
   type RuegefristResult,
 } from "@/lib/legal-utils";
 
@@ -48,8 +49,13 @@ export default function RuegefristCalculator() {
   const [discoveryDate, setDiscoveryDate] = useState("");
   const [result, setResult] = useState<RuegefristResult | null>(null);
 
+  const validationError =
+    contractDate && discoveryDate
+      ? validateRuegefristInput(new Date(contractDate), new Date(discoveryDate))
+      : null;
+
   function calculate() {
-    if (!contractDate || !discoveryDate) return;
+    if (!contractDate || !discoveryDate || validationError) return;
     const r = calculateRuegefrist(
       new Date(contractDate),
       new Date(discoveryDate)
@@ -110,12 +116,17 @@ export default function RuegefristCalculator() {
               className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-3 text-cream focus:outline-none focus:border-accent/40 transition-colors duration-300 [color-scheme:dark]"
             />
             <p className="text-[11px] text-muted/60 mt-1.5">{t("calc-discovery-hint")}</p>
+            {validationError === "discovery-before-contract" && (
+              <p className="text-[11px] text-red-400 mt-1.5">
+                {t("calc-discovery-before-contract")}
+              </p>
+            )}
           </div>
 
           <div className="flex gap-3 pt-1">
             <button
               onClick={calculate}
-              disabled={!contractDate || !discoveryDate}
+              disabled={!contractDate || !discoveryDate || !!validationError}
               className="flex-1 px-6 py-3 bg-accent hover:bg-accent/90 disabled:opacity-30 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-all duration-300 shadow-[0_4px_16px_rgba(217,119,6,0.2)] flex items-center justify-center gap-2 text-[14px]"
             >
               <Scale className="w-4 h-4" />
