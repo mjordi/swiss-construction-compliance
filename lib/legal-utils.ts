@@ -152,6 +152,12 @@ export function generateDeadlineICS(
   const now = new Date();
   const stamp = now.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
   const dateStr = deadlineDate.toISOString().split("T")[0].replace(/-/g, "");
+  // RFC5545: DTEND for DATE values is non-inclusive, so single-day all-day events
+  // must end on the following date to render correctly across calendar clients.
+  const endDateStr = addDays(deadlineDate, 1)
+    .toISOString()
+    .split("T")[0]
+    .replace(/-/g, "");
   const reminderDate = addDays(deadlineDate, -7);
   const reminderStr = reminderDate.toISOString().split("T")[0].replace(/-/g, "");
 
@@ -164,7 +170,7 @@ BEGIN:VEVENT
 UID:baucompliance-ruegefrist-${stamp}@baucompliance.ch
 DTSTAMP:${stamp}
 DTSTART;VALUE=DATE:${dateStr}
-DTEND;VALUE=DATE:${dateStr}
+DTEND;VALUE=DATE:${endDateStr}
 SUMMARY:${title}
 DESCRIPTION:${description.replace(/\n/g, "\\n")}
 BEGIN:VALARM
