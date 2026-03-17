@@ -20,6 +20,8 @@ export interface DeadlineResult {
   status: "ok" | "warning" | "urgent" | "expired";
 }
 
+export type RuegefristInputValidationError = "discovery-before-contract";
+
 export interface RuegefristResult {
   /** Which legal regime applies */
   regime: LegalRegime;
@@ -98,6 +100,19 @@ export function getStatus(
  * @param discoveryDate - Date the defect was discovered
  * @returns RuegefristResult with deadline or regime info
  */
+export function validateRuegefristInput(
+  contractDate: Date,
+  discoveryDate: Date
+): RuegefristInputValidationError | null {
+  const c = new Date(contractDate);
+  c.setHours(0, 0, 0, 0);
+  const d = new Date(discoveryDate);
+  d.setHours(0, 0, 0, 0);
+
+  if (d < c) return "discovery-before-contract";
+  return null;
+}
+
 export function calculateRuegefrist(
   contractDate: Date,
   discoveryDate: Date

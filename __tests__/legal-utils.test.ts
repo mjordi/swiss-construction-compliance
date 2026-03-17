@@ -4,6 +4,7 @@ import {
   calculateRuegefrist,
   addDays,
   generateDeadlineICS,
+  validateRuegefristInput,
   OR_REVISION_DATE,
 } from "../lib/legal-utils";
 
@@ -54,6 +55,23 @@ describe("generateDeadlineICS", () => {
     );
 
     expect(ics).toContain("TRIGGER;VALUE=DATE:20260423");
+  });
+});
+
+describe("validateRuegefristInput", () => {
+  it("returns error when discovery date is before contract date", () => {
+    expect(
+      validateRuegefristInput(new Date("2026-03-01"), new Date("2026-02-28"))
+    ).toBe("discovery-before-contract");
+  });
+
+  it("returns null when discovery date is on or after contract date", () => {
+    expect(
+      validateRuegefristInput(new Date("2026-03-01"), new Date("2026-03-01"))
+    ).toBeNull();
+    expect(
+      validateRuegefristInput(new Date("2026-03-01"), new Date("2026-03-10"))
+    ).toBeNull();
   });
 });
 
