@@ -1,6 +1,6 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, ReactNode } from "react";
+import { createContext, useContext, useState, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 
 interface AuthContextType {
@@ -13,19 +13,13 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<{ email: string; name: string } | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const router = useRouter();
-
-  useEffect(() => {
-    // Check local storage on mount — use startTransition to avoid cascading render warning
+  const [user, setUser] = useState<{ email: string; name: string } | null>(() => {
+    if (typeof window === "undefined") return null;
     const storedUser = localStorage.getItem("baucompliance_user");
-    const parsed = storedUser ? (JSON.parse(storedUser) as { email: string; name: string }) : null;
-    // Batch both state updates together to avoid cascading renders
-    if (parsed) setUser(parsed);
-    setIsLoading(false);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    return storedUser ? (JSON.parse(storedUser) as { email: string; name: string }) : null;
+  });
+  const [isLoading] = useState(false);
+  const router = useRouter();
 
   const login = (email: string) => {
     // Simulate API call
