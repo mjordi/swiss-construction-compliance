@@ -50,22 +50,22 @@ export default function MobileNav() {
         <div className="flex items-center justify-between px-4 py-3">
           <div>
             <div className="text-xs font-semibold uppercase tracking-[0.24em] text-muted">
-              Dashboard
+              {t("mobile-nav-dashboard")}
             </div>
             <div className="mt-1 text-sm font-medium text-cream">
-              {activeItem ? t(activeItem.label as keyof typeof de) : "Navigation"}
+              {activeItem ? t(activeItem.label as keyof typeof de) : t("menu-nav")}
             </div>
           </div>
           <button
             type="button"
             onClick={() => setIsOpen(true)}
             className="inline-flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-sm font-medium text-cream transition-colors hover:bg-white/[0.06]"
-            aria-label="Open navigation menu"
+            aria-label={t("mobile-nav-open-aria")}
             aria-expanded={isOpen}
             aria-controls="mobile-dashboard-nav"
           >
             <Menu className="h-4 w-4" />
-            Menu
+            {t("mobile-nav-menu")}
           </button>
         </div>
       </div>
@@ -75,7 +75,7 @@ export default function MobileNav() {
           <button
             type="button"
             className="absolute inset-0 bg-[#020617]/80 backdrop-blur-sm"
-            aria-label="Close navigation menu"
+            aria-label={t("mobile-nav-close-aria")}
             onClick={closeMenu}
           />
 
@@ -83,17 +83,17 @@ export default function MobileNav() {
             id="mobile-dashboard-nav"
             role="dialog"
             aria-modal="true"
-            aria-label="Dashboard navigation"
+            aria-label={t("mobile-nav-dialog-aria")}
             className="absolute inset-y-0 left-0 flex w-full max-w-xs flex-col border-r border-white/[0.08] bg-[#0a0f1c] shadow-2xl"
           >
             <div className="border-b border-white/[0.04] px-4 py-4">
               <div className="flex items-center justify-between">
-                <span className="text-sm font-semibold tracking-tight text-cream">Navigation</span>
+                <span className="text-sm font-semibold tracking-tight text-cream">{t("menu-nav")}</span>
                 <button
                   type="button"
                   onClick={closeMenu}
                   className="rounded-lg border border-white/[0.08] p-2 text-muted transition-colors hover:bg-white/[0.04] hover:text-cream"
-                  aria-label="Close navigation menu"
+                  aria-label={t("mobile-nav-close-aria")}
                 >
                   <X className="h-4 w-4" />
                 </button>

@@ -7,6 +7,7 @@ import { pdf } from '@react-pdf/renderer';
 import { AuditReportPDF } from "@/components/dashboard/AuditReportPDF";
 import SignaturePad from 'signature_pad';
 import { useLanguage } from "@/context/LanguageContext";
+import type { TranslationKey } from "@/locales";
 import { buildComplianceRecord } from "@/lib/compliance-record";
 
 const PROJECT_DRAFT_STORAGE_KEY = "baucompliance:wizard-project-draft";
@@ -90,7 +91,7 @@ export default function Dashboard() {
 
   const handleGenerateProtocol = async () => {
     if (sigPad && sigPad.isEmpty()) {
-        alert("Please provide a signature first.");
+        alert(t("dashboard-signature-required"));
         return;
     }
 
@@ -183,7 +184,7 @@ export default function Dashboard() {
                     <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("label-project")}</label>
                     <input
                       type="text"
-                      placeholder="e.g. Residentia West"
+                      placeholder={t("dashboard-project-placeholder")}
                       className={INPUT_CLASS}
                       value={projectData.name}
                       onChange={(e) => setProjectData({...projectData, name: e.target.value})}
@@ -193,7 +194,7 @@ export default function Dashboard() {
                     <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("label-date")}</label>
                     <div className="flex items-center gap-2 bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-muted">
                       <Calendar className="w-4 h-4" />
-                      <span className="text-sm">{new Date().toLocaleDateString('de-CH')}</span>
+                      <span className="text-sm">{new Date().toLocaleDateString()}</span>
                     </div>
                   </div>
                 </div>
@@ -202,7 +203,7 @@ export default function Dashboard() {
                   <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("label-contractor")}</label>
                   <input
                     type="text"
-                    placeholder="Company Name AG"
+                    placeholder={t("dashboard-contractor-placeholder")}
                     className={INPUT_CLASS}
                     value={projectData.contractor}
                     onChange={(e) => setProjectData({...projectData, contractor: e.target.value})}
@@ -213,7 +214,7 @@ export default function Dashboard() {
                   <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("label-client")}</label>
                   <input
                     type="text"
-                    placeholder="Client Name"
+                    placeholder={t("dashboard-client-placeholder")}
                     className={INPUT_CLASS}
                     value={projectData.client}
                     onChange={(e) => setProjectData({...projectData, client: e.target.value})}
@@ -229,7 +230,7 @@ export default function Dashboard() {
                     {t("btn-next")}
                   </button>
                   {!canProceedStep1 && (
-                    <p className="mt-2 text-xs text-muted">Please fill in project, contractor, and client before continuing.</p>
+                    <p className="mt-2 text-xs text-muted">{t("dashboard-step1-required")}</p>
                   )}
                 </div>
               </div>
@@ -349,49 +350,38 @@ export default function Dashboard() {
             <div className="space-y-2.5 text-[13px] text-muted">
               <div className="flex justify-between">
                 <span>{t("context-warranty")}</span>
-                <span className="text-cream font-semibold">5 Years</span>
+                <span className="text-cream font-semibold">{t("dashboard-warranty-value")}</span>
               </div>
               <div className="flex justify-between">
                 <span>{t("context-standard")}</span>
-                <span className="text-cream font-semibold">SIA 118 (2026)</span>
+                <span className="text-cream font-semibold">{t("dashboard-standard-value")}</span>
               </div>
             </div>
           </div>
 
           <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05]">
-            <h4 className="text-[11px] font-semibold text-muted uppercase tracking-[0.12em] mb-3">Compliance Record Preview</h4>
-            <div className="text-xs text-muted mb-4">Case ID</div>
+            <h4 className="text-[11px] font-semibold text-muted uppercase tracking-[0.12em] mb-3">{t("dashboard-compliance-preview")}</h4>
+            <div className="text-xs text-muted mb-4">{t("dashboard-case-id")}</div>
             <div className="font-mono text-xs text-accent break-all mb-5">{complianceRecord.caseId}</div>
 
             <div className="space-y-2.5 text-sm">
-              <div className="flex items-center justify-between">
-                <span className="text-muted">Project data complete</span>
-                <span className={complianceRecord.checklist.projectData ? "text-emerald-400" : "text-muted/50"}>
-                  {complianceRecord.checklist.projectData ? "Done" : "Open"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted">Defect log captured</span>
-                <span className={complianceRecord.checklist.defectLog ? "text-emerald-400" : "text-muted/50"}>
-                  {complianceRecord.checklist.defectLog ? "Done" : "Open"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted">Signature attached</span>
-                <span className={complianceRecord.checklist.signature ? "text-emerald-400" : "text-muted/50"}>
-                  {complianceRecord.checklist.signature ? "Done" : "Open"}
-                </span>
-              </div>
-              <div className="flex items-center justify-between">
-                <span className="text-muted">Export-ready dossier</span>
-                <span className={complianceRecord.checklist.exportReady ? "text-emerald-400" : "text-muted/50"}>
-                  {complianceRecord.checklist.exportReady ? "Done" : "Open"}
-                </span>
-              </div>
+              <ChecklistRow label={t("dashboard-check-project-data")} done={complianceRecord.checklist.projectData} t={t} />
+              <ChecklistRow label={t("dashboard-check-defect-log")} done={complianceRecord.checklist.defectLog} t={t} />
+              <ChecklistRow label={t("dashboard-check-signature")} done={complianceRecord.checklist.signature} t={t} />
+              <ChecklistRow label={t("dashboard-check-export-ready")} done={complianceRecord.checklist.exportReady} t={t} />
             </div>
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ChecklistRow({ label, done, t }: { label: string; done: boolean; t: (key: TranslationKey) => string }) {
+  return (
+    <div className="flex items-center justify-between">
+      <span className="text-muted">{label}</span>
+      <span className={done ? "text-emerald-400" : "text-muted/50"}>{done ? t("dashboard-status-done") : t("dashboard-status-open")}</span>
     </div>
   );
 }

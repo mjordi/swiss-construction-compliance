@@ -4,6 +4,7 @@ import { useMemo, useState } from "react";
 import { scaleQuantize } from "d3-scale";
 import { AlertTriangle, TrendingUp, TrendingDown, Minus, Info } from "lucide-react";
 import PageHeader from "@/components/dashboard/PageHeader";
+import { useLanguage } from "@/context/LanguageContext";
 
 const cantons = [
   { id: "ZH", name: "Zürich",      risk: 88, trend: "up",     description: "Strictest enforcement of digital handover protocols. Dense urban construction with complex multi-party liability chains." },
@@ -39,7 +40,7 @@ const colorScale = scaleQuantize<string>()
   .range(["#4ade80", "#a3e635", "#facc15", "#fb923c", "#ef4444"]);
 
 const TrendIcon = ({ trend }: { trend: string }) => {
-  if (trend === "up")   return <TrendingUp   className="w-4 h-4 text-red-400" />;
+  if (trend === "up")   return <TrendingUp className="w-4 h-4 text-red-400" />;
   if (trend === "down") return <TrendingDown className="w-4 h-4 text-green-400" />;
   return <Minus className="w-4 h-4 text-muted" />;
 };
@@ -59,6 +60,7 @@ export default function RiskMap() {
   const [selectedCantonId, setSelectedCantonId] = useState(cantons[0].id);
   const [riskBand, setRiskBand] = useState<RiskBand>("all");
   const [trendFilter, setTrendFilter] = useState<TrendFilter>("all");
+  const { t } = useLanguage();
 
   const filteredCantons = useMemo(() => {
     return cantons.filter((canton) => {
@@ -80,64 +82,43 @@ export default function RiskMap() {
     <div className="h-[calc(100vh-125px)] flex flex-col">
       <header className="mb-6">
         <PageHeader
-          marker="Risk Assessment"
-          title="Canton Risk Matrix"
-          subtitle="Real-time legislative risk assessment for all 26 Swiss cantons."
+          marker={t("risk-marker")}
+          title={t("risk-title")}
+          subtitle={t("risk-subtitle")}
         />
       </header>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 flex-1 min-h-0">
-
-        {/* Main Grid */}
         <div className="lg:col-span-2 rounded-2xl bg-white/[0.02] border border-white/[0.05] p-6 relative overflow-hidden flex flex-col">
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-green-400 via-yellow-400 to-red-500" />
 
           <div className="flex flex-col md:flex-row gap-3 mb-4">
-            <select
-              value={riskBand}
-              onChange={(e) => setRiskBand(e.target.value as RiskBand)}
-              className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-cream"
-            >
-              <option value="all">All risk bands</option>
-              <option value="critical">Critical (80+)</option>
-              <option value="high">High (60-79)</option>
-              <option value="medium">Medium (40-59)</option>
-              <option value="low">Low (0-39)</option>
+            <select value={riskBand} onChange={(e) => setRiskBand(e.target.value as RiskBand)} className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-cream">
+              <option value="all">{t("risk-filter-band-all")}</option>
+              <option value="critical">{t("risk-filter-band-critical")}</option>
+              <option value="high">{t("risk-filter-band-high")}</option>
+              <option value="medium">{t("risk-filter-band-medium")}</option>
+              <option value="low">{t("risk-filter-band-low")}</option>
             </select>
 
-            <select
-              value={trendFilter}
-              onChange={(e) => setTrendFilter(e.target.value as TrendFilter)}
-              className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-cream"
-            >
-              <option value="all">All trends</option>
-              <option value="up">Rising</option>
-              <option value="stable">Stable</option>
-              <option value="down">Falling</option>
+            <select value={trendFilter} onChange={(e) => setTrendFilter(e.target.value as TrendFilter)} className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-cream">
+              <option value="all">{t("risk-filter-trend-all")}</option>
+              <option value="up">{t("risk-filter-trend-up")}</option>
+              <option value="stable">{t("risk-filter-trend-stable")}</option>
+              <option value="down">{t("risk-filter-trend-down")}</option>
             </select>
 
             <div className="text-xs text-muted self-center md:ml-auto">
-              Showing {filteredCantons.length} of {cantons.length} cantons
+              {t("risk-showing")} {filteredCantons.length} {t("risk-of")} {cantons.length} {t("risk-cantons")}
             </div>
           </div>
 
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 overflow-y-auto pr-2 custom-scrollbar">
             {filteredCantons.map((canton) => (
-              <div
-                key={canton.id}
-                onClick={() => setSelectedCantonId(canton.id)}
-                className={`p-4 rounded-xl border transition-all duration-300 cursor-pointer flex flex-col justify-between h-32 ${
-                  selectedCanton.id === canton.id
-                    ? "bg-white/[0.06] border-accent/30 shadow-[0_0_30px_rgba(217,119,6,0.08)]"
-                    : "bg-white/[0.02] border-white/[0.05] hover:bg-white/[0.04] hover:border-white/[0.08]"
-                }`}
-              >
+              <div key={canton.id} onClick={() => setSelectedCantonId(canton.id)} className={`p-4 rounded-xl border transition-all duration-300 cursor-pointer flex flex-col justify-between h-32 ${selectedCanton.id === canton.id ? "bg-white/[0.06] border-accent/30 shadow-[0_0_30px_rgba(217,119,6,0.08)]" : "bg-white/[0.02] border-white/[0.05] hover:bg-white/[0.04] hover:border-white/[0.08]"}`}>
                 <div className="flex justify-between items-start">
                   <span className="font-semibold text-cream">{canton.id}</span>
-                  <div
-                    className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                    style={{ backgroundColor: colorScale(canton.risk) }}
-                  />
+                  <div className="w-2.5 h-2.5 rounded-full flex-shrink-0" style={{ backgroundColor: colorScale(canton.risk) }} />
                 </div>
                 <div>
                   <div className="text-[12px] font-medium text-muted truncate">{canton.name}</div>
@@ -147,18 +128,15 @@ export default function RiskMap() {
             ))}
           </div>
 
-          {filteredCantons.length === 0 && (
-            <div className="mt-4 text-sm text-muted">No cantons match the current filters.</div>
-          )}
+          {filteredCantons.length === 0 && <div className="mt-4 text-sm text-muted">{t("risk-no-match")}</div>}
 
-          {/* Legend */}
           <div className="mt-4 pt-4 border-t border-white/[0.04] flex items-center gap-4 text-[11px] text-muted">
-            <span className="font-semibold uppercase tracking-wider">Risk:</span>
+            <span className="font-semibold uppercase tracking-wider">{t("risk-legend")}</span>
             {[
-              { color: "#4ade80", label: "Low (0-39)" },
-              { color: "#facc15", label: "Medium (40-59)" },
-              { color: "#fb923c", label: "High (60-79)" },
-              { color: "#ef4444", label: "Critical (80+)" },
+              { color: "#4ade80", label: t("risk-filter-band-low") },
+              { color: "#facc15", label: t("risk-filter-band-medium") },
+              { color: "#fb923c", label: t("risk-filter-band-high") },
+              { color: "#ef4444", label: t("risk-filter-band-critical") },
             ].map(({ color, label }) => (
               <div key={label} className="flex items-center gap-1.5">
                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }} />
@@ -168,7 +146,6 @@ export default function RiskMap() {
           </div>
         </div>
 
-        {/* Sidebar Details */}
         <div className="rounded-2xl bg-white/[0.02] border border-white/[0.05] p-8 flex flex-col relative overflow-y-auto">
           <div className="absolute top-0 left-0 w-[2px] h-full bg-gradient-to-b from-accent via-accent/30 to-transparent" />
 
@@ -181,49 +158,39 @@ export default function RiskMap() {
             <div className="relative w-24 h-24 flex-shrink-0 flex items-center justify-center">
               <svg className="w-full h-full -rotate-90" viewBox="0 0 96 96">
                 <circle cx="48" cy="48" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-white/[0.06]" />
-                <circle
-                  cx="48" cy="48" r="40"
-                  stroke={colorScale(selectedCanton.risk)}
-                  strokeWidth="8"
-                  fill="transparent"
-                  strokeDasharray={`${selectedCanton.risk * 2.51} 251.2`}
-                  strokeLinecap="round"
-                  className="transition-all duration-700 ease-out"
-                />
+                <circle cx="48" cy="48" r="40" stroke={colorScale(selectedCanton.risk)} strokeWidth="8" fill="transparent" strokeDasharray={`${selectedCanton.risk * 2.51} 251.2`} strokeLinecap="round" className="transition-all duration-700 ease-out" />
               </svg>
               <div className="absolute inset-0 flex flex-col items-center justify-center">
                 <span className="text-2xl font-[family-name:var(--font-display)] italic text-cream">{selectedCanton.risk}</span>
-                <span className="text-[9px] text-muted uppercase tracking-[0.15em] font-semibold">RISK</span>
+                <span className="text-[9px] text-muted uppercase tracking-[0.15em] font-semibold">{t("risk-score")}</span>
               </div>
             </div>
 
             <div className="flex-1 space-y-2">
               <div className="flex items-center gap-2 text-sm text-muted">
                 <TrendIcon trend={selectedCanton.trend} />
-                <span>Trend: {selectedCanton.trend === "up" ? "Rising" : selectedCanton.trend === "down" ? "Falling" : "Stable"}</span>
+                <span>{t("risk-trend")}: {selectedCanton.trend === "up" ? t("risk-filter-trend-up") : selectedCanton.trend === "down" ? t("risk-filter-trend-down") : t("risk-filter-trend-stable")}</span>
               </div>
               <div className="flex items-center gap-2 text-sm text-muted">
                 <AlertTriangle className="w-4 h-4 text-yellow-400" />
-                <span>Active Alerts: {selectedCanton.risk >= 80 ? 3 : selectedCanton.risk >= 60 ? 2 : 1}</span>
+                <span>{t("risk-active-alerts")}: {selectedCanton.risk >= 80 ? 3 : selectedCanton.risk >= 60 ? 2 : 1}</span>
               </div>
             </div>
           </div>
 
           <div className="bg-white/[0.02] border border-white/[0.05] rounded-xl p-5 mb-6 flex-1">
             <h3 className="text-[11px] font-semibold text-muted uppercase tracking-[0.12em] mb-3 flex items-center gap-2">
-              <Info className="w-3.5 h-3.5" /> Legal Context
+              <Info className="w-3.5 h-3.5" /> {t("risk-legal-context")}
             </h3>
-            <p className="text-sm leading-relaxed text-muted">
-              {selectedCanton.description}
-            </p>
+            <p className="text-sm leading-relaxed text-muted">{selectedCanton.description}</p>
             <div className="mt-4 pt-4 border-t border-white/[0.04]">
-              <div className="text-[11px] text-muted/60 mb-1">Key 2026 Change</div>
-              <div className="text-sm text-cream font-medium">Art. 371 OR (Strict)</div>
+              <div className="text-[11px] text-muted/60 mb-1">{t("risk-key-change")}</div>
+              <div className="text-sm text-cream font-medium">Art. 371 OR ({t("risk-strict")})</div>
             </div>
           </div>
 
           <button className="w-full py-3.5 bg-accent hover:bg-accent/90 text-white font-semibold rounded-lg shadow-lg shadow-accent/10 transition-colors duration-300">
-            Generate Canton Report
+            {t("risk-generate-report")}
           </button>
         </div>
       </div>
