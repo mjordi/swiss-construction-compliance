@@ -92,6 +92,7 @@ export const de = {
   // Dashboard Sidebar
   "menu-audit": "Abnahme-Engine",
   "menu-risk": "Risiko-Matrix",
+  "menu-cases": "Fälle",
   "menu-vault": "Tech-Tresor",
   "menu-settings": "Einstellungen",
   "menu-logout": "Abmelden",
@@ -313,6 +314,7 @@ export const fr = {
   // Dashboard Sidebar
   "menu-audit": "Moteur de Réception",
   "menu-risk": "Matrice de Risques",
+  "menu-cases": "Dossiers",
   "menu-vault": "Coffre Tech",
   "menu-settings": "Paramètres",
   "menu-logout": "Déconnexion",
@@ -534,6 +536,7 @@ export const it = {
   // Dashboard Sidebar
   "menu-audit": "Motore Collaudo",
   "menu-risk": "Matrice Rischi",
+  "menu-cases": "Casi",
   "menu-vault": "Caveau Tech",
   "menu-settings": "Impostazioni",
   "menu-logout": "Disconnetti",
@@ -755,6 +758,7 @@ export const en = {
   // Dashboard Sidebar
   "menu-audit": "Handover Engine",
   "menu-risk": "Risk Matrix",
+  "menu-cases": "Cases",
   "menu-vault": "Tech Vault",
   "menu-settings": "Settings",
   "menu-logout": "Sign Out",
