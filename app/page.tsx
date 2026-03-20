@@ -100,7 +100,7 @@ export default function Home() {
         href="#main-content"
         className="sr-only focus:not-sr-only focus:absolute focus:top-3 focus:left-3 z-[60] px-4 py-2 rounded-md bg-accent text-white text-sm font-semibold"
       >
-        Zum Hauptinhalt springen
+        {t("home-skip-main")}
       </a>
 
       <Script
@@ -527,7 +527,7 @@ export default function Home() {
       {/* ──────────────────── Social Proof ──────────────────── */}
       <section
         id="social-proof"
-        aria-label="Vertrauenssignale"
+        aria-label={t("home-social-proof-aria")}
         className="px-6 md:px-10 py-16 max-w-7xl mx-auto w-full"
       >
         <motion.div
@@ -732,38 +732,21 @@ export default function Home() {
         className="px-6 md:px-10 py-20 max-w-7xl mx-auto w-full"
       >
         <div className="max-w-3xl">
-          <div className="section-marker mb-6">FAQ</div>
+          <div className="section-marker mb-6">{t("home-faq-marker")}</div>
           <h2 id="faq-title" className="text-3xl md:text-4xl font-[family-name:var(--font-display)] italic text-cream mb-4">
-            Häufige Fragen zur OR-Revision 2026
+            {t("home-faq-title")}
           </h2>
-          <p className="text-muted mb-10">
-            Die wichtigsten Antworten für Bauunternehmen, die Abnahme und Mängelrüge digital absichern wollen.
-          </p>
+          <p className="text-muted mb-10">{t("home-faq-subtitle")}</p>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
           {[
-            {
-              q: "Was ändert sich mit der OR-Revision 2026 konkret?",
-              a: "Die Fristen und Anforderungen rund um Mängelrüge und Dokumentation werden für Bauunternehmen kritischer. BauCompliance hilft, Fristen strukturiert zu erfassen und Nachweise zentral zu dokumentieren.",
-            },
-            {
-              q: "Funktioniert BauCompliance für alle Kantone?",
-              a: "Ja, die Plattform berücksichtigt kantonale Unterschiede über die integrierte Risiko-Matrix und unterstützt eine saubere, nachvollziehbare Projektabwicklung.",
-            },
-            {
-              q: "Brauchen wir ein grosses IT-Projekt für den Start?",
-              a: "Nein. Das MVP ist als schneller Web-Workflow aufgebaut: Team einloggen, Abnahmeprozess starten, Protokoll digital dokumentieren.",
-            },
-            {
-              q: "Für wen lohnt sich der Professional-Plan?",
-              a: "Für Teams mit regelmässigen Abnahmen und höherem Nachweisbedarf. Er bietet mehr Umfang für strukturierte Prozesse und revisionssichere Dokumentation.",
-            },
+            { q: t("home-faq-q1"), a: t("home-faq-a1") },
+            { q: t("home-faq-q2"), a: t("home-faq-a2") },
+            { q: t("home-faq-q3"), a: t("home-faq-a3") },
+            { q: t("home-faq-q4"), a: t("home-faq-a4") },
           ].map((item) => (
-            <article
-              key={item.q}
-              className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05]"
-            >
+            <article key={item.q} className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05]">
               <h3 className="text-base font-semibold text-cream mb-3">{item.q}</h3>
               <p className="text-sm text-muted leading-relaxed">{item.a}</p>
             </article>
