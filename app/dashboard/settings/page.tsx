@@ -1,6 +1,6 @@
 "use client";
 
-import { User, Bell, Shield, CreditCard, LogOut } from "lucide-react";
+import { Bell, Shield, CreditCard, LogOut } from "lucide-react";
 import PageHeader from "@/components/dashboard/PageHeader";
 
 export default function Settings() {
