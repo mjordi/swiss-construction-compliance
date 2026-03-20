@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { scaleQuantize } from "d3-scale";
 import { AlertTriangle, TrendingUp, TrendingDown, Minus, Info } from "lucide-react";
 import PageHeader from "@/components/dashboard/PageHeader";
@@ -56,7 +56,7 @@ function matchesRiskBand(risk: number, riskBand: RiskBand) {
 }
 
 export default function RiskMap() {
-  const [selectedCanton, setSelectedCanton] = useState(cantons[0]);
+  const [selectedCantonId, setSelectedCantonId] = useState(cantons[0].id);
   const [riskBand, setRiskBand] = useState<RiskBand>("all");
   const [trendFilter, setTrendFilter] = useState<TrendFilter>("all");
 
@@ -68,11 +68,13 @@ export default function RiskMap() {
     });
   }, [riskBand, trendFilter]);
 
-  useEffect(() => {
-    if (!filteredCantons.some((c) => c.id === selectedCanton.id)) {
-      setSelectedCanton(filteredCantons[0] ?? cantons[0]);
-    }
-  }, [filteredCantons, selectedCanton.id]);
+  const selectedCanton = useMemo(() => {
+    return (
+      filteredCantons.find((canton) => canton.id === selectedCantonId) ??
+      filteredCantons[0] ??
+      cantons[0]
+    );
+  }, [filteredCantons, selectedCantonId]);
 
   return (
     <div className="h-[calc(100vh-125px)] flex flex-col">
@@ -123,7 +125,7 @@ export default function RiskMap() {
             {filteredCantons.map((canton) => (
               <div
                 key={canton.id}
-                onClick={() => setSelectedCanton(canton)}
+                onClick={() => setSelectedCantonId(canton.id)}
                 className={`p-4 rounded-xl border transition-all duration-300 cursor-pointer flex flex-col justify-between h-32 ${
                   selectedCanton.id === canton.id
                     ? "bg-white/[0.06] border-accent/30 shadow-[0_0_30px_rgba(217,119,6,0.08)]"
