@@ -4,9 +4,14 @@ import { useMemo, useState } from "react";
 import PageHeader from "@/components/dashboard/PageHeader";
 import {
   applyComplianceCaseView,
+  buildCaseDeadlineReminderICS,
   buildComplianceCaseTimeline,
+  deriveChecklistProgress,
+  isDeadlineReminderIcsExportEligible,
   type ComplianceCaseInput,
   type ComplianceCaseViewModel,
+  type FollowUpChecklistKey,
+  type FollowUpChecklistState,
   type CaseRegimeFilter,
   type CaseSortMode,
   type CaseStatusFilter,
@@ -60,15 +65,57 @@ const countdownClass: Record<ComplianceCaseViewModel["deadlineCountdownTone"], s
   expired: "text-red-300 font-semibold",
 };
 
+const checklistLabels: Record<FollowUpChecklistKey, string> = {
+  defectDocumented: "Defect documented",
+  evidenceAttached: "Evidence attached",
+  noticeDrafted: "Notice drafted",
+  calendarReminderExported: "Calendar reminder exported",
+};
+
 export default function CasesPage() {
   const [regimeFilter, setRegimeFilter] = useState<CaseRegimeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<CaseStatusFilter>("all");
   const [sortMode, setSortMode] = useState<CaseSortMode>("nearest-deadline");
+  const [checklistsByCase, setChecklistsByCase] = useState<Record<string, FollowUpChecklistState>>(() =>
+    Object.fromEntries(cases.map((item) => [item.id, item.checklistDefaults]))
+  );
 
   const visibleCases = useMemo(
     () => applyComplianceCaseView(cases, regimeFilter, statusFilter, sortMode),
     [regimeFilter, sortMode, statusFilter]
   );
+
+  function toggleChecklistItem(caseId: string, key: FollowUpChecklistKey) {
+    setChecklistsByCase((prev) => ({
+      ...prev,
+      [caseId]: {
+        ...prev[caseId],
+        [key]: !prev[caseId][key],
+      },
+    }));
+  }
+
+  function downloadCaseReminder(item: ComplianceCaseViewModel) {
+    const content = buildCaseDeadlineReminderICS(item);
+    if (!content) return;
+
+    const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const dateKey = item.noticeDeadline?.toISOString().split("T")[0] ?? "deadline";
+    a.href = url;
+    a.download = `baucompliance-case-${item.id}-notice-deadline-${dateKey}.ics`;
+    a.click();
+    URL.revokeObjectURL(url);
+
+    setChecklistsByCase((prev) => ({
+      ...prev,
+      [item.id]: {
+        ...prev[item.id],
+        calendarReminderExported: true,
+      },
+    }));
+  }
 
   return (
     <div>
@@ -115,65 +162,103 @@ export default function CasesPage() {
       </section>
 
       <div className="space-y-4">
-        {visibleCases.map((item) => (
-          <article
-            key={item.id}
-            className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05]"
-          >
-            <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-4">
-              <div>
-                <h2 className="text-lg font-semibold text-cream">{item.projectName}</h2>
-                <p className="text-sm text-muted mt-1">Canton {item.canton}</p>
+        {visibleCases.map((item) => {
+          const checklist = checklistsByCase[item.id];
+          const progress = deriveChecklistProgress(checklist);
+
+          return (
+            <article
+              key={item.id}
+              className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05]"
+            >
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-4">
+                <div>
+                  <h2 className="text-lg font-semibold text-cream">{item.projectName}</h2>
+                  <p className="text-sm text-muted mt-1">Canton {item.canton}</p>
+                </div>
+
+                <div className="flex flex-wrap gap-2 text-xs">
+                  <span className="px-2.5 py-1 rounded-md border border-white/[0.12] text-muted">
+                    {item.regimeLabel}
+                  </span>
+                  <span
+                    className={`px-2.5 py-1 rounded-md border font-medium ${statusClass[item.status]}`}
+                  >
+                    {item.statusLabel}
+                  </span>
+                  <span className="px-2.5 py-1 rounded-md border border-emerald-500/30 text-emerald-300 bg-emerald-500/[0.08]">
+                    {progress.label}
+                  </span>
+                </div>
               </div>
 
-              <div className="flex flex-wrap gap-2 text-xs">
-                <span className="px-2.5 py-1 rounded-md border border-white/[0.12] text-muted">
-                  {item.regimeLabel}
-                </span>
-                <span
-                  className={`px-2.5 py-1 rounded-md border font-medium ${statusClass[item.status]}`}
-                >
-                  {item.statusLabel}
-                </span>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm mb-5">
+                <InfoCell label="Contract date" value={item.contractDateLabel} />
+                <InfoCell label="Defect discovered" value={item.discoveryDateLabel} />
+                <InfoCell label="60-day notice" value={item.noticeApplies ? "Applies" : "Not fixed"} />
+                <InfoCell label="Notice deadline" value={item.noticeDeadlineLabel} />
               </div>
-            </div>
 
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm mb-5">
-              <InfoCell label="Contract date" value={item.contractDateLabel} />
-              <InfoCell label="Defect discovered" value={item.discoveryDateLabel} />
-              <InfoCell label="60-day notice" value={item.noticeApplies ? "Applies" : "Not fixed"} />
-              <InfoCell label="Notice deadline" value={item.noticeDeadlineLabel} />
-            </div>
+              <details className="rounded-xl border border-white/[0.07] p-4 bg-white/[0.01]">
+                <summary className="cursor-pointer text-sm font-semibold text-cream">
+                  Case detail and follow-up checklist
+                </summary>
+                <div className="mt-4 grid md:grid-cols-3 gap-3 text-sm mb-4">
+                  <InfoCell label="Next legal action" value={item.nextAction} />
+                  <InfoCell
+                    label="Deadline countdown"
+                    value={item.deadlineCountdownLabel}
+                    valueClassName={countdownClass[item.deadlineCountdownTone]}
+                  />
+                  <InfoCell
+                    label="Reminder readiness"
+                    value={[
+                      item.reminderReadiness.calendarExportReady
+                        ? "Calendar export ready"
+                        : "Calendar export pending",
+                      item.reminderReadiness.emailReminderPlanned
+                        ? "Email reminder planned"
+                        : "Email reminder not planned",
+                      item.reminderReadiness.evidenceComplete
+                        ? "Evidence complete"
+                        : "Evidence incomplete",
+                    ].join(" · ")}
+                  />
+                </div>
 
-            <details className="rounded-xl border border-white/[0.07] p-4 bg-white/[0.01]">
-              <summary className="cursor-pointer text-sm font-semibold text-cream">
-                Case detail and reminder readiness
-              </summary>
-              <div className="mt-4 grid md:grid-cols-3 gap-3 text-sm">
-                <InfoCell label="Next legal action" value={item.nextAction} />
-                <InfoCell
-                  label="Deadline countdown"
-                  value={item.deadlineCountdownLabel}
-                  valueClassName={countdownClass[item.deadlineCountdownTone]}
-                />
-                <InfoCell
-                  label="Reminder readiness"
-                  value={[
-                    item.reminderReadiness.calendarExportReady
-                      ? "Calendar export ready"
-                      : "Calendar export pending",
-                    item.reminderReadiness.emailReminderPlanned
-                      ? "Email reminder planned"
-                      : "Email reminder not planned",
-                    item.reminderReadiness.evidenceComplete
-                      ? "Evidence complete"
-                      : "Evidence incomplete",
-                  ].join(" · ")}
-                />
-              </div>
-            </details>
-          </article>
-        ))}
+                <div className="rounded-lg border border-white/[0.06] bg-black/20 p-3 space-y-2">
+                  <div className="text-xs uppercase tracking-[0.08em] text-muted/70">Follow-up checklist</div>
+                  {Object.entries(checklistLabels).map(([key, label]) => {
+                    const checklistKey = key as FollowUpChecklistKey;
+
+                    return (
+                      <label key={key} className="flex items-center gap-2 text-sm text-cream">
+                        <input
+                          type="checkbox"
+                          checked={checklist[checklistKey]}
+                          onChange={() => toggleChecklistItem(item.id, checklistKey)}
+                        />
+                        <span>{label}</span>
+                      </label>
+                    );
+                  })}
+                </div>
+
+                {isDeadlineReminderIcsExportEligible(item) && (
+                  <div className="mt-4 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => downloadCaseReminder(item)}
+                      className="rounded-lg border border-white/[0.14] px-3 py-2 text-sm text-cream hover:bg-white/[0.06]"
+                    >
+                      Export 60-day deadline reminder (.ics)
+                    </button>
+                  </div>
+                )}
+              </details>
+            </article>
+          );
+        })}
       </div>
     </div>
   );

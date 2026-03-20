@@ -1,8 +1,11 @@
 import { describe, expect, it } from "vitest";
 import {
   applyComplianceCaseView,
+  buildCaseDeadlineReminderICS,
   buildComplianceCaseTimeline,
+  deriveChecklistProgress,
   filterComplianceCases,
+  isDeadlineReminderIcsExportEligible,
   sortComplianceCases,
   toComplianceCaseViewModel,
   type ComplianceCaseInput,
@@ -30,6 +33,7 @@ describe("case timeline view model", () => {
     expect(vm.status).toBe("immediate-notice");
     expect(vm.noticeApplies).toBe(false);
     expect(vm.deadlineCountdownLabel).toBe("Notify immediately");
+    expect(vm.exportCapability.deadlineReminderIcsEligible).toBe(false);
   });
 
   it("adds 60-day deadline and countdown details under the new law", () => {
@@ -46,6 +50,7 @@ describe("case timeline view model", () => {
     expect(vm.noticeDeadline!.toISOString().split("T")[0]).toBe("2026-04-30");
     expect(vm.noticeApplies).toBe(true);
     expect(vm.reminderReadiness.calendarExportReady).toBe(true);
+    expect(vm.exportCapability.deadlineReminderIcsEligible).toBe(true);
   });
 });
 
@@ -109,5 +114,46 @@ describe("case timeline filtering and sorting", () => {
     const filtered = applyComplianceCaseView(timeline, "new", "expired", "most-urgent");
     expect(filtered).toHaveLength(1);
     expect(filtered[0].id).toBe("expired");
+  });
+});
+
+describe("checklist progress and export eligibility", () => {
+  it("derives checklist completion ratio and label", () => {
+    const progress = deriveChecklistProgress({
+      defectDocumented: true,
+      evidenceAttached: false,
+      noticeDrafted: true,
+      calendarReminderExported: false,
+    });
+
+    expect(progress.completed).toBe(2);
+    expect(progress.total).toBe(4);
+    expect(progress.label).toBe("2/4 complete");
+  });
+
+  it("enables ICS export only for new-law cases with notice deadline", () => {
+    const oldLaw = toComplianceCaseViewModel({
+      id: "old-2",
+      projectName: "Old law",
+      canton: "BE",
+      contractDate: new Date("2025-12-31"),
+      discoveryDate: new Date("2026-03-05"),
+    });
+
+    const newLaw = toComplianceCaseViewModel({
+      id: "new-2",
+      projectName: "New law",
+      canton: "SG",
+      contractDate: new Date("2026-01-02"),
+      discoveryDate: new Date("2026-03-05"),
+    });
+
+    expect(isDeadlineReminderIcsExportEligible(oldLaw)).toBe(false);
+    expect(isDeadlineReminderIcsExportEligible(newLaw)).toBe(true);
+    expect(buildCaseDeadlineReminderICS(oldLaw)).toBeNull();
+
+    const ics = buildCaseDeadlineReminderICS(newLaw);
+    expect(ics).toContain("BEGIN:VCALENDAR");
+    expect(ics).toContain("SUMMARY:BauCompliance: 60-day notice deadline");
   });
 });
