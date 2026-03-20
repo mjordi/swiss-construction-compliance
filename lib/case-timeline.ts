@@ -2,6 +2,7 @@ import {
   calculateRuegefrist,
   determineLegalRegime,
   formatDateCH,
+  generateDeadlineICS,
   type LegalRegime,
   type DeadlineResult,
 } from "@/lib/legal-utils";
@@ -11,6 +12,29 @@ export type CaseDeadlineStatus = DeadlineResult["status"] | "immediate-notice";
 export type CaseRegimeFilter = LegalRegime | "all";
 export type CaseStatusFilter = DeadlineResult["status"] | "all";
 export type CaseSortMode = "nearest-deadline" | "most-urgent";
+
+export type FollowUpChecklistKey =
+  | "defectDocumented"
+  | "evidenceAttached"
+  | "noticeDrafted"
+  | "calendarReminderExported";
+
+export interface FollowUpChecklistState {
+  defectDocumented: boolean;
+  evidenceAttached: boolean;
+  noticeDrafted: boolean;
+  calendarReminderExported: boolean;
+}
+
+export interface CaseChecklistProgress {
+  completed: number;
+  total: number;
+  label: string;
+}
+
+export interface CaseReminderExportCapability {
+  deadlineReminderIcsEligible: boolean;
+}
 
 export interface ComplianceCaseInput {
   id: string;
@@ -44,6 +68,8 @@ export interface ComplianceCaseViewModel {
     emailReminderPlanned: boolean;
     evidenceComplete: boolean;
   };
+  exportCapability: CaseReminderExportCapability;
+  checklistDefaults: FollowUpChecklistState;
 }
 
 export function toComplianceCaseViewModel(
@@ -74,6 +100,15 @@ export function toComplianceCaseViewModel(
         emailReminderPlanned: true,
         evidenceComplete,
       },
+      exportCapability: {
+        deadlineReminderIcsEligible: false,
+      },
+      checklistDefaults: {
+        defectDocumented: true,
+        evidenceAttached: evidenceComplete,
+        noticeDrafted: false,
+        calendarReminderExported: false,
+      },
     };
   }
 
@@ -98,6 +133,15 @@ export function toComplianceCaseViewModel(
       calendarExportReady: true,
       emailReminderPlanned: true,
       evidenceComplete,
+    },
+    exportCapability: {
+      deadlineReminderIcsEligible: true,
+    },
+    checklistDefaults: {
+      defectDocumented: true,
+      evidenceAttached: evidenceComplete,
+      noticeDrafted: false,
+      calendarReminderExported: false,
     },
   };
 }
@@ -158,6 +202,38 @@ export function applyComplianceCaseView(
   return sortComplianceCases(
     filterComplianceCases(cases, regimeFilter, statusFilter),
     sortMode
+  );
+}
+
+export function deriveChecklistProgress(
+  checklist: FollowUpChecklistState
+): CaseChecklistProgress {
+  const values = Object.values(checklist);
+  const completed = values.filter(Boolean).length;
+  const total = values.length;
+
+  return {
+    completed,
+    total,
+    label: `${completed}/${total} complete`,
+  };
+}
+
+export function isDeadlineReminderIcsExportEligible(
+  item: ComplianceCaseViewModel
+): boolean {
+  return item.regime === "new" && item.noticeApplies && item.noticeDeadline !== null;
+}
+
+export function buildCaseDeadlineReminderICS(item: ComplianceCaseViewModel): string | null {
+  if (!isDeadlineReminderIcsExportEligible(item) || !item.noticeDeadline) {
+    return null;
+  }
+
+  return generateDeadlineICS(
+    item.noticeDeadline,
+    `BauCompliance: 60-day notice deadline (${item.projectName})`,
+    `Case: ${item.projectName} (${item.canton})\nDefect discovered: ${item.discoveryDateLabel}\nDeadline: ${item.noticeDeadlineLabel}`
   );
 }
 
