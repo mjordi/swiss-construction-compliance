@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { scaleQuantize } from "d3-scale";
 import { AlertTriangle, TrendingUp, TrendingDown, Minus, Info } from "lucide-react";
 import PageHeader from "@/components/dashboard/PageHeader";
@@ -44,8 +44,35 @@ const TrendIcon = ({ trend }: { trend: string }) => {
   return <Minus className="w-4 h-4 text-muted" />;
 };
 
+type RiskBand = "all" | "critical" | "high" | "medium" | "low";
+type TrendFilter = "all" | "up" | "stable" | "down";
+
+function matchesRiskBand(risk: number, riskBand: RiskBand) {
+  if (riskBand === "critical") return risk >= 80;
+  if (riskBand === "high") return risk >= 60 && risk <= 79;
+  if (riskBand === "medium") return risk >= 40 && risk <= 59;
+  if (riskBand === "low") return risk <= 39;
+  return true;
+}
+
 export default function RiskMap() {
   const [selectedCanton, setSelectedCanton] = useState(cantons[0]);
+  const [riskBand, setRiskBand] = useState<RiskBand>("all");
+  const [trendFilter, setTrendFilter] = useState<TrendFilter>("all");
+
+  const filteredCantons = useMemo(() => {
+    return cantons.filter((canton) => {
+      const riskOk = matchesRiskBand(canton.risk, riskBand);
+      const trendOk = trendFilter === "all" ? true : canton.trend === trendFilter;
+      return riskOk && trendOk;
+    });
+  }, [riskBand, trendFilter]);
+
+  useEffect(() => {
+    if (!filteredCantons.some((c) => c.id === selectedCanton.id)) {
+      setSelectedCanton(filteredCantons[0] ?? cantons[0]);
+    }
+  }, [filteredCantons, selectedCanton.id]);
 
   return (
     <div className="h-[calc(100vh-125px)] flex flex-col">
@@ -63,8 +90,37 @@ export default function RiskMap() {
         <div className="lg:col-span-2 rounded-2xl bg-white/[0.02] border border-white/[0.05] p-6 relative overflow-hidden flex flex-col">
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-green-400 via-yellow-400 to-red-500" />
 
+          <div className="flex flex-col md:flex-row gap-3 mb-4">
+            <select
+              value={riskBand}
+              onChange={(e) => setRiskBand(e.target.value as RiskBand)}
+              className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-cream"
+            >
+              <option value="all">All risk bands</option>
+              <option value="critical">Critical (80+)</option>
+              <option value="high">High (60-79)</option>
+              <option value="medium">Medium (40-59)</option>
+              <option value="low">Low (0-39)</option>
+            </select>
+
+            <select
+              value={trendFilter}
+              onChange={(e) => setTrendFilter(e.target.value as TrendFilter)}
+              className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-cream"
+            >
+              <option value="all">All trends</option>
+              <option value="up">Rising</option>
+              <option value="stable">Stable</option>
+              <option value="down">Falling</option>
+            </select>
+
+            <div className="text-xs text-muted self-center md:ml-auto">
+              Showing {filteredCantons.length} of {cantons.length} cantons
+            </div>
+          </div>
+
           <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-4 gap-3 overflow-y-auto pr-2 custom-scrollbar">
-            {cantons.map((canton) => (
+            {filteredCantons.map((canton) => (
               <div
                 key={canton.id}
                 onClick={() => setSelectedCanton(canton)}
@@ -88,6 +144,10 @@ export default function RiskMap() {
               </div>
             ))}
           </div>
+
+          {filteredCantons.length === 0 && (
+            <div className="mt-4 text-sm text-muted">No cantons match the current filters.</div>
+          )}
 
           {/* Legend */}
           <div className="mt-4 pt-4 border-t border-white/[0.04] flex items-center gap-4 text-[11px] text-muted">
