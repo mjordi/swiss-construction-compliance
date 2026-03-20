@@ -1,8 +1,15 @@
+"use client";
+
+import { useMemo, useState } from "react";
 import PageHeader from "@/components/dashboard/PageHeader";
 import {
+  applyComplianceCaseView,
   buildComplianceCaseTimeline,
   type ComplianceCaseInput,
   type ComplianceCaseViewModel,
+  type CaseRegimeFilter,
+  type CaseSortMode,
+  type CaseStatusFilter,
 } from "@/lib/case-timeline";
 
 const mockCases: ComplianceCaseInput[] = [
@@ -46,19 +53,69 @@ const statusClass: Record<ComplianceCaseViewModel["status"], string> = {
   "immediate-notice": "text-blue-300 bg-blue-500/[0.08] border-blue-500/30",
 };
 
+const countdownClass: Record<ComplianceCaseViewModel["deadlineCountdownTone"], string> = {
+  neutral: "text-emerald-300",
+  warning: "text-yellow-300",
+  urgent: "text-orange-300 font-semibold",
+  expired: "text-red-300 font-semibold",
+};
+
 export default function CasesPage() {
+  const [regimeFilter, setRegimeFilter] = useState<CaseRegimeFilter>("all");
+  const [statusFilter, setStatusFilter] = useState<CaseStatusFilter>("all");
+  const [sortMode, setSortMode] = useState<CaseSortMode>("nearest-deadline");
+
+  const visibleCases = useMemo(
+    () => applyComplianceCaseView(cases, regimeFilter, statusFilter, sortMode),
+    [regimeFilter, sortMode, statusFilter]
+  );
+
   return (
     <div>
       <div className="mb-8">
         <PageHeader
           marker="Cases"
           title="Case Timeline"
-          subtitle="Mock compliance timeline for contract regime and defect-notice deadlines."
+          subtitle="Action-first view for defect notice triage and preparation readiness."
         />
       </div>
 
+      <section className="mb-6 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.05] grid gap-3 md:grid-cols-3">
+        <FilterSelect
+          label="Regime"
+          value={regimeFilter}
+          onChange={(value) => setRegimeFilter(value as CaseRegimeFilter)}
+          options={[
+            { value: "all", label: "All" },
+            { value: "old", label: "Old law" },
+            { value: "new", label: "New law" },
+          ]}
+        />
+        <FilterSelect
+          label="Status"
+          value={statusFilter}
+          onChange={(value) => setStatusFilter(value as CaseStatusFilter)}
+          options={[
+            { value: "all", label: "All" },
+            { value: "ok", label: "On track" },
+            { value: "warning", label: "Attention" },
+            { value: "urgent", label: "Urgent" },
+            { value: "expired", label: "Expired" },
+          ]}
+        />
+        <FilterSelect
+          label="Sort"
+          value={sortMode}
+          onChange={(value) => setSortMode(value as CaseSortMode)}
+          options={[
+            { value: "nearest-deadline", label: "Nearest deadline" },
+            { value: "most-urgent", label: "Most urgent" },
+          ]}
+        />
+      </section>
+
       <div className="space-y-4">
-        {cases.map((item) => (
+        {visibleCases.map((item) => (
           <article
             key={item.id}
             className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05]"
@@ -81,24 +138,40 @@ export default function CasesPage() {
               </div>
             </div>
 
-            <div className="grid sm:grid-cols-2 lg:grid-cols-5 gap-3 text-sm mb-5">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm mb-5">
               <InfoCell label="Contract date" value={item.contractDateLabel} />
               <InfoCell label="Defect discovered" value={item.discoveryDateLabel} />
-              <InfoCell label="Regime" value={item.regimeLabel} />
-              <InfoCell label="60-day deadline" value={item.noticeDeadlineLabel} />
-              <InfoCell label="Next action" value={item.nextAction} />
+              <InfoCell label="60-day notice" value={item.noticeApplies ? "Applies" : "Not fixed"} />
+              <InfoCell label="Notice deadline" value={item.noticeDeadlineLabel} />
             </div>
 
-            <div className="rounded-xl border border-white/[0.07] p-4">
-              <div className="text-[11px] uppercase tracking-[0.12em] text-muted/70 mb-3 font-semibold">
-                Timeline
+            <details className="rounded-xl border border-white/[0.07] p-4 bg-white/[0.01]">
+              <summary className="cursor-pointer text-sm font-semibold text-cream">
+                Case detail and reminder readiness
+              </summary>
+              <div className="mt-4 grid md:grid-cols-3 gap-3 text-sm">
+                <InfoCell label="Next legal action" value={item.nextAction} />
+                <InfoCell
+                  label="Deadline countdown"
+                  value={item.deadlineCountdownLabel}
+                  valueClassName={countdownClass[item.deadlineCountdownTone]}
+                />
+                <InfoCell
+                  label="Reminder readiness"
+                  value={[
+                    item.reminderReadiness.calendarExportReady
+                      ? "Calendar export ready"
+                      : "Calendar export pending",
+                    item.reminderReadiness.emailReminderPlanned
+                      ? "Email reminder planned"
+                      : "Email reminder not planned",
+                    item.reminderReadiness.evidenceComplete
+                      ? "Evidence complete"
+                      : "Evidence incomplete",
+                  ].join(" · ")}
+                />
               </div>
-              <ol className="grid md:grid-cols-3 gap-3 text-sm">
-                <TimelineStep title="Contract signed" value={item.contractDateLabel} />
-                <TimelineStep title="Defect discovered" value={item.discoveryDateLabel} />
-                <TimelineStep title="Notice deadline" value={item.noticeDeadlineLabel} />
-              </ol>
-            </div>
+            </details>
           </article>
         ))}
       </div>
@@ -106,20 +179,48 @@ export default function CasesPage() {
   );
 }
 
-function InfoCell({ label, value }: { label: string; value: string }) {
+function InfoCell({
+  label,
+  value,
+  valueClassName,
+}: {
+  label: string;
+  value: string;
+  valueClassName?: string;
+}) {
   return (
     <div className="rounded-lg border border-white/[0.05] bg-white/[0.01] p-3">
       <div className="text-[11px] uppercase tracking-[0.08em] text-muted/60 mb-1">{label}</div>
-      <div className="text-cream">{value}</div>
+      <div className={valueClassName ?? "text-cream"}>{value}</div>
     </div>
   );
 }
 
-function TimelineStep({ title, value }: { title: string; value: string }) {
+function FilterSelect({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string;
+  value: string;
+  onChange: (value: string) => void;
+  options: Array<{ value: string; label: string }>;
+}) {
   return (
-    <li className="relative rounded-lg border border-white/[0.05] bg-white/[0.01] p-3">
-      <div className="text-[11px] uppercase tracking-[0.08em] text-muted/60 mb-1">{title}</div>
-      <div className="text-cream">{value}</div>
-    </li>
+    <label className="text-sm text-muted">
+      <span className="block text-[11px] uppercase tracking-[0.08em] text-muted/60 mb-1">{label}</span>
+      <select
+        className="w-full rounded-lg border border-white/[0.1] bg-black/30 px-3 py-2 text-cream"
+        value={value}
+        onChange={(event) => onChange(event.target.value)}
+      >
+        {options.map((option) => (
+          <option key={option.value} value={option.value} className="bg-black text-cream">
+            {option.label}
+          </option>
+        ))}
+      </select>
+    </label>
   );
 }
