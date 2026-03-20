@@ -31,13 +31,14 @@ function generateICS(deadlines: Deadline[], acceptanceDate: Date): string {
   const events = deadlines
     .map((d, i) => {
       const dateStr = d.date.toISOString().split("T")[0].replace(/-/g, "");
+      const endDateStr = addDays(d.date, 1).toISOString().split("T")[0].replace(/-/g, "");
       const reminderDate = addDays(d.date, -7);
       const reminderStr = reminderDate.toISOString().split("T")[0].replace(/-/g, "");
       return `BEGIN:VEVENT
 UID:baucompliance-deadline-${i}-${stamp}@baucompliance.ch
 DTSTAMP:${stamp}
 DTSTART;VALUE=DATE:${dateStr}
-DTEND;VALUE=DATE:${dateStr}
+DTEND;VALUE=DATE:${endDateStr}
 SUMMARY:BauCompliance: ${d.key} (Abnahme ${acceptanceDate.toLocaleDateString("de-CH")})
 DESCRIPTION:Fristablauf gemäss BauCompliance.ch\\nAbnahmedatum: ${acceptanceDate.toLocaleDateString("de-CH")}
 BEGIN:VALARM
