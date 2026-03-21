@@ -81,9 +81,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(
     async (email: string, password: string) => {
-      const { error } = await supabase.auth.signInWithPassword({ email, password });
-      if (!error) {
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password });
+      if (!error && data.session) {
+        // Set user immediately so the dashboard auth guard sees it before render
+        setUser(mapUser(data.session.user));
         router.push("/dashboard");
+        // Resolve profile name in the background
+        resolveProfileName(supabase, data.session.user.id).then((fullName) => {
+          setUser(mapUser(data.session.user, fullName));
+        });
       }
       return { error };
     },
