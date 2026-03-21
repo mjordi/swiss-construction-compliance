@@ -3,7 +3,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabase";
-import type { User, AuthError } from "@supabase/supabase-js";
+import type { User, AuthError, Session } from "@supabase/supabase-js";
 
 interface AuthContextType {
   user: { email: string; name: string; id: string } | null;
@@ -24,6 +24,22 @@ function mapUser(user: User | null, fullName?: string): AuthContextType["user"] 
   };
 }
 
+async function resolveProfileName(
+  supabase: ReturnType<typeof getSupabase>,
+  userId: string
+): Promise<string | undefined> {
+  try {
+    const res: { data: { full_name: string | null } | null } = await supabase
+      .from("profiles")
+      .select("full_name")
+      .eq("id", userId)
+      .single();
+    return res.data?.full_name ?? undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthContextType["user"]>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -31,39 +47,33 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const supabase = getSupabase();
 
   useEffect(() => {
-    // Check active session on mount
-    supabase.auth.getSession().then((result: { data: { session: { user: User } | null } }) => {
-      const session = result.data.session;
-      if (session?.user) {
-        supabase
-          .from("profiles")
-          .select("full_name")
-          .eq("id", session.user.id)
-          .single()
-          .then((res: { data: { full_name: string | null } | null }) => {
-            setUser(mapUser(session.user, res.data?.full_name ?? undefined));
-            setIsLoading(false);
-          });
-      } else {
+    const syncSession = async (session: Session | null) => {
+      if (!session?.user) {
         setUser(null);
         setIsLoading(false);
+        return;
       }
-    });
 
-    // Listen to auth changes
+      // Set a usable auth state immediately so the UI does not appear stuck
+      setUser(mapUser(session.user));
+      setIsLoading(false);
+
+      const fullName = await resolveProfileName(supabase, session.user.id);
+      setUser(mapUser(session.user, fullName));
+    };
+
+    supabase.auth
+      .getSession()
+      .then((result: { data: { session: Session | null } }) => syncSession(result.data.session))
+      .catch(() => {
+        setUser(null);
+        setIsLoading(false);
+      });
+
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event: string, session: { user: User } | null) => {
-      if (session?.user) {
-        const res: { data: { full_name: string | null } | null } = await supabase
-          .from("profiles")
-          .select("full_name")
-          .eq("id", session.user.id)
-          .single();
-        setUser(mapUser(session.user, res.data?.full_name ?? undefined));
-      } else {
-        setUser(null);
-      }
+    } = supabase.auth.onAuthStateChange(async (_event: string, session: Session | null) => {
+      await syncSession(session);
     });
 
     return () => subscription.unsubscribe();
