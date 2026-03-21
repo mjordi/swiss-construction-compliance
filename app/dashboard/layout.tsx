@@ -1,14 +1,36 @@
 "use client";
 
+import { useEffect } from "react";
+import { useRouter } from "next/navigation";
 import Sidebar from "@/components/dashboard/Sidebar";
 import SiteHeader from "@/components/SiteHeader";
 import MobileNav from "@/components/dashboard/MobileNav";
+import { useAuth } from "@/context/AuthContext";
 
 export default function DashboardLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const { user, isLoading } = useAuth();
+  const router = useRouter();
+
+  useEffect(() => {
+    if (!isLoading && !user) {
+      router.push("/login");
+    }
+  }, [user, isLoading, router]);
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex items-center justify-center noise-overlay">
+        <div className="w-6 h-6 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
+
+  if (!user) return null;
+
   return (
     <div className="min-h-screen flex flex-col noise-overlay">
       {/* Top accent line */}

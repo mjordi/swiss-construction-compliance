@@ -9,6 +9,8 @@ import SignaturePad from 'signature_pad';
 import { useLanguage } from "@/context/LanguageContext";
 import type { TranslationKey } from "@/locales";
 import { buildComplianceRecord } from "@/lib/compliance-record";
+import { useAuth } from "@/context/AuthContext";
+import { getSupabase } from "@/lib/supabase";
 
 const PROJECT_DRAFT_STORAGE_KEY = "baucompliance:wizard-project-draft";
 
@@ -18,8 +20,11 @@ const INPUT_CLASS = "w-full bg-white/[0.03] border border-white/[0.08] rounded-l
 export default function Dashboard() {
   const [step, setStep] = useState(1);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [defectDescription, setDefectDescription] = useState("");
   const sigCanvas = useRef<HTMLCanvasElement>(null);
   const { t } = useLanguage();
+  const { user } = useAuth();
+  const supabase = getSupabase();
   const [sigPad, setSigPad] = useState<SignaturePad | null>(null);
   const [projectData, setProjectData] = useState({
     name: "",
@@ -96,10 +101,24 @@ export default function Dashboard() {
     }
 
     setIsGenerating(true);
-    setTimeout(() => {
-        setIsGenerating(false);
-        setStep(3);
-    }, 2500);
+
+    // Save protocol to Supabase
+    if (user) {
+      const signatureData = sigPad ? sigPad.toDataURL() : null;
+      await supabase.from("protocols").insert({
+        user_id: user.id,
+        case_id: complianceRecord.caseId,
+        project_name: projectData.name,
+        contractor: projectData.contractor,
+        client: projectData.client,
+        defect_description: defectDescription || null,
+        signature_data: signatureData,
+        status: "finalized",
+      });
+    }
+
+    setIsGenerating(false);
+    setStep(3);
   };
 
   const handleDownload = async () => {
@@ -259,7 +278,9 @@ export default function Dashboard() {
                 <textarea
                   className="w-full bg-transparent text-sm text-cream resize-none outline-none h-20 placeholder-muted/40"
                   placeholder={t("defect-placeholder")}
-                ></textarea>
+                  value={defectDescription}
+                  onChange={(e) => setDefectDescription(e.target.value)}
+                />
               </div>
 
               <div className="mb-6">
@@ -319,6 +340,7 @@ export default function Dashboard() {
                 <button
                   onClick={() => {
                     setProjectData({ name: "", contractor: "", client: "" });
+                    setDefectDescription("");
                     window.localStorage.removeItem(PROJECT_DRAFT_STORAGE_KEY);
                     setStep(1);
                   }}

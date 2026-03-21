@@ -1,8 +1,12 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Plus, Trash2, Loader2 } from "lucide-react";
 import PageHeader from "@/components/dashboard/PageHeader";
 import { useLanguage } from "@/context/LanguageContext";
+import { useAuth } from "@/context/AuthContext";
+import { getSupabase } from "@/lib/supabase";
+import type { Case } from "@/lib/database.types";
 import {
   applyComplianceCaseView,
   buildCaseDeadlineReminderICS,
@@ -18,14 +22,11 @@ import {
   type CaseStatusFilter,
 } from "@/lib/case-timeline";
 
-const mockCases: ComplianceCaseInput[] = [
-  { id: "case-1", projectName: "Wohnpark Seefeld", canton: "ZH", contractDate: new Date("2025-11-14"), discoveryDate: new Date("2026-03-10") },
-  { id: "case-2", projectName: "Schulhaus Muri West", canton: "AG", contractDate: new Date("2026-01-10"), discoveryDate: new Date("2026-03-15") },
-  { id: "case-3", projectName: "Clinique du Lac", canton: "VD", contractDate: new Date("2026-02-22"), discoveryDate: new Date("2026-03-01") },
-  { id: "case-4", projectName: "Residenza Bellavista", canton: "TI", contractDate: new Date("2024-09-05"), discoveryDate: new Date("2026-03-04") },
+const SWISS_CANTONS = [
+  "AG","AI","AR","BE","BL","BS","FR","GE","GL","GR",
+  "JU","LU","NE","NW","OW","SG","SH","SO","SZ","TG",
+  "TI","UR","VD","VS","ZG","ZH",
 ];
-
-const cases = buildComplianceCaseTimeline(mockCases);
 
 const statusClass: Record<ComplianceCaseViewModel["status"], string> = {
   ok: "text-green-400 bg-green-500/[0.08] border-green-500/30",
@@ -43,13 +44,68 @@ const countdownClass: Record<ComplianceCaseViewModel["deadlineCountdownTone"], s
 };
 
 export default function CasesPage() {
+  const { t } = useLanguage();
+  const { user } = useAuth();
+  const supabase = getSupabase();
+
+  const [dbCases, setDbCases] = useState<Case[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [formData, setFormData] = useState({ projectName: "", canton: "ZH", contractDate: "", discoveryDate: "" });
+
   const [regimeFilter, setRegimeFilter] = useState<CaseRegimeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<CaseStatusFilter>("all");
   const [sortMode, setSortMode] = useState<CaseSortMode>("nearest-deadline");
-  const [checklistsByCase, setChecklistsByCase] = useState<Record<string, FollowUpChecklistState>>(() =>
-    Object.fromEntries(cases.map((item) => [item.id, item.checklistDefaults]))
+  const [checklistsByCase, setChecklistsByCase] = useState<Record<string, FollowUpChecklistState>>({});
+
+  const fetchCases = useCallback(async () => {
+    if (!user) return;
+    const { data } = await supabase
+      .from("cases")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: false });
+    if (data) setDbCases(data as Case[]);
+    setLoading(false);
+  }, [user, supabase]);
+
+  useEffect(() => {
+    fetchCases();
+  }, [fetchCases]);
+
+  const caseInputs: ComplianceCaseInput[] = useMemo(
+    () =>
+      dbCases.map((c) => ({
+        id: c.id,
+        projectName: c.project_name,
+        canton: c.canton,
+        contractDate: new Date(c.contract_date),
+        discoveryDate: new Date(c.discovery_date),
+      })),
+    [dbCases]
   );
-  const { t } = useLanguage();
+
+  const cases = useMemo(() => buildComplianceCaseTimeline(caseInputs), [caseInputs]);
+
+  // Initialize checklists from DB
+  useEffect(() => {
+    const newChecklists: Record<string, FollowUpChecklistState> = {};
+    for (const c of dbCases) {
+      const existing = checklistsByCase[c.id];
+      if (!existing) {
+        newChecklists[c.id] = c.checklist as FollowUpChecklistState;
+      }
+    }
+    if (Object.keys(newChecklists).length > 0) {
+      setChecklistsByCase((prev) => ({ ...prev, ...newChecklists }));
+    }
+  }, [dbCases]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const visibleCases = useMemo(
+    () => applyComplianceCaseView(cases, regimeFilter, statusFilter, sortMode),
+    [cases, regimeFilter, statusFilter, sortMode]
+  );
 
   const checklistLabels: Record<FollowUpChecklistKey, string> = {
     defectDocumented: t("cases-checklist-defect-documented"),
@@ -58,10 +114,10 @@ export default function CasesPage() {
     calendarReminderExported: t("cases-checklist-calendar-exported"),
   };
 
-  const visibleCases = useMemo(() => applyComplianceCaseView(cases, regimeFilter, statusFilter, sortMode), [regimeFilter, sortMode, statusFilter]);
-
-  function toggleChecklistItem(caseId: string, key: FollowUpChecklistKey) {
-    setChecklistsByCase((prev) => ({ ...prev, [caseId]: { ...prev[caseId], [key]: !prev[caseId][key] } }));
+  async function toggleChecklistItem(caseId: string, key: FollowUpChecklistKey) {
+    const updated = { ...checklistsByCase[caseId], [key]: !checklistsByCase[caseId][key] };
+    setChecklistsByCase((prev) => ({ ...prev, [caseId]: updated }));
+    await supabase.from("cases").update({ checklist: updated, updated_at: new Date().toISOString() }).eq("id", caseId);
   }
 
   function downloadCaseReminder(item: ComplianceCaseViewModel) {
@@ -75,88 +131,172 @@ export default function CasesPage() {
     a.download = `baucompliance-case-${item.id}-notice-deadline-${dateKey}.ics`;
     a.click();
     URL.revokeObjectURL(url);
-    setChecklistsByCase((prev) => ({ ...prev, [item.id]: { ...prev[item.id], calendarReminderExported: true } }));
+    toggleChecklistItem(item.id, "calendarReminderExported");
+  }
+
+  async function handleAddCase(e: React.FormEvent) {
+    e.preventDefault();
+    if (!user || !formData.projectName || !formData.contractDate || !formData.discoveryDate) return;
+    setSaving(true);
+    await supabase.from("cases").insert({
+      user_id: user.id,
+      project_name: formData.projectName,
+      canton: formData.canton,
+      contract_date: formData.contractDate,
+      discovery_date: formData.discoveryDate,
+    });
+    setFormData({ projectName: "", canton: "ZH", contractDate: "", discoveryDate: "" });
+    setShowForm(false);
+    setSaving(false);
+    fetchCases();
+  }
+
+  async function handleDeleteCase(caseId: string) {
+    await supabase.from("cases").delete().eq("id", caseId);
+    setChecklistsByCase((prev) => {
+      const next = { ...prev };
+      delete next[caseId];
+      return next;
+    });
+    fetchCases();
+  }
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="w-6 h-6 animate-spin text-accent" />
+      </div>
+    );
   }
 
   return (
     <div>
-      <div className="mb-8">
+      <div className="mb-8 flex items-end justify-between">
         <PageHeader marker={t("cases-marker")} title={t("cases-title")} subtitle={t("cases-subtitle")} />
+        <button
+          onClick={() => setShowForm(!showForm)}
+          className="bg-accent hover:bg-accent/90 text-white px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors duration-300 text-[13px] font-semibold shrink-0"
+        >
+          <Plus className="w-4 h-4" /> {t("cases-add-case")}
+        </button>
       </div>
 
+      {/* Add case form */}
+      {showForm && (
+        <form onSubmit={handleAddCase} className="mb-8 p-6 rounded-2xl bg-white/[0.02] border border-accent/20">
+          <h3 className="text-[15px] font-semibold text-cream mb-4">{t("cases-add-title")}</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-project-name")}</label>
+              <input type="text" value={formData.projectName} onChange={(e) => setFormData({ ...formData, projectName: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none transition-colors duration-200" required />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-canton-label")}</label>
+              <select value={formData.canton} onChange={(e) => setFormData({ ...formData, canton: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none">
+                {SWISS_CANTONS.map((c) => <option key={c} value={c} className="bg-black text-cream">{c}</option>)}
+              </select>
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-contract-date-input")}</label>
+              <input type="date" value={formData.contractDate} onChange={(e) => setFormData({ ...formData, contractDate: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none [color-scheme:dark]" required />
+            </div>
+            <div>
+              <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-discovery-date-input")}</label>
+              <input type="date" value={formData.discoveryDate} onChange={(e) => setFormData({ ...formData, discoveryDate: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none [color-scheme:dark]" required />
+            </div>
+          </div>
+          <div className="flex gap-3">
+            <button type="submit" disabled={saving} className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white font-semibold rounded-lg text-sm flex items-center gap-2">
+              {saving && <Loader2 className="w-4 h-4 animate-spin" />} {t("cases-save")}
+            </button>
+            <button type="button" onClick={() => setShowForm(false)} className="px-5 py-2.5 bg-white/[0.03] border border-white/[0.06] text-muted hover:text-cream font-medium rounded-lg text-sm">
+              {t("cases-cancel")}
+            </button>
+          </div>
+        </form>
+      )}
+
+      {/* Filters */}
       <section className="mb-6 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.05] grid gap-3 md:grid-cols-3">
-        <FilterSelect label={t("cases-filter-regime")} value={regimeFilter} onChange={(value) => setRegimeFilter(value as CaseRegimeFilter)} options={[{ value: "all", label: t("cases-all") }, { value: "old", label: t("cases-old-law") }, { value: "new", label: t("cases-new-law") }]} />
-        <FilterSelect label={t("cases-filter-status")} value={statusFilter} onChange={(value) => setStatusFilter(value as CaseStatusFilter)} options={[{ value: "all", label: t("cases-all") }, { value: "ok", label: t("cases-status-on-track") }, { value: "warning", label: t("cases-status-attention") }, { value: "urgent", label: t("cases-status-urgent") }, { value: "expired", label: t("cases-status-expired") }]} />
-        <FilterSelect label={t("cases-filter-sort")} value={sortMode} onChange={(value) => setSortMode(value as CaseSortMode)} options={[{ value: "nearest-deadline", label: t("cases-sort-nearest") }, { value: "most-urgent", label: t("cases-sort-urgent") }]} />
+        <FilterSelect label={t("cases-filter-regime")} value={regimeFilter} onChange={(v) => setRegimeFilter(v as CaseRegimeFilter)} options={[{ value: "all", label: t("cases-all") }, { value: "old", label: t("cases-old-law") }, { value: "new", label: t("cases-new-law") }]} />
+        <FilterSelect label={t("cases-filter-status")} value={statusFilter} onChange={(v) => setStatusFilter(v as CaseStatusFilter)} options={[{ value: "all", label: t("cases-all") }, { value: "ok", label: t("cases-status-on-track") }, { value: "warning", label: t("cases-status-attention") }, { value: "urgent", label: t("cases-status-urgent") }, { value: "expired", label: t("cases-status-expired") }]} />
+        <FilterSelect label={t("cases-filter-sort")} value={sortMode} onChange={(v) => setSortMode(v as CaseSortMode)} options={[{ value: "nearest-deadline", label: t("cases-sort-nearest") }, { value: "most-urgent", label: t("cases-sort-urgent") }]} />
       </section>
 
-      <div className="space-y-4">
-        {visibleCases.map((item) => {
-          const checklist = checklistsByCase[item.id];
-          const progress = deriveChecklistProgress(checklist);
+      {/* Cases list */}
+      {visibleCases.length === 0 ? (
+        <div className="text-center py-16 text-muted">{t("cases-no-cases")}</div>
+      ) : (
+        <div className="space-y-4">
+          {visibleCases.map((item) => {
+            const checklist = checklistsByCase[item.id] ?? item.checklistDefaults;
+            const progress = deriveChecklistProgress(checklist);
 
-          return (
-            <article key={item.id} className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05]">
-              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-4">
-                <div>
-                  <h2 className="text-lg font-semibold text-cream">{item.projectName}</h2>
-                  <p className="text-sm text-muted mt-1">{t("cases-canton")} {item.canton}</p>
-                </div>
-
-                <div className="flex flex-wrap gap-2 text-xs">
-                  <span className="px-2.5 py-1 rounded-md border border-white/[0.12] text-muted">{item.regimeLabel}</span>
-                  <span className={`px-2.5 py-1 rounded-md border font-medium ${statusClass[item.status]}`}>{item.statusLabel}</span>
-                  <span className="px-2.5 py-1 rounded-md border border-emerald-500/30 text-emerald-300 bg-emerald-500/[0.08]">{progress.label}</span>
-                </div>
-              </div>
-
-              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm mb-5">
-                <InfoCell label={t("cases-contract-date")} value={item.contractDateLabel} />
-                <InfoCell label={t("cases-defect-discovered")} value={item.discoveryDateLabel} />
-                <InfoCell label={t("cases-60day-notice")} value={item.noticeApplies ? t("cases-applies") : t("cases-not-fixed")} />
-                <InfoCell label={t("cases-notice-deadline")} value={item.noticeDeadlineLabel} />
-              </div>
-
-              <details className="rounded-xl border border-white/[0.07] p-4 bg-white/[0.01]">
-                <summary className="cursor-pointer text-sm font-semibold text-cream">{t("cases-detail-summary")}</summary>
-                <div className="mt-4 grid md:grid-cols-3 gap-3 text-sm mb-4">
-                  <InfoCell label={t("cases-next-legal-action")} value={item.nextAction} />
-                  <InfoCell label={t("cases-deadline-countdown")} value={item.deadlineCountdownLabel} valueClassName={countdownClass[item.deadlineCountdownTone]} />
-                  <InfoCell
-                    label={t("cases-reminder-readiness")}
-                    value={[
-                      item.reminderReadiness.calendarExportReady ? t("cases-calendar-ready") : t("cases-calendar-pending"),
-                      item.reminderReadiness.emailReminderPlanned ? t("cases-email-planned") : t("cases-email-not-planned"),
-                      item.reminderReadiness.evidenceComplete ? t("cases-evidence-complete") : t("cases-evidence-incomplete"),
-                    ].join(" · ")}
-                  />
-                </div>
-
-                <div className="rounded-lg border border-white/[0.06] bg-black/20 p-3 space-y-2">
-                  <div className="text-xs uppercase tracking-[0.08em] text-muted/70">{t("cases-followup-checklist")}</div>
-                  {Object.entries(checklistLabels).map(([key, label]) => {
-                    const checklistKey = key as FollowUpChecklistKey;
-                    return (
-                      <label key={key} className="flex items-center gap-2 text-sm text-cream">
-                        <input type="checkbox" checked={checklist[checklistKey]} onChange={() => toggleChecklistItem(item.id, checklistKey)} />
-                        <span>{label}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-
-                {isDeadlineReminderIcsExportEligible(item) && (
-                  <div className="mt-4 flex justify-end">
-                    <button type="button" onClick={() => downloadCaseReminder(item)} className="rounded-lg border border-white/[0.14] px-3 py-2 text-sm text-cream hover:bg-white/[0.06]">
-                      {t("cases-export-ics")}
+            return (
+              <article key={item.id} className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05]">
+                <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-4">
+                  <div>
+                    <h2 className="text-lg font-semibold text-cream">{item.projectName}</h2>
+                    <p className="text-sm text-muted mt-1">{t("cases-canton")} {item.canton}</p>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2 text-xs">
+                    <span className="px-2.5 py-1 rounded-md border border-white/[0.12] text-muted">{item.regimeLabel}</span>
+                    <span className={`px-2.5 py-1 rounded-md border font-medium ${statusClass[item.status]}`}>{item.statusLabel}</span>
+                    <span className="px-2.5 py-1 rounded-md border border-emerald-500/30 text-emerald-300 bg-emerald-500/[0.08]">{progress.label}</span>
+                    <button onClick={() => handleDeleteCase(item.id)} className="ml-2 p-1.5 rounded-md text-muted/40 hover:text-red-400 hover:bg-red-400/[0.06] transition-colors" title={t("cases-delete")}>
+                      <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
-                )}
-              </details>
-            </article>
-          );
-        })}
-      </div>
+                </div>
+
+                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm mb-5">
+                  <InfoCell label={t("cases-contract-date")} value={item.contractDateLabel} />
+                  <InfoCell label={t("cases-defect-discovered")} value={item.discoveryDateLabel} />
+                  <InfoCell label={t("cases-60day-notice")} value={item.noticeApplies ? t("cases-applies") : t("cases-not-fixed")} />
+                  <InfoCell label={t("cases-notice-deadline")} value={item.noticeDeadlineLabel} />
+                </div>
+
+                <details className="rounded-xl border border-white/[0.07] p-4 bg-white/[0.01]">
+                  <summary className="cursor-pointer text-sm font-semibold text-cream">{t("cases-detail-summary")}</summary>
+                  <div className="mt-4 grid md:grid-cols-3 gap-3 text-sm mb-4">
+                    <InfoCell label={t("cases-next-legal-action")} value={item.nextAction} />
+                    <InfoCell label={t("cases-deadline-countdown")} value={item.deadlineCountdownLabel} valueClassName={countdownClass[item.deadlineCountdownTone]} />
+                    <InfoCell
+                      label={t("cases-reminder-readiness")}
+                      value={[
+                        item.reminderReadiness.calendarExportReady ? t("cases-calendar-ready") : t("cases-calendar-pending"),
+                        item.reminderReadiness.emailReminderPlanned ? t("cases-email-planned") : t("cases-email-not-planned"),
+                        item.reminderReadiness.evidenceComplete ? t("cases-evidence-complete") : t("cases-evidence-incomplete"),
+                      ].join(" · ")}
+                    />
+                  </div>
+
+                  <div className="rounded-lg border border-white/[0.06] bg-black/20 p-3 space-y-2">
+                    <div className="text-xs uppercase tracking-[0.08em] text-muted/70">{t("cases-followup-checklist")}</div>
+                    {Object.entries(checklistLabels).map(([key, label]) => {
+                      const checklistKey = key as FollowUpChecklistKey;
+                      return (
+                        <label key={key} className="flex items-center gap-2 text-sm text-cream">
+                          <input type="checkbox" checked={checklist[checklistKey]} onChange={() => toggleChecklistItem(item.id, checklistKey)} />
+                          <span>{label}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+
+                  {isDeadlineReminderIcsExportEligible(item) && (
+                    <div className="mt-4 flex justify-end">
+                      <button type="button" onClick={() => downloadCaseReminder(item)} className="rounded-lg border border-white/[0.14] px-3 py-2 text-sm text-cream hover:bg-white/[0.06]">
+                        {t("cases-export-ics")}
+                      </button>
+                    </div>
+                  )}
+                </details>
+              </article>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
