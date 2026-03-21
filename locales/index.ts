@@ -99,6 +99,8 @@ export const de = {
   // Handover Wizard
   "wizard-title": "Digitales Abnahmeprotokoll",
   "wizard-subtitle": "Rechtssichere Berichte erstellen (SIA 118).",
+  "wizard-case-selector": "Mit Fall verknüpfen (optional)",
+  "wizard-no-case": "Kein Fall (eigenständiges Protokoll)",
   "step": "Schritt",
   "step-1": "Projektdetails",
   "step-2": "Mängel & Unterschriften",
@@ -335,6 +337,7 @@ export const de = {
   "cases-cancel": "Abbrechen",
   "cases-no-cases": "Noch keine Fälle. Erstellen Sie Ihren ersten Fall.",
   "cases-delete": "Löschen",
+  "cases-protocols": "Protokolle",
 };
 
 export const fr = {
@@ -436,6 +439,8 @@ export const fr = {
   // Handover Wizard
   "wizard-title": "Protocole de Réception Numérique",
   "wizard-subtitle": "Générer des rapports conformes (SIA 118).",
+  "wizard-case-selector": "Lier à un cas (optionnel)",
+  "wizard-no-case": "Aucun cas (protocole autonome)",
   "step": "Étape",
   "step-1": "Détails du Projet",
   "step-2": "Défauts & Signatures",
@@ -672,6 +677,7 @@ export const fr = {
   "cases-cancel": "Annuler",
   "cases-no-cases": "Aucun dossier. Créez votre premier dossier.",
   "cases-delete": "Supprimer",
+  "cases-protocols": "protocoles",
 };
 
 export const it = {
@@ -773,6 +779,8 @@ export const it = {
   // Handover Wizard
   "wizard-title": "Protocollo di Collaudo Digitale",
   "wizard-subtitle": "Genera rapporti conformi (SIA 118).",
+  "wizard-case-selector": "Collega a un caso (opzionale)",
+  "wizard-no-case": "Nessun caso (protocollo autonomo)",
   "step": "Passo",
   "step-1": "Dettagli Progetto",
   "step-2": "Difetti & Firme",
@@ -1009,6 +1017,7 @@ export const it = {
   "cases-cancel": "Annulla",
   "cases-no-cases": "Nessun caso. Crea il tuo primo caso.",
   "cases-delete": "Elimina",
+  "cases-protocols": "protocolli",
 };
 
 export const en = {
@@ -1110,6 +1119,8 @@ export const en = {
   // Handover Wizard
   "wizard-title": "Digital Handover Protocol",
   "wizard-subtitle": "Generate legally compliant acceptance reports (SIA 118).",
+  "wizard-case-selector": "Link to case (optional)",
+  "wizard-no-case": "No case (standalone protocol)",
   "step": "Step",
   "step-1": "Project Details",
   "step-2": "Defects & Signatures",
@@ -1352,6 +1363,7 @@ export const en = {
   "cases-cancel": "Cancel",
   "cases-no-cases": "No cases yet. Create your first case.",
   "cases-delete": "Delete",
+  "cases-protocols": "protocols",
 };
 
 export type TranslationKey = keyof typeof de;

@@ -58,6 +58,7 @@ export default function CasesPage() {
   const [statusFilter, setStatusFilter] = useState<CaseStatusFilter>("all");
   const [sortMode, setSortMode] = useState<CaseSortMode>("nearest-deadline");
   const [checklistsByCase, setChecklistsByCase] = useState<Record<string, FollowUpChecklistState>>({});
+  const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
 
   const fetchCases = useCallback(async () => {
     if (!user) return;
@@ -74,13 +75,27 @@ export default function CasesPage() {
     let cancelled = false;
     (async () => {
       if (!user) return;
-      const { data } = await supabase
-        .from("cases")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false });
+      const [casesResult, protocolsResult] = await Promise.all([
+        supabase
+          .from("cases")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("protocols")
+          .select("case_id")
+          .eq("user_id", user.id)
+          .not("case_id", "is", null),
+      ]);
       if (!cancelled) {
-        if (data) setDbCases(data as Case[]);
+        if (casesResult.data) setDbCases(casesResult.data as Case[]);
+        if (protocolsResult.data) {
+          const counts: Record<string, number> = {};
+          for (const p of protocolsResult.data) {
+            if (p.case_id) counts[p.case_id] = (counts[p.case_id] || 0) + 1;
+          }
+          setProtocolCounts(counts);
+        }
         setLoading(false);
       }
     })();
@@ -251,6 +266,11 @@ export default function CasesPage() {
                     <span className="px-2.5 py-1 rounded-md border border-white/[0.12] text-muted">{item.regimeLabel}</span>
                     <span className={`px-2.5 py-1 rounded-md border font-medium ${statusClass[item.status]}`}>{item.statusLabel}</span>
                     <span className="px-2.5 py-1 rounded-md border border-emerald-500/30 text-emerald-300 bg-emerald-500/[0.08]">{progress.label}</span>
+                    {(protocolCounts[item.id] ?? 0) > 0 && (
+                      <span className="px-2.5 py-1 rounded-md border border-blue-500/30 text-blue-300 bg-blue-500/[0.08]">
+                        {protocolCounts[item.id]} {t("cases-protocols")}
+                      </span>
+                    )}
                     <button onClick={() => handleDeleteCase(item.id)} className="ml-2 p-1.5 rounded-md text-muted/40 hover:text-red-400 hover:bg-red-400/[0.06] transition-colors" title={t("cases-delete")}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>

@@ -25,7 +25,7 @@ export interface Case {
 export interface Protocol {
   id: string;
   user_id: string;
-  case_id: string;
+  case_id: string | null;
   project_name: string;
   contractor: string;
   client: string;

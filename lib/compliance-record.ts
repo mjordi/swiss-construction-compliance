@@ -3,6 +3,7 @@ export interface ComplianceRecordInput {
   contractor: string;
   client: string;
   inspectionDate: Date;
+  caseId?: string | null;
 }
 
 export interface ComplianceRecord {
@@ -40,7 +41,7 @@ export function buildComplianceRecord(
   const projectSlug = slugify(input.projectName || "untitled");
 
   return {
-    caseId: `BC-${ymd}-${projectSlug || "case"}`,
+    caseId: input.caseId ?? `BC-${ymd}-${projectSlug || "case"}`,
     projectName: input.projectName,
     contractor: input.contractor,
     client: input.client,

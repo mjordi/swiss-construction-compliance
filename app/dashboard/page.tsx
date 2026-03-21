@@ -11,6 +11,7 @@ import type { TranslationKey } from "@/locales";
 import { buildComplianceRecord } from "@/lib/compliance-record";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
+import type { Case } from "@/lib/database.types";
 
 const PROJECT_DRAFT_STORAGE_KEY = "baucompliance:wizard-project-draft";
 
@@ -26,6 +27,8 @@ export default function Dashboard() {
   const { user } = useAuth();
   const supabase = getSupabase();
   const [sigPad, setSigPad] = useState<SignaturePad | null>(null);
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [userCases, setUserCases] = useState<Case[]>([]);
   const [projectData, setProjectData] = useState({
     name: "",
     contractor: "",
@@ -59,6 +62,21 @@ export default function Dashboard() {
     window.localStorage.setItem(PROJECT_DRAFT_STORAGE_KEY, JSON.stringify(projectData));
   }, [projectData]);
 
+  // Fetch user's cases for the case selector
+  useEffect(() => {
+    if (!user) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("cases")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("project_name", { ascending: true });
+      if (!cancelled && data) setUserCases(data as Case[]);
+    })();
+    return () => { cancelled = true; };
+  }, [user, supabase]);
+
   const complianceRecord = useMemo(
     () =>
       buildComplianceRecord(
@@ -67,11 +85,12 @@ export default function Dashboard() {
           contractor: projectData.contractor,
           client: projectData.client,
           inspectionDate: new Date(),
+          caseId: selectedCaseId,
         },
         step,
         Boolean(sigPad && !sigPad.isEmpty())
       ),
-    [projectData, step, sigPad]
+    [projectData, step, sigPad, selectedCaseId]
   );
 
   useEffect(() => {
@@ -107,7 +126,7 @@ export default function Dashboard() {
       const signatureData = sigPad ? sigPad.toDataURL() : null;
       await supabase.from("protocols").insert({
         user_id: user.id,
-        case_id: complianceRecord.caseId,
+        case_id: selectedCaseId,
         project_name: projectData.name,
         contractor: projectData.contractor,
         client: projectData.client,
@@ -115,6 +134,27 @@ export default function Dashboard() {
         signature_data: signatureData,
         status: "finalized",
       });
+
+      // Auto-mark "defect documented" on the linked case
+      if (selectedCaseId) {
+        const { data: caseData } = await supabase
+          .from("cases")
+          .select("checklist")
+          .eq("id", selectedCaseId)
+          .single();
+        if (caseData?.checklist) {
+          const checklist = caseData.checklist as Record<string, boolean>;
+          if (!checklist.defectDocumented) {
+            await supabase
+              .from("cases")
+              .update({
+                checklist: { ...checklist, defectDocumented: true },
+                updated_at: new Date().toISOString(),
+              })
+              .eq("id", selectedCaseId);
+          }
+        }
+      }
     }
 
     setIsGenerating(false);
@@ -198,6 +238,31 @@ export default function Dashboard() {
                 <FileText className="w-4 h-4 text-accent" /> {t("step-1")}
               </h3>
               <div className="space-y-4">
+                {userCases.length > 0 && (
+                  <div>
+                    <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("wizard-case-selector")}</label>
+                    <select
+                      value={selectedCaseId ?? ""}
+                      onChange={(e) => {
+                        const caseId = e.target.value || null;
+                        setSelectedCaseId(caseId);
+                        if (caseId) {
+                          const c = userCases.find((uc) => uc.id === caseId);
+                          if (c) setProjectData((prev) => ({ ...prev, name: c.project_name }));
+                        }
+                      }}
+                      className={INPUT_CLASS}
+                    >
+                      <option value="">{t("wizard-no-case")}</option>
+                      {userCases.map((c) => (
+                        <option key={c.id} value={c.id} className="bg-black text-cream">
+                          {c.project_name} ({c.canton})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("label-project")}</label>
@@ -341,6 +406,7 @@ export default function Dashboard() {
                   onClick={() => {
                     setProjectData({ name: "", contractor: "", client: "" });
                     setDefectDescription("");
+                    setSelectedCaseId(null);
                     window.localStorage.removeItem(PROJECT_DRAFT_STORAGE_KEY);
                     setStep(1);
                   }}
