@@ -1,6 +1,5 @@
 -- =============================================================
--- BauCompliance.ch — Supabase Schema
--- Run this in the Supabase SQL Editor to set up all tables.
+-- BauCompliance.ch — Supabase Schema (idempotent)
 -- =============================================================
 
 -- 1. Profiles (extends auth.users)
@@ -13,12 +12,15 @@ create table if not exists public.profiles (
 
 alter table public.profiles enable row level security;
 
+drop policy if exists "Users can read own profile" on public.profiles;
 create policy "Users can read own profile"
   on public.profiles for select using (auth.uid() = id);
 
+drop policy if exists "Users can update own profile" on public.profiles;
 create policy "Users can update own profile"
   on public.profiles for update using (auth.uid() = id);
 
+drop policy if exists "Users can insert own profile" on public.profiles;
 create policy "Users can insert own profile"
   on public.profiles for insert with check (auth.uid() = id);
 
@@ -52,10 +54,11 @@ create table if not exists public.cases (
 
 alter table public.cases enable row level security;
 
+drop policy if exists "Users can CRUD own cases" on public.cases;
 create policy "Users can CRUD own cases"
   on public.cases for all using (auth.uid() = user_id);
 
--- 3. Vault Projects
+-- 3. Vault Projects (will be dropped in next migration)
 create table if not exists public.vault_projects (
   id uuid default gen_random_uuid() primary key,
   user_id uuid references auth.users on delete cascade not null,
@@ -68,6 +71,7 @@ create table if not exists public.vault_projects (
 
 alter table public.vault_projects enable row level security;
 
+drop policy if exists "Users can CRUD own vault projects" on public.vault_projects;
 create policy "Users can CRUD own vault projects"
   on public.vault_projects for all using (auth.uid() = user_id);
 
@@ -88,5 +92,6 @@ create table if not exists public.protocols (
 
 alter table public.protocols enable row level security;
 
+drop policy if exists "Users can CRUD own protocols" on public.protocols;
 create policy "Users can CRUD own protocols"
   on public.protocols for all using (auth.uid() = user_id);
