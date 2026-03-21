@@ -108,6 +108,18 @@ export default function RiskMap() {
               <option value="down">{t("risk-filter-trend-down")}</option>
             </select>
 
+            <button
+              type="button"
+              onClick={() => {
+                setRiskBand("all");
+                setTrendFilter("all");
+                setSelectedCantonId(cantons[0].id);
+              }}
+              className="px-3 py-2 text-xs font-semibold rounded-lg border border-white/[0.1] text-muted hover:text-cream hover:bg-white/[0.04] transition-colors"
+            >
+              {t("deadlines-reset")}
+            </button>
+
             <div className="text-xs text-muted self-center md:ml-auto">
               {t("risk-showing")} {filteredCantons.length} {t("risk-of")} {cantons.length} {t("risk-cantons")}
             </div>
