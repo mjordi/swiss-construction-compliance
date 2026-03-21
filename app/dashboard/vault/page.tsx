@@ -61,8 +61,48 @@ export default function TechVault() {
   }, [user, supabase]);
 
   useEffect(() => {
-    fetchProjects();
-  }, [fetchProjects]);
+    let cancelled = false;
+    (async () => {
+      if (!user) return;
+
+      const { data: vaultData } = await supabase
+        .from("vault_projects")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("updated_at", { ascending: false });
+
+      if (cancelled) return;
+
+      if (!vaultData) {
+        setLoading(false);
+        return;
+      }
+
+      const { data: protocolCounts } = await supabase
+        .from("protocols")
+        .select("vault_project_id")
+        .eq("user_id", user.id)
+        .not("vault_project_id", "is", null);
+
+      if (cancelled) return;
+
+      const countMap: Record<string, number> = {};
+      for (const row of protocolCounts ?? []) {
+        if (row.vault_project_id) {
+          countMap[row.vault_project_id] = (countMap[row.vault_project_id] ?? 0) + 1;
+        }
+      }
+
+      setProjects(
+        (vaultData as VaultProject[]).map((p) => ({
+          ...p,
+          protocol_count: countMap[p.id] ?? 0,
+        }))
+      );
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [user, supabase]);
 
   const filtered = projects.filter((p) => {
     const tabMatch = activeTab === "archived" ? p.status === "archived" : p.status !== "archived";
@@ -99,8 +139,9 @@ export default function TechVault() {
     fetchProjects();
   }
 
+  const [now] = useState(() => Date.now());
+
   function formatRelativeTime(dateStr: string): string {
-    const now = Date.now();
     const diff = now - new Date(dateStr).getTime();
     const minutes = Math.floor(diff / 60000);
     if (minutes < 60) return `${minutes}m ago`;

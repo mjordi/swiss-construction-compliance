@@ -71,8 +71,21 @@ export default function CasesPage() {
   }, [user, supabase]);
 
   useEffect(() => {
-    fetchCases();
-  }, [fetchCases]);
+    let cancelled = false;
+    (async () => {
+      if (!user) return;
+      const { data } = await supabase
+        .from("cases")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false });
+      if (!cancelled) {
+        if (data) setDbCases(data as Case[]);
+        setLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [user, supabase]);
 
   const caseInputs: ComplianceCaseInput[] = useMemo(
     () =>
@@ -88,19 +101,14 @@ export default function CasesPage() {
 
   const cases = useMemo(() => buildComplianceCaseTimeline(caseInputs), [caseInputs]);
 
-  // Initialize checklists from DB
-  useEffect(() => {
-    const newChecklists: Record<string, FollowUpChecklistState> = {};
+  // Derive effective checklists: user overrides take precedence over DB defaults
+  const effectiveChecklists = useMemo(() => {
+    const result: Record<string, FollowUpChecklistState> = {};
     for (const c of dbCases) {
-      const existing = checklistsByCase[c.id];
-      if (!existing) {
-        newChecklists[c.id] = c.checklist as FollowUpChecklistState;
-      }
+      result[c.id] = checklistsByCase[c.id] ?? (c.checklist as FollowUpChecklistState);
     }
-    if (Object.keys(newChecklists).length > 0) {
-      setChecklistsByCase((prev) => ({ ...prev, ...newChecklists }));
-    }
-  }, [dbCases]); // eslint-disable-line react-hooks/exhaustive-deps
+    return result;
+  }, [dbCases, checklistsByCase]);
 
   const visibleCases = useMemo(
     () => applyComplianceCaseView(cases, regimeFilter, statusFilter, sortMode),
@@ -115,7 +123,7 @@ export default function CasesPage() {
   };
 
   async function toggleChecklistItem(caseId: string, key: FollowUpChecklistKey) {
-    const updated = { ...checklistsByCase[caseId], [key]: !checklistsByCase[caseId][key] };
+    const updated = { ...effectiveChecklists[caseId], [key]: !effectiveChecklists[caseId]?.[key] };
     setChecklistsByCase((prev) => ({ ...prev, [caseId]: updated }));
     await supabase.from("cases").update({ checklist: updated, updated_at: new Date().toISOString() }).eq("id", caseId);
   }
@@ -229,7 +237,7 @@ export default function CasesPage() {
       ) : (
         <div className="space-y-4">
           {visibleCases.map((item) => {
-            const checklist = checklistsByCase[item.id] ?? item.checklistDefaults;
+            const checklist = effectiveChecklists[item.id] ?? item.checklistDefaults;
             const progress = deriveChecklistProgress(checklist);
 
             return (
