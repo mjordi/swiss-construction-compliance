@@ -22,16 +22,6 @@ export interface Case {
   updated_at: string;
 }
 
-export interface VaultProject {
-  id: string;
-  user_id: string;
-  name: string;
-  status: "active" | "review" | "archived";
-  notes: string | null;
-  created_at: string;
-  updated_at: string;
-}
-
 export interface Protocol {
   id: string;
   user_id: string;
@@ -42,6 +32,5 @@ export interface Protocol {
   defect_description: string | null;
   signature_data: string | null;
   status: "draft" | "awaiting-signature" | "finalized";
-  vault_project_id: string | null;
   created_at: string;
 }
