@@ -5,6 +5,7 @@ import { Lock, Loader2, UserPlus, LogIn } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import SiteHeader from "@/components/SiteHeader";
+import { CONFIG_ERROR_MESSAGE, isSupabaseConfigured } from "@/lib/supabase";
 
 export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
@@ -16,6 +17,7 @@ export default function Login() {
   const [success, setSuccess] = useState<string | null>(null);
   const { login, signUp } = useAuth();
   const { t } = useLanguage();
+  const supabaseConfigured = isSupabaseConfigured();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -24,6 +26,11 @@ export default function Login() {
     setIsLoading(true);
 
     try {
+      if (!supabaseConfigured) {
+        setError(CONFIG_ERROR_MESSAGE);
+        return;
+      }
+
       if (isSignUp) {
         if (!fullName.trim()) {
           setError("Please enter your name.");
@@ -115,6 +122,12 @@ export default function Login() {
                 />
               </div>
 
+              {!supabaseConfigured && (
+                <div className="text-red-400 text-[13px] bg-red-400/[0.06] border border-red-400/15 rounded-lg px-4 py-2.5">
+                  {CONFIG_ERROR_MESSAGE}
+                </div>
+              )}
+
               {error && (
                 <div className="text-red-400 text-[13px] bg-red-400/[0.06] border border-red-400/15 rounded-lg px-4 py-2.5">
                   {error}
@@ -128,8 +141,8 @@ export default function Login() {
               )}
 
               <button
-                disabled={isLoading}
-                className="w-full bg-accent hover:bg-accent/90 text-white font-semibold py-2.5 rounded-lg shadow-lg shadow-accent/10 transition-all duration-200 flex items-center justify-center gap-2 mt-1"
+                disabled={isLoading || !supabaseConfigured}
+                className="w-full bg-accent hover:bg-accent/90 text-white font-semibold py-2.5 rounded-lg shadow-lg shadow-accent/10 transition-all duration-200 flex items-center justify-center gap-2 mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
                   <>
