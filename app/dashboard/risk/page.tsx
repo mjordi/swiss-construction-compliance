@@ -47,6 +47,7 @@ const TrendIcon = ({ trend }: { trend: string }) => {
 
 type RiskBand = "all" | "critical" | "high" | "medium" | "low";
 type TrendFilter = "all" | "up" | "stable" | "down";
+type SortBy = "risk-desc" | "risk-asc" | "name-asc";
 
 function matchesRiskBand(risk: number, riskBand: RiskBand) {
   if (riskBand === "critical") return risk >= 80;
@@ -60,15 +61,35 @@ export default function RiskMap() {
   const [selectedCantonId, setSelectedCantonId] = useState(cantons[0].id);
   const [riskBand, setRiskBand] = useState<RiskBand>("all");
   const [trendFilter, setTrendFilter] = useState<TrendFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
+  const [sortBy, setSortBy] = useState<SortBy>("risk-desc");
   const { t } = useLanguage();
 
   const filteredCantons = useMemo(() => {
-    return cantons.filter((canton) => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+
+    const result = cantons.filter((canton) => {
       const riskOk = matchesRiskBand(canton.risk, riskBand);
       const trendOk = trendFilter === "all" ? true : canton.trend === trendFilter;
-      return riskOk && trendOk;
+      const searchOk =
+        normalizedQuery.length === 0
+          ? true
+          : canton.id.toLowerCase().includes(normalizedQuery) ||
+            canton.name.toLowerCase().includes(normalizedQuery);
+
+      return riskOk && trendOk && searchOk;
     });
-  }, [riskBand, trendFilter]);
+
+    if (sortBy === "risk-asc") {
+      return result.sort((a, b) => a.risk - b.risk);
+    }
+
+    if (sortBy === "name-asc") {
+      return result.sort((a, b) => a.name.localeCompare(b.name));
+    }
+
+    return result.sort((a, b) => b.risk - a.risk);
+  }, [riskBand, trendFilter, searchQuery, sortBy]);
 
   const selectedCanton = useMemo(() => {
     return (
@@ -93,6 +114,14 @@ export default function RiskMap() {
           <div className="absolute top-0 left-0 w-full h-[2px] bg-gradient-to-r from-green-400 via-yellow-400 to-red-500" />
 
           <div className="flex flex-col md:flex-row gap-3 mb-4">
+            <input
+              type="search"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder={t("risk-search-placeholder")}
+              className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-cream placeholder:text-muted"
+            />
+
             <select value={riskBand} onChange={(e) => setRiskBand(e.target.value as RiskBand)} className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-cream">
               <option value="all">{t("risk-filter-band-all")}</option>
               <option value="critical">{t("risk-filter-band-critical")}</option>
@@ -107,6 +136,26 @@ export default function RiskMap() {
               <option value="stable">{t("risk-filter-trend-stable")}</option>
               <option value="down">{t("risk-filter-trend-down")}</option>
             </select>
+
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortBy)} className="bg-white/[0.03] border border-white/[0.08] rounded-lg px-3 py-2 text-sm text-cream">
+              <option value="risk-desc">{t("risk-sort-risk-desc")}</option>
+              <option value="risk-asc">{t("risk-sort-risk-asc")}</option>
+              <option value="name-asc">{t("risk-sort-name-asc")}</option>
+            </select>
+
+            <button
+              type="button"
+              onClick={() => {
+                setSearchQuery("");
+                setRiskBand("all");
+                setTrendFilter("all");
+                setSortBy("risk-desc");
+                setSelectedCantonId(cantons[0].id);
+              }}
+              className="px-3 py-2 text-xs font-semibold rounded-lg border border-white/[0.1] text-muted hover:text-cream hover:bg-white/[0.04] transition-colors"
+            >
+              {t("deadlines-reset")}
+            </button>
 
             <div className="text-xs text-muted self-center md:ml-auto">
               {t("risk-showing")} {filteredCantons.length} {t("risk-of")} {cantons.length} {t("risk-cantons")}
