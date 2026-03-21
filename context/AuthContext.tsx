@@ -108,8 +108,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const logout = useCallback(async () => {
     await supabase.auth.signOut();
     setUser(null);
-    router.push("/login");
-  }, [supabase, router]);
+    // Full reload to clear all client state and Supabase session
+    window.location.href = "/login";
+  }, [supabase]);
 
   return (
     <AuthContext.Provider value={{ user, login, signUp, logout, isLoading }}>
