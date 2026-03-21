@@ -2,9 +2,10 @@
 
 import { useMemo, useState } from "react";
 import { scaleQuantize } from "d3-scale";
-import { AlertTriangle, TrendingUp, TrendingDown, Minus, Info } from "lucide-react";
+import { AlertTriangle, TrendingUp, TrendingDown, Minus, Info, Download } from "lucide-react";
 import PageHeader from "@/components/dashboard/PageHeader";
 import { useLanguage } from "@/context/LanguageContext";
+import { formatDateCH } from "@/lib/legal-utils";
 
 const cantons = [
   { id: "ZH", name: "Zürich",      risk: 88, trend: "up",     description: "Strictest enforcement of digital handover protocols. Dense urban construction with complex multi-party liability chains." },
@@ -189,9 +190,46 @@ export default function RiskMap() {
             </div>
           </div>
 
-          <button className="w-full py-3.5 bg-accent hover:bg-accent/90 text-white font-semibold rounded-lg shadow-lg shadow-accent/10 transition-colors duration-300">
+          <button
+            onClick={() => {
+              const report = [
+                `BauCompliance — Canton Risk Report`,
+                `Generated: ${formatDateCH(new Date())}`,
+                ``,
+                `Canton: ${selectedCanton.name} (${selectedCanton.id})`,
+                `Risk Score: ${selectedCanton.risk}/100`,
+                `Trend: ${selectedCanton.trend}`,
+                ``,
+                `Legal Context:`,
+                selectedCanton.description,
+                ``,
+                `Key Change 2026: Art. 371 OR (strict)`,
+                ``,
+                `---`,
+                `Note: Risk scores are illustrative and based on publicly available regulatory data.`,
+                `They do not constitute legal advice. Consult a specialist for canton-specific guidance.`,
+              ].join("\n");
+              const blob = new Blob([report], { type: "text/plain;charset=utf-8" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `baucompliance-risk-report-${selectedCanton.id}.txt`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="w-full py-3.5 bg-accent hover:bg-accent/90 text-white font-semibold rounded-lg shadow-lg shadow-accent/10 transition-colors duration-300 flex items-center justify-center gap-2"
+          >
+            <Download className="w-4 h-4" />
             {t("risk-generate-report")}
           </button>
+        </div>
+      </div>
+
+      {/* Disclaimer */}
+      <div className="mt-6 p-4 rounded-xl bg-yellow-500/[0.04] border border-yellow-500/15">
+        <div className="flex items-start gap-2.5 text-[12px] text-yellow-300/70 leading-relaxed">
+          <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <span>{t("risk-disclaimer")}</span>
         </div>
       </div>
     </div>
