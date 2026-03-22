@@ -1,7 +1,6 @@
 "use client";
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
-import { useRouter } from "next/navigation";
 import { getSupabase } from "@/lib/supabase";
 import type { User, AuthError, Session } from "@supabase/supabase-js";
 
@@ -43,7 +42,6 @@ async function resolveProfileName(
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthContextType["user"]>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const router = useRouter();
   const supabase = getSupabase();
 
   useEffect(() => {
@@ -83,17 +81,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string, password: string) => {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (!error && data.session) {
-        // Set user immediately so the dashboard auth guard sees it before render
         setUser(mapUser(data.session.user));
-        router.push("/dashboard");
-        // Resolve profile name in the background
+        // Resolve profile name in the background (fire-and-forget)
         resolveProfileName(supabase, data.session.user.id).then((fullName) => {
           setUser(mapUser(data.session.user, fullName));
         });
+        // Full page reload ensures dashboard gets a clean auth state —
+        // router.push can hang during client-side transitions.
+        window.location.href = "/dashboard";
       }
       return { error };
     },
-    [supabase, router]
+    [supabase]
   );
 
   const signUp = useCallback(
@@ -103,12 +102,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         password,
         options: { data: { full_name: fullName } },
       });
-      if (!error) {
-        router.push("/dashboard");
-      }
       return { error };
     },
-    [supabase, router]
+    [supabase]
   );
 
   const logout = useCallback(async () => {

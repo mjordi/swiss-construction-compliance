@@ -28,6 +28,7 @@ export default function Login() {
     try {
       if (!supabaseConfigured) {
         setError(CONFIG_ERROR_MESSAGE);
+        setIsLoading(false);
         return;
       }
 
@@ -40,16 +41,22 @@ export default function Login() {
         const { error: signUpError } = await signUp(email, password, fullName);
         if (signUpError) {
           setError(signUpError.message);
+          setIsLoading(false);
         } else {
           setSuccess("Check your email for a confirmation link.");
+          setIsLoading(false);
         }
       } else {
         const { error: loginError } = await login(email, password);
         if (loginError) {
           setError(loginError.message);
+          setIsLoading(false);
         }
+        // On success, login() triggers window.location.href = "/dashboard"
+        // which does a full page reload — keep spinner visible during navigation.
       }
-    } finally {
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Authentication failed. Please try again.");
       setIsLoading(false);
     }
   };
