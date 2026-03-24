@@ -56,6 +56,17 @@ describe("generateDeadlineICS", () => {
 
     expect(ics).toContain("TRIGGER;VALUE=DATE:20260423");
   });
+
+  it("escapes ICS reserved characters in title and description", () => {
+    const ics = generateDeadlineICS(
+      new Date("2026-04-30"),
+      "Deadline, Legal; Notice \\\\ Check",
+      "Line 1, detail; note\\nPath \\\\server"
+    );
+
+    expect(ics).toContain("SUMMARY:Deadline\\, Legal\\; Notice \\\\\\\\ Check");
+    expect(ics).toContain("DESCRIPTION:Line 1\\, detail\\; note\\\\nPath \\\\\\\\server");
+  });
 });
 
 describe("validateRuegefristInput", () => {

@@ -159,6 +159,14 @@ export function formatDateCH(date: Date): string {
 /**
  * Generate an ICS calendar file for a single deadline.
  */
+function escapeICSText(value: string): string {
+  return value
+    .replace(/\\/g, "\\\\")
+    .replace(/\n/g, "\\n")
+    .replace(/,/g, "\\,")
+    .replace(/;/g, "\\;");
+}
+
 export function generateDeadlineICS(
   deadlineDate: Date,
   title: string,
@@ -186,8 +194,8 @@ UID:baucompliance-ruegefrist-${stamp}@baucompliance.ch
 DTSTAMP:${stamp}
 DTSTART;VALUE=DATE:${dateStr}
 DTEND;VALUE=DATE:${endDateStr}
-SUMMARY:${title}
-DESCRIPTION:${description.replace(/\n/g, "\\n")}
+SUMMARY:${escapeICSText(title)}
+DESCRIPTION:${escapeICSText(description)}
 BEGIN:VALARM
 ACTION:DISPLAY
 DESCRIPTION:Rügefrist läuft in 7 Tagen ab!
