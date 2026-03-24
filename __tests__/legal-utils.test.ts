@@ -64,8 +64,8 @@ describe("generateDeadlineICS", () => {
       "Line 1, detail; note\\nPath \\\\server"
     );
 
-    expect(ics).toContain("SUMMARY:Deadline\\, Legal\\; Notice \\\\\\ Check");
-    expect(ics).toContain("DESCRIPTION:Line 1\\, detail\\; note\\nPath \\\\\\server");
+    expect(ics).toContain("SUMMARY:Deadline\\, Legal\\; Notice \\\\\\\\ Check");
+    expect(ics).toContain("DESCRIPTION:Line 1\\, detail\\; note\\\\nPath \\\\\\\\server");
   });
 });
 
