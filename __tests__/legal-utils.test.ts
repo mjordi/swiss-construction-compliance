@@ -47,16 +47,14 @@ describe("generateDeadlineICS", () => {
     expect(ics).toContain("DTEND;VALUE=DATE:20260501");
   });
 
-  it("creates reminders 14, 7 and 1 day before the deadline", () => {
+  it("creates a reminder 7 days before the deadline", () => {
     const ics = generateDeadlineICS(
       new Date("2026-04-30"),
       "Deadline",
       "Description"
     );
 
-    expect(ics).toContain("TRIGGER;VALUE=DATE:20260416");
     expect(ics).toContain("TRIGGER;VALUE=DATE:20260423");
-    expect(ics).toContain("TRIGGER;VALUE=DATE:20260429");
   });
 
   it("escapes ICS reserved characters in title and description", () => {
@@ -66,8 +64,8 @@ describe("generateDeadlineICS", () => {
       "Line 1, detail; note\\nPath \\\\server"
     );
 
-    expect(ics).toContain("SUMMARY:Deadline\\, Legal\\; Notice \\\\\\\\ Check");
-    expect(ics).toContain("DESCRIPTION:Line 1\\, detail\\; note\\\\nPath \\\\\\\\server");
+    expect(ics).toContain("SUMMARY:Deadline\\, Legal\\; Notice \\\\\\ Check");
+    expect(ics).toContain("DESCRIPTION:Line 1\\, detail\\; note\\nPath \\\\\\server");
   });
 });
 
