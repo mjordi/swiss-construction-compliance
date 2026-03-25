@@ -181,8 +181,16 @@ export function generateDeadlineICS(
     .toISOString()
     .split("T")[0]
     .replace(/-/g, "");
-  const reminderDate = addDays(deadlineDate, -7);
-  const reminderStr = reminderDate.toISOString().split("T")[0].replace(/-/g, "");
+  const reminderOffsets = [14, 7, 1] as const;
+  const alarms = reminderOffsets
+    .map((offset) => {
+      const reminderStr = addDays(deadlineDate, -offset)
+        .toISOString()
+        .split("T")[0]
+        .replace(/-/g, "");
+      return `BEGIN:VALARM\nACTION:DISPLAY\nDESCRIPTION:Rügefrist läuft in ${offset} ${offset === 1 ? "Tag" : "Tagen"} ab!\nTRIGGER;VALUE=DATE:${reminderStr}\nEND:VALARM`;
+    })
+    .join("\n");
 
   return `BEGIN:VCALENDAR
 VERSION:2.0
@@ -196,11 +204,7 @@ DTSTART;VALUE=DATE:${dateStr}
 DTEND;VALUE=DATE:${endDateStr}
 SUMMARY:${escapeICSText(title)}
 DESCRIPTION:${escapeICSText(description)}
-BEGIN:VALARM
-ACTION:DISPLAY
-DESCRIPTION:Rügefrist läuft in 7 Tagen ab!
-TRIGGER;VALUE=DATE:${reminderStr}
-END:VALARM
+${alarms}
 END:VEVENT
 END:VCALENDAR`;
 }
