@@ -174,7 +174,10 @@ export default function CasesPage() {
     fetchCases();
   }
 
-  async function handleDeleteCase(caseId: string) {
+  async function handleDeleteCase(caseId: string, projectName: string) {
+    const confirmed = window.confirm(`Delete case "${projectName}"? This cannot be undone.`);
+    if (!confirmed) return;
+
     await supabase.from("cases").delete().eq("id", caseId);
     setChecklistsByCase((prev) => {
       const next = { ...prev };
@@ -271,7 +274,7 @@ export default function CasesPage() {
                         {protocolCounts[item.id]} {t("cases-protocols")}
                       </span>
                     )}
-                    <button onClick={() => handleDeleteCase(item.id)} className="ml-2 p-1.5 rounded-md text-muted/40 hover:text-red-400 hover:bg-red-400/[0.06] transition-colors" title={t("cases-delete")}>
+                    <button onClick={() => handleDeleteCase(item.id, item.projectName)} className="ml-2 p-1.5 rounded-md text-muted/40 hover:text-red-400 hover:bg-red-400/[0.06] transition-colors" title={t("cases-delete")}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
