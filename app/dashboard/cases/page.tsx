@@ -57,6 +57,7 @@ export default function CasesPage() {
   const [regimeFilter, setRegimeFilter] = useState<CaseRegimeFilter>("all");
   const [statusFilter, setStatusFilter] = useState<CaseStatusFilter>("all");
   const [sortMode, setSortMode] = useState<CaseSortMode>("nearest-deadline");
+  const [searchTerm, setSearchTerm] = useState("");
   const [checklistsByCase, setChecklistsByCase] = useState<Record<string, FollowUpChecklistState>>({});
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
 
@@ -125,9 +126,19 @@ export default function CasesPage() {
     return result;
   }, [dbCases, checklistsByCase]);
 
-  const visibleCases = useMemo(
-    () => applyComplianceCaseView(cases, regimeFilter, statusFilter, sortMode),
-    [cases, regimeFilter, statusFilter, sortMode]
+  const visibleCases = useMemo(() => {
+    const filtered = applyComplianceCaseView(cases, regimeFilter, statusFilter, sortMode);
+    const query = searchTerm.trim().toLowerCase();
+    if (!query) return filtered;
+
+    return filtered.filter((item) =>
+      `${item.projectName} ${item.canton}`.toLowerCase().includes(query)
+    );
+  }, [cases, regimeFilter, statusFilter, sortMode, searchTerm]);
+
+  const visibleUrgentCount = useMemo(
+    () => visibleCases.filter((item) => item.status === "urgent" || item.status === "expired").length,
+    [visibleCases]
   );
 
   const checklistLabels: Record<FollowUpChecklistKey, string> = {
@@ -240,10 +251,33 @@ export default function CasesPage() {
       )}
 
       {/* Filters */}
-      <section className="mb-6 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.05] grid gap-3 md:grid-cols-3">
-        <FilterSelect label={t("cases-filter-regime")} value={regimeFilter} onChange={(v) => setRegimeFilter(v as CaseRegimeFilter)} options={[{ value: "all", label: t("cases-all") }, { value: "old", label: t("cases-old-law") }, { value: "new", label: t("cases-new-law") }]} />
-        <FilterSelect label={t("cases-filter-status")} value={statusFilter} onChange={(v) => setStatusFilter(v as CaseStatusFilter)} options={[{ value: "all", label: t("cases-all") }, { value: "ok", label: t("cases-status-on-track") }, { value: "warning", label: t("cases-status-attention") }, { value: "urgent", label: t("cases-status-urgent") }, { value: "expired", label: t("cases-status-expired") }]} />
-        <FilterSelect label={t("cases-filter-sort")} value={sortMode} onChange={(v) => setSortMode(v as CaseSortMode)} options={[{ value: "nearest-deadline", label: t("cases-sort-nearest") }, { value: "most-urgent", label: t("cases-sort-urgent") }]} />
+      <section className="mb-6 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.05] space-y-3">
+        <div className="grid gap-3 md:grid-cols-3">
+          <div className="rounded-lg border border-white/[0.08] bg-black/20 px-3 py-2">
+            <div className="text-[11px] uppercase tracking-[0.08em] text-muted/70">{t("cases-all")}</div>
+            <div className="text-lg font-semibold text-cream">{visibleCases.length}</div>
+          </div>
+          <div className="rounded-lg border border-orange-500/30 bg-orange-500/[0.08] px-3 py-2">
+            <div className="text-[11px] uppercase tracking-[0.08em] text-orange-200/70">{t("cases-status-urgent")}</div>
+            <div className="text-lg font-semibold text-orange-200">{visibleUrgentCount}</div>
+          </div>
+          <label className="text-sm text-muted">
+            <span className="block text-[11px] uppercase tracking-[0.08em] text-muted/60 mb-1">Search</span>
+            <input
+              type="search"
+              placeholder="Project or canton"
+              value={searchTerm}
+              onChange={(event) => setSearchTerm(event.target.value)}
+              className="w-full rounded-lg border border-white/[0.1] bg-black/30 px-3 py-2 text-cream placeholder:text-muted/50"
+            />
+          </label>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-3">
+          <FilterSelect label={t("cases-filter-regime")} value={regimeFilter} onChange={(v) => setRegimeFilter(v as CaseRegimeFilter)} options={[{ value: "all", label: t("cases-all") }, { value: "old", label: t("cases-old-law") }, { value: "new", label: t("cases-new-law") }]} />
+          <FilterSelect label={t("cases-filter-status")} value={statusFilter} onChange={(v) => setStatusFilter(v as CaseStatusFilter)} options={[{ value: "all", label: t("cases-all") }, { value: "ok", label: t("cases-status-on-track") }, { value: "warning", label: t("cases-status-attention") }, { value: "urgent", label: t("cases-status-urgent") }, { value: "expired", label: t("cases-status-expired") }]} />
+          <FilterSelect label={t("cases-filter-sort")} value={sortMode} onChange={(v) => setSortMode(v as CaseSortMode)} options={[{ value: "nearest-deadline", label: t("cases-sort-nearest") }, { value: "most-urgent", label: t("cases-sort-urgent") }]} />
+        </div>
       </section>
 
       {/* Cases list */}
