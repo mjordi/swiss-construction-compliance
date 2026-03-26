@@ -12,6 +12,16 @@ const projects = [
 
 export default function TechVault() {
   const [activeTab, setActiveTab] = useState("projects");
+  const [query, setQuery] = useState("");
+
+  const filteredProjects = projects
+    .filter((project) => (activeTab === "projects" ? project.status !== "Archived" : project.status === "Archived"))
+    .filter((project) => {
+      const q = query.trim().toLowerCase();
+      if (!q) return true;
+      return project.name.toLowerCase().includes(q) || project.status.toLowerCase().includes(q);
+    })
+    .sort((a, b) => b.updated.localeCompare(a.updated));
 
   return (
     <div className="max-w-6xl mx-auto h-[calc(100vh-100px)] flex flex-col">
@@ -46,8 +56,10 @@ export default function TechVault() {
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input 
               type="text" 
-              placeholder="Search documentation..." 
+              placeholder="Search projects or status..." 
               className="bg-black/20 border border-white/5 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-accent/50 w-64 transition"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
             />
           </div>
         </div>
@@ -55,7 +67,7 @@ export default function TechVault() {
         {/* Content Area */}
         <div className="flex-1 overflow-y-auto p-6">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {projects.map((project, i) => (
+            {filteredProjects.map((project, i) => (
               <motion.div 
                 key={project.id}
                 initial={{ opacity: 0, y: 20 }}
@@ -89,6 +101,12 @@ export default function TechVault() {
                 </div>
               </motion.div>
             ))}
+
+            {filteredProjects.length === 0 && (
+              <div className="col-span-full border border-white/10 rounded-2xl p-8 text-center text-slate-400 bg-white/[0.02]">
+                No projects match your current filter.
+              </div>
+            )}
 
             {/* Add New Placeholder */}
             <div className="border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center p-6 text-slate-500 hover:text-white hover:border-white/20 hover:bg-white/5 cursor-pointer transition min-h-[200px]">
