@@ -4,7 +4,7 @@ import { useState } from "react";
 import { ComposableMap, Geographies, Geography, ZoomableGroup } from "react-simple-maps";
 import { scaleQuantize } from "d3-scale";
 import { Tooltip } from "react-tooltip";
-import { AlertTriangle, TrendingUp, Info } from "lucide-react";
+import { AlertTriangle, TrendingUp, TrendingDown, Minus, Info } from "lucide-react";
 
 // Simplified topojson for Switzerland would ideally be fetched. 
 // For this demo, we'll use a placeholder or generic Europe map zoomed in if we can,
@@ -104,12 +104,16 @@ export default function RiskMap() {
             
             <div className="flex-1 space-y-2">
               <div className="flex items-center gap-2 text-sm text-slate-300">
-                <TrendingUp className={`w-4 h-4 ${selectedCanton.trend === 'up' ? 'text-red-400' : 'text-green-400'}`} />
-                <span>Trend: {selectedCanton.trend === 'up' ? 'Increasing' : 'Stable'}</span>
+                {selectedCanton.trend === "up" && <TrendingUp className="w-4 h-4 text-red-400" />}
+                {selectedCanton.trend === "down" && <TrendingDown className="w-4 h-4 text-emerald-400" />}
+                {selectedCanton.trend === "stable" && <Minus className="w-4 h-4 text-slate-400" />}
+                <span>
+                  Trend: {selectedCanton.trend === "up" ? "Increasing" : selectedCanton.trend === "down" ? "Decreasing" : "Stable"}
+                </span>
               </div>
               <div className="flex items-center gap-2 text-sm text-slate-300">
                 <AlertTriangle className="w-4 h-4 text-yellow-400" />
-                <span>Alerts: 2 Active</span>
+                <span>Alerts: {selectedCanton.risk >= 80 ? 3 : selectedCanton.risk >= 65 ? 2 : 1} Active</span>
               </div>
             </div>
           </div>
