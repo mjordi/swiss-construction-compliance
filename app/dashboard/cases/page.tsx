@@ -141,6 +141,11 @@ export default function CasesPage() {
     [visibleCases]
   );
 
+  const hasActiveFilters = useMemo(
+    () => regimeFilter !== "all" || statusFilter !== "all" || searchTerm.trim().length > 0,
+    [regimeFilter, statusFilter, searchTerm]
+  );
+
   const checklistLabels: Record<FollowUpChecklistKey, string> = {
     defectDocumented: t("cases-checklist-defect-documented"),
     evidenceAttached: t("cases-checklist-evidence-attached"),
@@ -196,6 +201,13 @@ export default function CasesPage() {
       return next;
     });
     fetchCases();
+  }
+
+  function clearFilters() {
+    setRegimeFilter("all");
+    setStatusFilter("all");
+    setSortMode("nearest-deadline");
+    setSearchTerm("");
   }
 
   if (loading) {
@@ -285,7 +297,20 @@ export default function CasesPage() {
 
       {/* Cases list */}
       {visibleCases.length === 0 ? (
-        <div className="text-center py-16 text-muted">{t("cases-no-cases")}</div>
+        hasActiveFilters ? (
+          <div className="text-center py-16 text-muted space-y-4">
+            <p>{t("cases-no-results")}</p>
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="px-4 py-2 rounded-lg border border-white/[0.12] text-cream hover:bg-white/[0.06]"
+            >
+              {t("cases-clear-filters")}
+            </button>
+          </div>
+        ) : (
+          <div className="text-center py-16 text-muted">{t("cases-no-cases")}</div>
+        )
       ) : (
         <div className="space-y-4">
           {visibleCases.map((item) => {

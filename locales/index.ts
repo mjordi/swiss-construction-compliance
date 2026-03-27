@@ -336,6 +336,8 @@ export const de = {
   "cases-save": "Fall speichern",
   "cases-cancel": "Abbrechen",
   "cases-no-cases": "Noch keine Fälle. Erstellen Sie Ihren ersten Fall.",
+  "cases-no-results": "Keine Fälle für die aktuellen Filter gefunden.",
+  "cases-clear-filters": "Filter zurücksetzen",
   "cases-delete": "Löschen",
   "cases-protocols": "Protokolle",
 };
@@ -676,6 +678,8 @@ export const fr = {
   "cases-save": "Enregistrer",
   "cases-cancel": "Annuler",
   "cases-no-cases": "Aucun dossier. Créez votre premier dossier.",
+  "cases-no-results": "Aucun dossier ne correspond aux filtres actuels.",
+  "cases-clear-filters": "Réinitialiser les filtres",
   "cases-delete": "Supprimer",
   "cases-protocols": "protocoles",
 };
@@ -1016,6 +1020,8 @@ export const it = {
   "cases-save": "Salva caso",
   "cases-cancel": "Annulla",
   "cases-no-cases": "Nessun caso. Crea il tuo primo caso.",
+  "cases-no-results": "Nessun caso corrisponde ai filtri correnti.",
+  "cases-clear-filters": "Reimposta filtri",
   "cases-delete": "Elimina",
   "cases-protocols": "protocolli",
 };
@@ -1362,6 +1368,8 @@ export const en = {
   "cases-save": "Save case",
   "cases-cancel": "Cancel",
   "cases-no-cases": "No cases yet. Create your first case.",
+  "cases-no-results": "No cases match the current filters.",
+  "cases-clear-filters": "Clear filters",
   "cases-delete": "Delete",
   "cases-protocols": "protocols",
 };
