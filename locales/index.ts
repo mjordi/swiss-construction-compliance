@@ -337,6 +337,9 @@ export const de = {
   "cases-cancel": "Abbrechen",
   "cases-no-cases": "Noch keine Fälle. Erstellen Sie Ihren ersten Fall.",
   "cases-delete": "Löschen",
+  "cases-delete-confirm": "Fall \"{projectName}\" löschen? Dies kann nicht rückgängig gemacht werden.",
+  "cases-search-label": "Suche",
+  "cases-search-placeholder": "Projekt oder Kanton",
   "cases-protocols": "Protokolle",
 };
 
@@ -677,6 +680,9 @@ export const fr = {
   "cases-cancel": "Annuler",
   "cases-no-cases": "Aucun dossier. Créez votre premier dossier.",
   "cases-delete": "Supprimer",
+  "cases-delete-confirm": "Supprimer le dossier \"{projectName}\" ? Cette action est irréversible.",
+  "cases-search-label": "Recherche",
+  "cases-search-placeholder": "Projet ou canton",
   "cases-protocols": "protocoles",
 };
 
@@ -1017,6 +1023,9 @@ export const it = {
   "cases-cancel": "Annulla",
   "cases-no-cases": "Nessun caso. Crea il tuo primo caso.",
   "cases-delete": "Elimina",
+  "cases-delete-confirm": "Eliminare il caso \"{projectName}\"? Questa azione non può essere annullata.",
+  "cases-search-label": "Cerca",
+  "cases-search-placeholder": "Progetto o cantone",
   "cases-protocols": "protocolli",
 };
 
@@ -1363,6 +1372,9 @@ export const en = {
   "cases-cancel": "Cancel",
   "cases-no-cases": "No cases yet. Create your first case.",
   "cases-delete": "Delete",
+  "cases-delete-confirm": "Delete case \"{projectName}\"? This cannot be undone.",
+  "cases-search-label": "Search",
+  "cases-search-placeholder": "Project or canton",
   "cases-protocols": "protocols",
 };
 

@@ -186,7 +186,8 @@ export default function CasesPage() {
   }
 
   async function handleDeleteCase(caseId: string, projectName: string) {
-    const confirmed = window.confirm(`Delete case "${projectName}"? This cannot be undone.`);
+    const confirmText = t("cases-delete-confirm").replace("{projectName}", projectName);
+    const confirmed = window.confirm(confirmText);
     if (!confirmed) return;
 
     await supabase.from("cases").delete().eq("id", caseId);
@@ -265,10 +266,10 @@ export default function CasesPage() {
             <div className="text-lg font-semibold text-orange-200">{visibleUrgentCount}</div>
           </div>
           <label className="text-sm text-muted">
-            <span className="block text-[11px] uppercase tracking-[0.08em] text-muted/60 mb-1">Search</span>
+            <span className="block text-[11px] uppercase tracking-[0.08em] text-muted/60 mb-1">{t("cases-search-label")}</span>
             <input
               type="search"
-              placeholder="Project or canton"
+              placeholder={t("cases-search-placeholder")}
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
               className="w-full rounded-lg border border-white/[0.1] bg-black/30 px-3 py-2 text-cream placeholder:text-muted/50"
