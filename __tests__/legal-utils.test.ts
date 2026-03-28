@@ -4,6 +4,7 @@ import {
   calculateRuegefrist,
   addDays,
   generateDeadlineICS,
+  generateDeadlineCalendarICS,
   validateRuegefristInput,
   OR_REVISION_DATE,
 } from "../lib/legal-utils";
@@ -71,6 +72,25 @@ describe("generateDeadlineICS", () => {
 
     expect(summaryLine).toBe(String.raw`SUMMARY:Deadline\, Legal\; Notice \\ Check`);
     expect(descriptionLine).toBe(String.raw`DESCRIPTION:Line 1\, detail\; note\nPath \\server`);
+  });
+});
+
+describe("generateDeadlineCalendarICS", () => {
+  it("creates one VEVENT per deadline and includes 14/7/1 day reminders", () => {
+    const ics = generateDeadlineCalendarICS(
+      [
+        { key: "60-Tage-Rügefrist", date: new Date("2026-04-30") },
+        { key: "2-Jahres-SIA-Frist", date: new Date("2028-03-01") },
+      ],
+      "01.03.2026"
+    );
+
+    expect(ics.match(/BEGIN:VEVENT/g)?.length).toBe(2);
+    expect(ics).toContain("SUMMARY:BauCompliance: 60-Tage-Rügefrist (Abnahme 01.03.2026)");
+    expect(ics).toContain("SUMMARY:BauCompliance: 2-Jahres-SIA-Frist (Abnahme 01.03.2026)");
+    expect(ics).toContain("TRIGGER;VALUE=DATE:20260416"); // -14 days
+    expect(ics).toContain("TRIGGER;VALUE=DATE:20260423"); // -7 days
+    expect(ics).toContain("TRIGGER;VALUE=DATE:20260429"); // -1 day
   });
 });
 

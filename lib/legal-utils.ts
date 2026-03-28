@@ -208,3 +208,51 @@ ${alarms}
 END:VEVENT
 END:VCALENDAR`;
 }
+
+export interface CalendarDeadlineInput {
+  key: string;
+  date: Date;
+}
+
+export function generateDeadlineCalendarICS(
+  deadlines: CalendarDeadlineInput[],
+  acceptanceDateLabel: string
+): string {
+  const now = new Date();
+  const stamp = now.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
+  const reminderOffsets = [14, 7, 1] as const;
+
+  const events = deadlines
+    .map((deadline, index) => {
+      const dateStr = deadline.date.toISOString().split("T")[0].replace(/-/g, "");
+      const endDateStr = addDays(deadline.date, 1).toISOString().split("T")[0].replace(/-/g, "");
+      const alarms = reminderOffsets
+        .map((offset) => {
+          const reminderStr = addDays(deadline.date, -offset)
+            .toISOString()
+            .split("T")[0]
+            .replace(/-/g, "");
+          return `BEGIN:VALARM\nACTION:DISPLAY\nDESCRIPTION:Frist läuft in ${offset} ${offset === 1 ? "Tag" : "Tagen"} ab\nTRIGGER;VALUE=DATE:${reminderStr}\nEND:VALARM`;
+        })
+        .join("\n");
+
+      return `BEGIN:VEVENT
+UID:baucompliance-deadline-${index}-${stamp}@baucompliance.ch
+DTSTAMP:${stamp}
+DTSTART;VALUE=DATE:${dateStr}
+DTEND;VALUE=DATE:${endDateStr}
+SUMMARY:${escapeICSText(`BauCompliance: ${deadline.key} (Abnahme ${acceptanceDateLabel})`)}
+DESCRIPTION:${escapeICSText(`Fristablauf gemäss BauCompliance.ch\nAbnahmedatum: ${acceptanceDateLabel}`)}
+${alarms}
+END:VEVENT`;
+    })
+    .join("\n");
+
+  return `BEGIN:VCALENDAR
+VERSION:2.0
+PRODID:-//BauCompliance.ch//Deadline Calculator//DE
+CALSCALE:GREGORIAN
+METHOD:PUBLISH
+${events}
+END:VCALENDAR`;
+}

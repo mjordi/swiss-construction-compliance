@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { Clock, Download, RotateCcw, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
-import { addDays, addYears, getDaysRemaining, formatDateCH } from "@/lib/legal-utils";
+import { addDays, addYears, getDaysRemaining, formatDateCH, generateDeadlineCalendarICS } from "@/lib/legal-utils";
 import PageHeader from "@/components/dashboard/PageHeader";
 import type { TranslationKey } from "@/locales";
 
@@ -24,40 +24,6 @@ interface Deadline {
   status: "ok" | "warning" | "urgent" | "expired";
 }
 
-function generateICS(deadlines: Deadline[], acceptanceDate: Date): string {
-  const now = new Date();
-  const stamp = now.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-
-  const events = deadlines
-    .map((d, i) => {
-      const dateStr = d.date.toISOString().split("T")[0].replace(/-/g, "");
-      const endDateStr = addDays(d.date, 1).toISOString().split("T")[0].replace(/-/g, "");
-      const reminderDate = addDays(d.date, -7);
-      const reminderStr = reminderDate.toISOString().split("T")[0].replace(/-/g, "");
-      return `BEGIN:VEVENT
-UID:baucompliance-deadline-${i}-${stamp}@baucompliance.ch
-DTSTAMP:${stamp}
-DTSTART;VALUE=DATE:${dateStr}
-DTEND;VALUE=DATE:${endDateStr}
-SUMMARY:BauCompliance: ${d.key} (Abnahme ${acceptanceDate.toLocaleDateString("de-CH")})
-DESCRIPTION:Fristablauf gemäss BauCompliance.ch\\nAbnahmedatum: ${acceptanceDate.toLocaleDateString("de-CH")}
-BEGIN:VALARM
-ACTION:DISPLAY
-DESCRIPTION:Frist läuft ab in 7 Tagen
-TRIGGER;VALUE=DATE:${reminderStr}
-END:VALARM
-END:VEVENT`;
-    })
-    .join("\n");
-
-  return `BEGIN:VCALENDAR
-VERSION:2.0
-PRODID:-//BauCompliance.ch//Deadline Calculator//DE
-CALSCALE:GREGORIAN
-METHOD:PUBLISH
-${events}
-END:VCALENDAR`;
-}
 
 export default function DeadlinesPage() {
   const { t } = useLanguage();
@@ -109,8 +75,11 @@ export default function DeadlinesPage() {
 
   function downloadICS() {
     if (!deadlines || !acceptanceDate) return;
-    const base = new Date(acceptanceDate);
-    const content = generateICS(deadlines, base);
+    const acceptanceDateLabel = new Date(acceptanceDate).toLocaleDateString("de-CH");
+    const content = generateDeadlineCalendarICS(
+      deadlines.map((d) => ({ key: d.key, date: d.date })),
+      acceptanceDateLabel
+    );
     const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
