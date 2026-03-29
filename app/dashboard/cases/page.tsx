@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import PageHeader from "@/components/dashboard/PageHeader";
 import { useLanguage } from "@/context/LanguageContext";
@@ -58,6 +58,7 @@ export default function CasesPage() {
   const [statusFilter, setStatusFilter] = useState<CaseStatusFilter>("all");
   const [sortMode, setSortMode] = useState<CaseSortMode>("nearest-deadline");
   const [searchTerm, setSearchTerm] = useState("");
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const [checklistsByCase, setChecklistsByCase] = useState<Record<string, FollowUpChecklistState>>({});
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
 
@@ -102,6 +103,28 @@ export default function CasesPage() {
     })();
     return () => { cancelled = true; };
   }, [user, supabase]);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "/") return;
+      if (event.metaKey || event.ctrlKey || event.altKey) return;
+
+      const target = event.target as HTMLElement | null;
+      const isTypingTarget =
+        target?.tagName === "INPUT" ||
+        target?.tagName === "TEXTAREA" ||
+        target?.tagName === "SELECT" ||
+        target?.isContentEditable;
+
+      if (isTypingTarget) return;
+
+      event.preventDefault();
+      searchInputRef.current?.focus();
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const caseInputs: ComplianceCaseInput[] = useMemo(
     () =>
@@ -280,10 +303,12 @@ export default function CasesPage() {
           <label className="text-sm text-muted">
             <span className="block text-[11px] uppercase tracking-[0.08em] text-muted/60 mb-1">{t("cases-search-label")}</span>
             <input
+              ref={searchInputRef}
               type="search"
               placeholder={t("cases-search-placeholder")}
               value={searchTerm}
               onChange={(event) => setSearchTerm(event.target.value)}
+              aria-label={t("cases-search-label")}
               className="w-full rounded-lg border border-white/[0.1] bg-black/30 px-3 py-2 text-cream placeholder:text-muted/50"
             />
           </label>
