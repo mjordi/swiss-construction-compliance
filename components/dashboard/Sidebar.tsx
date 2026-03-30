@@ -1,17 +1,17 @@
 "use client";
 
-import { FileText, Settings, LogOut, Clock, Briefcase } from "lucide-react";
+import { Shield, FileText, Lock, Settings, LogOut } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 
-export const navItems = [
-  { icon: FileText, label: "menu-audit" as const, href: "/dashboard" },
-  { icon: Clock, label: "menu-deadlines" as const, href: "/dashboard/deadlines" },
-  { icon: Briefcase, label: "menu-cases" as const, href: "/dashboard/cases" },
-  { icon: Settings, label: "menu-settings" as const, href: "/dashboard/settings" },
+const navItems = [
+  { icon: FileText, label: "menu-audit", href: "/dashboard" },
+  { icon: Shield, label: "menu-risk", href: "/dashboard/risk" },
+  { icon: Lock, label: "menu-vault", href: "/dashboard/vault" },
+  { icon: Settings, label: "menu-settings", href: "/dashboard/settings" },
 ];
 
 export default function Sidebar() {
@@ -19,36 +19,16 @@ export default function Sidebar() {
   const { user, logout } = useAuth();
   const { t } = useLanguage();
 
-  const initials = user?.name
-    ? user.name
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase()
-    : "?";
-
   return (
-    <aside className="hidden lg:flex w-56 shrink-0 bg-white/[0.015] border-r border-white/[0.04] flex-col sticky top-[61px] h-[calc(100vh-61px)]">
-      {/* User */}
-      {user && (
-        <div className="px-4 pt-5 pb-4 border-b border-white/[0.04]">
-          <div className="flex items-center gap-2.5">
-            <div className="w-7 h-7 rounded-md bg-accent/[0.1] border border-accent/20 flex items-center justify-center text-[10px] font-bold text-accent tracking-tight">
-              {initials}
-            </div>
-            <div className="min-w-0">
-              <div className="text-[12px] font-medium text-cream truncate leading-tight">{user.name}</div>
-              <div className="text-[10px] text-muted/50 truncate">{user.email}</div>
-            </div>
-          </div>
+    <aside className="w-72 bg-card/30 backdrop-blur-xl border-r border-white/5 flex flex-col fixed h-full left-0 top-0 z-40">
+      <div className="p-8">
+        <div className="text-xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-white to-slate-400 font-[family-name:var(--font-outfit)]">
+          Bau<span className="text-accent">Compliance</span>
         </div>
-      )}
-
-      <div className="px-4 pt-4 pb-1 text-[9px] font-semibold uppercase tracking-[0.15em] text-muted/40">
-        {t("menu-nav")}
+        {user && <div className="text-xs text-slate-500 mt-2 font-medium">{t("menu-logged-in")} {user.name}</div>}
       </div>
 
-      <nav className="flex-1 px-2 py-1 space-y-px">
+      <nav className="flex-1 px-4 space-y-2">
         {navItems.map((item) => {
           const isActive = pathname === item.href;
           return (
@@ -56,28 +36,25 @@ export default function Sidebar() {
               key={item.href}
               href={item.href}
               className={clsx(
-                "flex items-center gap-2.5 px-3 py-2 rounded-md transition-all duration-200 text-[13px] font-medium relative",
-                isActive
-                  ? "bg-accent/[0.06] text-accent"
-                  : "text-muted hover:text-cream hover:bg-white/[0.02]"
+                "flex items-center gap-4 px-6 py-4 rounded-xl transition font-medium",
+                isActive 
+                  ? "bg-accent/10 text-accent" 
+                  : "text-slate-400 hover:text-white hover:bg-white/5"
               )}
             >
-              {isActive && (
-                <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-accent rounded-r" />
-              )}
-              <item.icon className="w-4 h-4 shrink-0" />
-              {t(item.label)}
+              <item.icon className="w-5 h-5" />
+              {t(item.label as keyof typeof import("@/locales").de)}
             </Link>
           );
         })}
       </nav>
 
-      <div className="px-4 py-4 border-t border-white/[0.04]">
-        <button
+      <div className="p-8 border-t border-white/5">
+        <button 
           onClick={logout}
-          className="flex items-center gap-2.5 text-muted/60 hover:text-red-400 transition-colors duration-200 text-[12px] font-medium w-full"
+          className="flex items-center gap-4 text-slate-500 hover:text-red-400 transition text-sm font-medium w-full"
         >
-          <LogOut className="w-3.5 h-3.5" />
+          <LogOut className="w-5 h-5" />
           {t("menu-logout")}
         </button>
       </div>
