@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { useLanguage } from "@/context/LanguageContext";
 import { SUPPORTED_LANGUAGES } from "@/locales";
+import { buildPreservedHref, captureMarketingAttributionFromLocation } from "@/lib/marketing-attribution";
+import { useEffect, useMemo } from "react";
 
 interface SiteHeaderProps {
   showNav?: boolean;
@@ -11,6 +13,20 @@ interface SiteHeaderProps {
 
 export default function SiteHeader({ showNav = false, showLogin = false }: SiteHeaderProps) {
   const { t, lang, setLanguage } = useLanguage();
+
+  useEffect(() => {
+    captureMarketingAttributionFromLocation();
+  }, []);
+
+  const loginHref = useMemo(() => {
+    if (typeof window === "undefined") return "/login";
+    return buildPreservedHref("/login", window.location.search);
+  }, []);
+
+  const calculatorHref = useMemo(() => {
+    if (typeof window === "undefined") return "/tools/ruegefrist-rechner";
+    return buildPreservedHref("/tools/ruegefrist-rechner", window.location.search);
+  }, []);
 
   return (
     <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#0a0f1c]/80 border-b border-white/[0.04]">
@@ -33,7 +49,7 @@ export default function SiteHeader({ showNav = false, showLogin = false }: SiteH
               <a href="#how-it-works" className="hover:text-cream transition-colors duration-300">
                 {t("how-title")}
               </a>
-              <Link href="/tools/ruegefrist-rechner" className="hover:text-cream transition-colors duration-300">
+              <Link href={calculatorHref} className="hover:text-cream transition-colors duration-300">
                 {t("nav-tools")}
               </Link>
               <a href="#pricing" className="hover:text-cream transition-colors duration-300">
@@ -58,7 +74,7 @@ export default function SiteHeader({ showNav = false, showLogin = false }: SiteH
 
           {showLogin && (
             <Link
-              href="/login"
+              href={loginHref}
               className="hidden sm:flex items-center gap-1.5 px-5 py-2 text-[13px] font-semibold text-background bg-cream rounded-lg hover:bg-white transition-colors duration-300"
             >
               {t("btn-login")}

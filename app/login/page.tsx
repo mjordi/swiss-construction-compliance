@@ -1,11 +1,16 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { Lock, Loader2, UserPlus, LogIn } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import SiteHeader from "@/components/SiteHeader";
 import { CONFIG_ERROR_MESSAGE, isSupabaseConfigured } from "@/lib/supabase";
+import {
+  captureMarketingAttributionFromLocation,
+  getStoredMarketingAttribution,
+  type MarketingAttribution,
+} from "@/lib/marketing-attribution";
 
 export default function Login() {
   const [isLoading, setIsLoading] = useState(false);
@@ -18,6 +23,11 @@ export default function Login() {
   const { login, signUp } = useAuth();
   const { t } = useLanguage();
   const supabaseConfigured = isSupabaseConfigured();
+
+  const attribution = useMemo<MarketingAttribution | null>(() => {
+    captureMarketingAttributionFromLocation();
+    return getStoredMarketingAttribution();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -38,7 +48,7 @@ export default function Login() {
           setIsLoading(false);
           return;
         }
-        const { error: signUpError } = await signUp(email, password, fullName);
+        const { error: signUpError } = await signUp(email, password, fullName, attribution);
         if (signUpError) {
           setError(signUpError.message);
           setIsLoading(false);
@@ -183,6 +193,13 @@ export default function Login() {
             <div className="mt-4 text-center text-[10px] text-muted/40 tracking-wide">
               {t("login-encryption")}
             </div>
+
+            {attribution?.utm_source && (
+              <div className="mt-2 text-center text-[10px] text-muted/40 tracking-wide">
+                Source: {attribution.utm_source}
+                {attribution.utm_campaign ? ` · ${attribution.utm_campaign}` : ""}
+              </div>
+            )}
           </div>
         </div>
       </div>
