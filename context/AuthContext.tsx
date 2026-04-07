@@ -3,11 +3,17 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase";
 import type { User, AuthError, Session } from "@supabase/supabase-js";
+import type { MarketingAttribution } from "@/lib/marketing-attribution";
 
 interface AuthContextType {
   user: { email: string; name: string; id: string } | null;
   login: (email: string, password: string) => Promise<{ error: AuthError | null }>;
-  signUp: (email: string, password: string, fullName: string) => Promise<{ error: AuthError | null }>;
+  signUp: (
+    email: string,
+    password: string,
+    fullName: string,
+    attribution?: MarketingAttribution | null
+  ) => Promise<{ error: AuthError | null }>;
   logout: () => Promise<void>;
   isLoading: boolean;
 }
@@ -96,11 +102,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const signUp = useCallback(
-    async (email: string, password: string, fullName: string) => {
+    async (email: string, password: string, fullName: string, attribution?: MarketingAttribution | null) => {
       const { error } = await supabase.auth.signUp({
         email,
         password,
-        options: { data: { full_name: fullName } },
+        options: { data: { full_name: fullName, ...(attribution ?? {}) } },
       });
       return { error };
     },

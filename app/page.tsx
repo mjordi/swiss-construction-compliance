@@ -22,6 +22,8 @@ import { useLanguage } from "@/context/LanguageContext";
 import Script from "next/script";
 import { motion } from "framer-motion";
 import SiteHeader from "@/components/SiteHeader";
+import { useEffect, useMemo } from "react";
+import { buildPreservedHref, captureMarketingAttributionFromLocation } from "@/lib/marketing-attribution";
 
 const jsonLd = {
   "@context": "https://schema.org",
@@ -100,6 +102,20 @@ const HOW_STEPS = [
 export default function Home() {
   const { t } = useLanguage();
 
+  useEffect(() => {
+    captureMarketingAttributionFromLocation();
+  }, []);
+
+  const loginHref = useMemo(() => {
+    if (typeof window === "undefined") return "/login";
+    return buildPreservedHref("/login", window.location.search);
+  }, []);
+
+  const calculatorHref = useMemo(() => {
+    if (typeof window === "undefined") return "/tools/ruegefrist-rechner";
+    return buildPreservedHref("/tools/ruegefrist-rechner", window.location.search);
+  }, []);
+
   return (
     <div className="min-h-screen flex flex-col noise-overlay scanline">
       <a
@@ -169,7 +185,7 @@ export default function Home() {
 
               <motion.div variants={fadeChild} className="flex gap-4 flex-col sm:flex-row">
                 <Link
-                  href="/login"
+                  href={loginHref}
                   className="group relative px-9 py-4 bg-accent text-white rounded-xl font-semibold text-[15px] transition-all duration-500 shadow-[0_8px_40px_rgba(217,119,6,0.3)] hover:shadow-[0_16px_56px_rgba(217,119,6,0.45)] flex items-center justify-center gap-2.5 overflow-hidden"
                 >
                   <span className="relative z-10 flex items-center gap-2.5">
@@ -179,7 +195,7 @@ export default function Home() {
                   <div className="absolute inset-0 bg-gradient-to-r from-accent via-amber-500 to-accent opacity-0 group-hover:opacity-100 transition-opacity duration-500" />
                 </Link>
                 <Link
-                  href="/tools/ruegefrist-rechner"
+                  href={calculatorHref}
                   className="group px-9 py-4 border border-white/[0.08] text-cream rounded-xl font-semibold text-[15px] hover:bg-white/[0.03] hover:border-white/[0.14] transition-all duration-500 text-center flex items-center justify-center gap-2"
                 >
                   {t("btn-law")}
@@ -573,7 +589,7 @@ export default function Home() {
                   <p className="text-muted text-[15px] leading-relaxed">{t("calc-promo-desc")}</p>
                 </div>
                 <Link
-                  href="/tools/ruegefrist-rechner"
+                  href={calculatorHref}
                   className="group/btn flex items-center gap-2.5 px-8 py-4 bg-accent text-white rounded-xl font-semibold text-[14px] hover:bg-accent/90 transition-all duration-500 shadow-[0_6px_24px_rgba(217,119,6,0.25)] hover:shadow-[0_12px_40px_rgba(217,119,6,0.4)] whitespace-nowrap"
                 >
                   {t("calc-promo-cta")}
@@ -655,7 +671,7 @@ export default function Home() {
                   ))}
                 </ul>
                 <Link
-                  href="/login"
+                  href={loginHref}
                   className="w-full py-3 text-center text-[13px] border border-white/[0.06] text-cream/70 font-semibold rounded-xl hover:bg-white/[0.03] hover:border-white/[0.12] transition-all duration-300"
                 >
                   {t("plan-starter-cta")}
@@ -684,7 +700,7 @@ export default function Home() {
                   ))}
                 </ul>
                 <Link
-                  href="/login"
+                  href={loginHref}
                   className="w-full py-3 text-center text-[13px] border border-white/[0.06] text-cream/70 font-semibold rounded-xl hover:bg-white/[0.03] hover:border-white/[0.12] transition-all duration-300"
                 >
                   {t("plan-team-cta")}
@@ -716,7 +732,7 @@ export default function Home() {
                   ))}
                 </ul>
                 <Link
-                  href="/login"
+                  href={loginHref}
                   className="w-full py-3.5 text-center text-[13px] bg-accent hover:bg-amber-600 text-white font-semibold rounded-xl shadow-[0_4px_20px_rgba(217,119,6,0.25)] hover:shadow-[0_8px_32px_rgba(217,119,6,0.4)] transition-all duration-300"
                 >
                   {t("plan-pro-cta")}
@@ -786,7 +802,7 @@ export default function Home() {
                 </motion.p>
                 <motion.div variants={fadeChild}>
                   <Link
-                    href="/login"
+                    href={loginHref}
                     className="group inline-flex items-center gap-2.5 px-10 py-4 bg-accent text-white rounded-xl font-semibold text-[15px] hover:bg-accent/90 transition-all duration-500 shadow-[0_8px_40px_rgba(217,119,6,0.3)] hover:shadow-[0_16px_56px_rgba(217,119,6,0.45)]"
                   >
                     {t("cta-btn")}
@@ -859,7 +875,7 @@ export default function Home() {
                 {t("nav-home")}
               </h4>
               <nav className="flex flex-col gap-3">
-                <Link href="/tools/ruegefrist-rechner" className="text-[13px] text-muted/60 hover:text-cream transition-colors duration-300">
+                <Link href={calculatorHref} className="text-[13px] text-muted/60 hover:text-cream transition-colors duration-300">
                   {t("nav-tools")}
                 </Link>
                 <a href="#features" className="text-[13px] text-muted/60 hover:text-cream transition-colors duration-300">
