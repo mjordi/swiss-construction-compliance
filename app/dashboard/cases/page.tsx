@@ -21,6 +21,7 @@ import {
   type CaseSortMode,
   type CaseStatusFilter,
 } from "@/lib/case-timeline";
+import { validateRuegefristInput } from "@/lib/legal-utils";
 
 const SWISS_CANTONS = [
   "AG","AI","AR","BE","BL","BS","FR","GE","GL","GR",
@@ -169,6 +170,14 @@ export default function CasesPage() {
     [regimeFilter, statusFilter, searchTerm]
   );
 
+  const caseDateValidationError = useMemo(() => {
+    if (!formData.contractDate || !formData.discoveryDate) return null;
+    return validateRuegefristInput(
+      new Date(formData.contractDate),
+      new Date(formData.discoveryDate)
+    );
+  }, [formData.contractDate, formData.discoveryDate]);
+
   const checklistLabels: Record<FollowUpChecklistKey, string> = {
     defectDocumented: t("cases-checklist-defect-documented"),
     evidenceAttached: t("cases-checklist-evidence-attached"),
@@ -198,7 +207,15 @@ export default function CasesPage() {
 
   async function handleAddCase(e: React.FormEvent) {
     e.preventDefault();
-    if (!user || !formData.projectName || !formData.contractDate || !formData.discoveryDate) return;
+    if (
+      !user ||
+      !formData.projectName ||
+      !formData.contractDate ||
+      !formData.discoveryDate ||
+      caseDateValidationError
+    ) {
+      return;
+    }
     setSaving(true);
     await supabase.from("cases").insert({
       user_id: user.id,
@@ -276,10 +293,13 @@ export default function CasesPage() {
             <div>
               <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-discovery-date-input")}</label>
               <input type="date" value={formData.discoveryDate} onChange={(e) => setFormData({ ...formData, discoveryDate: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none [color-scheme:dark]" required />
+              {caseDateValidationError === "discovery-before-contract" && (
+                <p className="mt-2 text-xs text-red-400">{t("calc-discovery-before-contract")}</p>
+              )}
             </div>
           </div>
           <div className="flex gap-3">
-            <button type="submit" disabled={saving} className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white font-semibold rounded-lg text-sm flex items-center gap-2">
+            <button type="submit" disabled={saving || !!caseDateValidationError} className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white font-semibold rounded-lg text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />} {t("cases-save")}
             </button>
             <button type="button" onClick={() => setShowForm(false)} className="px-5 py-2.5 bg-white/[0.03] border border-white/[0.06] text-muted hover:text-cream font-medium rounded-lg text-sm">
