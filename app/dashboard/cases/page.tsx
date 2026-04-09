@@ -127,6 +127,23 @@ export default function CasesPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape") return;
+      const target = event.target as HTMLElement | null;
+      const inSearch = target === searchInputRef.current;
+      if (!inSearch && searchTerm.trim().length === 0) return;
+
+      if (inSearch) {
+        event.preventDefault();
+      }
+      setSearchTerm("");
+    };
+
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [searchTerm]);
+
   const caseInputs: ComplianceCaseInput[] = useMemo(
     () =>
       dbCases.map((c) => ({
