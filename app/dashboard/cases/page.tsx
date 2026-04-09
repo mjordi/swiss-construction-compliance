@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import PageHeader from "@/components/dashboard/PageHeader";
 import { useLanguage } from "@/context/LanguageContext";
@@ -44,10 +45,30 @@ const countdownClass: Record<ComplianceCaseViewModel["deadlineCountdownTone"], s
   expired: "text-red-300 font-semibold",
 };
 
+function parseRegimeFilter(value: string | null): CaseRegimeFilter {
+  if (value === "old" || value === "new") return value;
+  return "all";
+}
+
+function parseStatusFilter(value: string | null): CaseStatusFilter {
+  if (value === "ok" || value === "warning" || value === "urgent" || value === "expired") {
+    return value;
+  }
+  return "all";
+}
+
+function parseSortMode(value: string | null): CaseSortMode {
+  if (value === "most-urgent") return value;
+  return "nearest-deadline";
+}
+
 export default function CasesPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
   const supabase = getSupabase();
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   const [dbCases, setDbCases] = useState<Case[]>([]);
   const [loading, setLoading] = useState(true);
@@ -55,10 +76,10 @@ export default function CasesPage() {
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({ projectName: "", canton: "ZH", contractDate: "", discoveryDate: "" });
 
-  const [regimeFilter, setRegimeFilter] = useState<CaseRegimeFilter>("all");
-  const [statusFilter, setStatusFilter] = useState<CaseStatusFilter>("all");
-  const [sortMode, setSortMode] = useState<CaseSortMode>("nearest-deadline");
-  const [searchTerm, setSearchTerm] = useState("");
+  const [regimeFilter, setRegimeFilter] = useState<CaseRegimeFilter>(() => parseRegimeFilter(searchParams.get("regime")));
+  const [statusFilter, setStatusFilter] = useState<CaseStatusFilter>(() => parseStatusFilter(searchParams.get("status")));
+  const [sortMode, setSortMode] = useState<CaseSortMode>(() => parseSortMode(searchParams.get("sort")));
+  const [searchTerm, setSearchTerm] = useState(() => searchParams.get("q") ?? "");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [checklistsByCase, setChecklistsByCase] = useState<Record<string, FollowUpChecklistState>>({});
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
@@ -104,6 +125,28 @@ export default function CasesPage() {
     })();
     return () => { cancelled = true; };
   }, [user, supabase]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (regimeFilter === "all") params.delete("regime");
+    else params.set("regime", regimeFilter);
+
+    if (statusFilter === "all") params.delete("status");
+    else params.set("status", statusFilter);
+
+    if (sortMode === "nearest-deadline") params.delete("sort");
+    else params.set("sort", sortMode);
+
+    if (!searchTerm.trim()) params.delete("q");
+    else params.set("q", searchTerm.trim());
+
+    const next = params.toString();
+    const current = searchParams.toString();
+    if (next !== current) {
+      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+    }
+  }, [regimeFilter, statusFilter, sortMode, searchTerm, pathname, router, searchParams]);
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
