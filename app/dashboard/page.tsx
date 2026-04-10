@@ -96,23 +96,31 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (step === 2 && sigCanvas.current) {
-        const pad = new SignaturePad(sigCanvas.current);
-        pad.onEnd = () => setHasSignature(!pad.isEmpty());
-        setSigPad(pad);
-        const resizeCanvas = () => {
-            const canvas = sigCanvas.current;
-            if (canvas) {
-                const ratio =  Math.max(window.devicePixelRatio || 1, 1);
-                canvas.width = canvas.offsetWidth * ratio;
-                canvas.height = canvas.offsetHeight * ratio;
-                canvas.getContext("2d")?.scale(ratio, ratio);
-                pad.clear();
-                setHasSignature(false);
-            }
-        };
-        window.addEventListener("resize", resizeCanvas);
-        resizeCanvas();
-        return () => window.removeEventListener("resize", resizeCanvas);
+      const pad = new SignaturePad(sigCanvas.current);
+      const handleStrokeEnd = () => setHasSignature(!pad.isEmpty());
+      pad.addEventListener("endStroke", handleStrokeEnd);
+      setSigPad(pad);
+
+      const resizeCanvas = () => {
+        const canvas = sigCanvas.current;
+        if (canvas) {
+          const ratio = Math.max(window.devicePixelRatio || 1, 1);
+          canvas.width = canvas.offsetWidth * ratio;
+          canvas.height = canvas.offsetHeight * ratio;
+          canvas.getContext("2d")?.scale(ratio, ratio);
+          pad.clear();
+          setHasSignature(false);
+        }
+      };
+
+      window.addEventListener("resize", resizeCanvas);
+      resizeCanvas();
+
+      return () => {
+        window.removeEventListener("resize", resizeCanvas);
+        pad.removeEventListener("endStroke", handleStrokeEnd);
+        pad.off();
+      };
     }
   }, [step]);
 
