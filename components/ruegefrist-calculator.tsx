@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Download,
   RotateCcw,
@@ -45,9 +45,43 @@ const statusConfig = {
 
 export default function RuegefristCalculator() {
   const { t } = useLanguage();
+  const STORAGE_KEY = "baucompliance:ruegefrist-draft";
   const [contractDate, setContractDate] = useState("");
   const [discoveryDate, setDiscoveryDate] = useState("");
+  const [isDraftLoaded, setIsDraftLoaded] = useState(false);
   const [result, setResult] = useState<RuegefristResult | null>(null);
+
+  useEffect(() => {
+    try {
+      const rawDraft = window.localStorage.getItem(STORAGE_KEY);
+      if (!rawDraft) return;
+      const parsedDraft = JSON.parse(rawDraft) as {
+        contractDate?: string;
+        discoveryDate?: string;
+      };
+      setContractDate(parsedDraft.contractDate ?? "");
+      setDiscoveryDate(parsedDraft.discoveryDate ?? "");
+    } catch {
+      setContractDate("");
+      setDiscoveryDate("");
+    } finally {
+      setIsDraftLoaded(true);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!isDraftLoaded) return;
+
+    if (!contractDate && !discoveryDate) {
+      window.localStorage.removeItem(STORAGE_KEY);
+      return;
+    }
+
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ contractDate, discoveryDate })
+    );
+  }, [contractDate, discoveryDate, isDraftLoaded]);
 
   const validationError =
     contractDate && discoveryDate
@@ -67,6 +101,7 @@ export default function RuegefristCalculator() {
     setContractDate("");
     setDiscoveryDate("");
     setResult(null);
+    window.localStorage.removeItem(STORAGE_KEY);
   }
 
   function downloadICS() {
@@ -132,7 +167,7 @@ export default function RuegefristCalculator() {
               <Scale className="w-4 h-4" />
               {t("calc-calculate")}
             </button>
-            {result && (
+            {(result || contractDate || discoveryDate) && (
               <button
                 onClick={reset}
                 className="px-4 py-3 border border-white/[0.08] text-muted hover:text-cream hover:border-white/[0.12] rounded-lg transition-all duration-300"
