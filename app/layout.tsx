@@ -1,19 +1,13 @@
 import type { Metadata } from "next";
-import { Instrument_Serif, DM_Sans } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext";
 import { LanguageProvider } from "@/context/LanguageContext";
 
-const instrumentSerif = Instrument_Serif({
-  variable: "--font-display",
-  subsets: ["latin"],
-  weight: "400",
-});
-
-const dmSans = DM_Sans({
-  variable: "--font-body",
-  subsets: ["latin"],
-});
+const bodyStyle: React.CSSProperties & Record<`--${string}`, string> = {
+  "--font-body": '"Inter", "DM Sans", "Segoe UI", "Helvetica Neue", Arial, sans-serif',
+  "--font-display": '"Instrument Serif", "Iowan Old Style", "Times New Roman", serif',
+  fontFamily: "var(--font-body)",
+};
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://baucompliance.ch"),
@@ -98,10 +92,7 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="de">
-      <body
-        className={`${instrumentSerif.variable} ${dmSans.variable} antialiased`}
-        style={{ fontFamily: "var(--font-body)" }}
-      >
+      <body className="antialiased" style={bodyStyle}>
         <LanguageProvider>
           <AuthProvider>
             {children}
