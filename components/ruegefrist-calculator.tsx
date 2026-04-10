@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import {
   Download,
   RotateCcw,
@@ -45,9 +45,38 @@ const statusConfig = {
 
 export default function RuegefristCalculator() {
   const { t } = useLanguage();
-  const [contractDate, setContractDate] = useState("");
-  const [discoveryDate, setDiscoveryDate] = useState("");
+  const STORAGE_KEY = "baucompliance:ruegefrist-draft";
+
+  const [contractDate, setContractDate] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      const rawDraft = window.localStorage.getItem(STORAGE_KEY);
+      if (!rawDraft) return "";
+      const parsedDraft = JSON.parse(rawDraft) as { contractDate?: string };
+      return parsedDraft.contractDate ?? "";
+    } catch {
+      return "";
+    }
+  });
+  const [discoveryDate, setDiscoveryDate] = useState(() => {
+    if (typeof window === "undefined") return "";
+    try {
+      const rawDraft = window.localStorage.getItem(STORAGE_KEY);
+      if (!rawDraft) return "";
+      const parsedDraft = JSON.parse(rawDraft) as { discoveryDate?: string };
+      return parsedDraft.discoveryDate ?? "";
+    } catch {
+      return "";
+    }
+  });
   const [result, setResult] = useState<RuegefristResult | null>(null);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify({ contractDate, discoveryDate })
+    );
+  }, [contractDate, discoveryDate]);
 
   const validationError =
     contractDate && discoveryDate
@@ -67,6 +96,7 @@ export default function RuegefristCalculator() {
     setContractDate("");
     setDiscoveryDate("");
     setResult(null);
+    window.localStorage.removeItem(STORAGE_KEY);
   }
 
   function downloadICS() {
