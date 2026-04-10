@@ -27,6 +27,7 @@ export default function Dashboard() {
   const { user } = useAuth();
   const supabase = getSupabase();
   const [sigPad, setSigPad] = useState<SignaturePad | null>(null);
+  const [hasSignature, setHasSignature] = useState(false);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [userCases, setUserCases] = useState<Case[]>([]);
   const [projectData, setProjectData] = useState({
@@ -95,21 +96,31 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (step === 2 && sigCanvas.current) {
-        const pad = new SignaturePad(sigCanvas.current);
-        setSigPad(pad);
-        const resizeCanvas = () => {
-            const canvas = sigCanvas.current;
-            if (canvas) {
-                const ratio =  Math.max(window.devicePixelRatio || 1, 1);
-                canvas.width = canvas.offsetWidth * ratio;
-                canvas.height = canvas.offsetHeight * ratio;
-                canvas.getContext("2d")?.scale(ratio, ratio);
-                pad.clear();
-            }
-        };
-        window.addEventListener("resize", resizeCanvas);
-        resizeCanvas();
-        return () => window.removeEventListener("resize", resizeCanvas);
+      const pad = new SignaturePad(sigCanvas.current);
+      const handleStrokeEnd = () => setHasSignature(!pad.isEmpty());
+      pad.addEventListener("endStroke", handleStrokeEnd);
+      setSigPad(pad);
+
+      const resizeCanvas = () => {
+        const canvas = sigCanvas.current;
+        if (canvas) {
+          const ratio = Math.max(window.devicePixelRatio || 1, 1);
+          canvas.width = canvas.offsetWidth * ratio;
+          canvas.height = canvas.offsetHeight * ratio;
+          canvas.getContext("2d")?.scale(ratio, ratio);
+          pad.clear();
+          setHasSignature(false);
+        }
+      };
+
+      window.addEventListener("resize", resizeCanvas);
+      resizeCanvas();
+
+      return () => {
+        window.removeEventListener("resize", resizeCanvas);
+        pad.removeEventListener("endStroke", handleStrokeEnd);
+        pad.off();
+      };
     }
   }, [step]);
 
@@ -349,7 +360,19 @@ export default function Dashboard() {
               </div>
 
               <div className="mb-6">
-                <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("label-signature")}</label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">{t("label-signature")}</label>
+                  <button
+                    onClick={() => {
+                      sigPad?.clear();
+                      setHasSignature(false);
+                    }}
+                    type="button"
+                    className="text-[11px] text-muted hover:text-cream transition-colors duration-200"
+                  >
+                    {t("btn-clear")}
+                  </button>
+                </div>
                 <div className="border border-white/[0.08] rounded-lg bg-white h-28 relative overflow-hidden cursor-crosshair touch-none">
                   <canvas
                     ref={sigCanvas}
@@ -368,8 +391,8 @@ export default function Dashboard() {
                 </button>
                 <button
                   onClick={handleGenerateProtocol}
-                  disabled={isGenerating}
-                  className="flex-1 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 transition-colors duration-200 flex items-center justify-center gap-2 shadow-lg shadow-accent/10 text-sm"
+                  disabled={isGenerating || !hasSignature}
+                  className="flex-1 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 transition-colors duration-200 flex items-center justify-center gap-2 shadow-lg shadow-accent/10 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                   {isGenerating ? t("btn-generating") : t("btn-finalize")}
