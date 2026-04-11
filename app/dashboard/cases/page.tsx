@@ -382,15 +382,30 @@ export default function CasesPage() {
           </div>
           <label className="text-sm text-muted">
             <span className="block text-[11px] uppercase tracking-[0.08em] text-muted/60 mb-1">{t("cases-search-label")}</span>
-            <input
-              ref={searchInputRef}
-              type="search"
-              placeholder={t("cases-search-placeholder")}
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              aria-label={t("cases-search-label")}
-              className="w-full rounded-lg border border-white/[0.1] bg-black/30 px-3 py-2 text-cream placeholder:text-muted/50"
-            />
+            <div className="relative">
+              <input
+                ref={searchInputRef}
+                type="search"
+                placeholder={t("cases-search-placeholder")}
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                aria-label={t("cases-search-label")}
+                className="w-full rounded-lg border border-white/[0.1] bg-black/30 px-3 py-2 pr-9 text-cream placeholder:text-muted/50"
+              />
+              {searchTerm.trim().length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm("");
+                    searchInputRef.current?.focus();
+                  }}
+                  aria-label={t("cases-clear-filters")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-1 text-base leading-none text-muted/80 hover:text-cream hover:bg-white/[0.08]"
+                >
+                  ×
+                </button>
+              )}
+            </div>
           </label>
         </div>
 
