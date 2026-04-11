@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import PageHeader from "@/components/dashboard/PageHeader";
@@ -80,6 +80,7 @@ export default function CasesPage() {
   const [statusFilter, setStatusFilter] = useState<CaseStatusFilter>(() => parseStatusFilter(searchParams.get("status")));
   const [sortMode, setSortMode] = useState<CaseSortMode>(() => parseSortMode(searchParams.get("sort")));
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get("q") ?? "");
+  const searchInputId = useId();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [checklistsByCase, setChecklistsByCase] = useState<Record<string, FollowUpChecklistState>>({});
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
@@ -380,18 +381,36 @@ export default function CasesPage() {
             <div className="text-[11px] uppercase tracking-[0.08em] text-orange-200/70">{t("cases-status-urgent")}</div>
             <div className="text-lg font-semibold text-orange-200">{visibleUrgentCount}</div>
           </div>
-          <label className="text-sm text-muted">
-            <span className="block text-[11px] uppercase tracking-[0.08em] text-muted/60 mb-1">{t("cases-search-label")}</span>
-            <input
-              ref={searchInputRef}
-              type="search"
-              placeholder={t("cases-search-placeholder")}
-              value={searchTerm}
-              onChange={(event) => setSearchTerm(event.target.value)}
-              aria-label={t("cases-search-label")}
-              className="w-full rounded-lg border border-white/[0.1] bg-black/30 px-3 py-2 text-cream placeholder:text-muted/50"
-            />
-          </label>
+          <div className="text-sm text-muted">
+            <label htmlFor={searchInputId} className="block text-[11px] uppercase tracking-[0.08em] text-muted/60 mb-1">
+              {t("cases-search-label")}
+            </label>
+            <div className="relative">
+              <input
+                id={searchInputId}
+                ref={searchInputRef}
+                type="search"
+                placeholder={t("cases-search-placeholder")}
+                value={searchTerm}
+                onChange={(event) => setSearchTerm(event.target.value)}
+                aria-label={t("cases-search-label")}
+                className="w-full rounded-lg border border-white/[0.1] bg-black/30 px-3 py-2 pr-9 text-cream placeholder:text-muted/50"
+              />
+              {searchTerm.trim().length > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSearchTerm("");
+                    searchInputRef.current?.focus();
+                  }}
+                  aria-label={t("cases-clear-filters")}
+                  className="absolute right-2 top-1/2 -translate-y-1/2 rounded px-1 text-base leading-none text-muted/80 hover:text-cream hover:bg-white/[0.08]"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
