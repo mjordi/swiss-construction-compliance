@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useId, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import PageHeader from "@/components/dashboard/PageHeader";
@@ -80,6 +80,7 @@ export default function CasesPage() {
   const [statusFilter, setStatusFilter] = useState<CaseStatusFilter>(() => parseStatusFilter(searchParams.get("status")));
   const [sortMode, setSortMode] = useState<CaseSortMode>(() => parseSortMode(searchParams.get("sort")));
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get("q") ?? "");
+  const searchInputId = useId();
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [checklistsByCase, setChecklistsByCase] = useState<Record<string, FollowUpChecklistState>>({});
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
@@ -380,10 +381,13 @@ export default function CasesPage() {
             <div className="text-[11px] uppercase tracking-[0.08em] text-orange-200/70">{t("cases-status-urgent")}</div>
             <div className="text-lg font-semibold text-orange-200">{visibleUrgentCount}</div>
           </div>
-          <label className="text-sm text-muted">
-            <span className="block text-[11px] uppercase tracking-[0.08em] text-muted/60 mb-1">{t("cases-search-label")}</span>
+          <div className="text-sm text-muted">
+            <label htmlFor={searchInputId} className="block text-[11px] uppercase tracking-[0.08em] text-muted/60 mb-1">
+              {t("cases-search-label")}
+            </label>
             <div className="relative">
               <input
+                id={searchInputId}
                 ref={searchInputRef}
                 type="search"
                 placeholder={t("cases-search-placeholder")}
@@ -406,7 +410,7 @@ export default function CasesPage() {
                 </button>
               )}
             </div>
-          </label>
+          </div>
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
