@@ -414,6 +414,18 @@ export default function CasesPage() {
           <FilterSelect label={t("cases-filter-status")} value={statusFilter} onChange={(v) => setStatusFilter(v as CaseStatusFilter)} options={[{ value: "all", label: t("cases-all") }, { value: "ok", label: t("cases-status-on-track") }, { value: "warning", label: t("cases-status-attention") }, { value: "urgent", label: t("cases-status-urgent") }, { value: "expired", label: t("cases-status-expired") }]} />
           <FilterSelect label={t("cases-filter-sort")} value={sortMode} onChange={(v) => setSortMode(v as CaseSortMode)} options={[{ value: "nearest-deadline", label: t("cases-sort-nearest") }, { value: "most-urgent", label: t("cases-sort-urgent") }]} />
         </div>
+
+        {hasActiveFilters && (
+          <div className="flex justify-end">
+            <button
+              type="button"
+              onClick={clearFilters}
+              className="px-3 py-1.5 rounded-lg border border-white/[0.12] text-xs font-medium text-cream hover:bg-white/[0.06]"
+            >
+              {t("cases-clear-filters")}
+            </button>
+          </div>
+        )}
       </section>
 
       {/* Cases list */}
