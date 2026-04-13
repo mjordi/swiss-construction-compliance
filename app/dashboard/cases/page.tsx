@@ -51,7 +51,7 @@ function parseRegimeFilter(value: string | null): CaseRegimeFilter {
 }
 
 function parseStatusFilter(value: string | null): CaseStatusFilter {
-  if (value === "ok" || value === "warning" || value === "urgent" || value === "expired") {
+  if (value === "ok" || value === "warning" || value === "urgent" || value === "expired" || value === "triage") {
     return value;
   }
   return "all";
@@ -378,13 +378,13 @@ export default function CasesPage() {
           </div>
           <button
             type="button"
-            onClick={() => setStatusFilter((prev) => (prev === "urgent" ? "all" : "urgent"))}
+            onClick={() => setStatusFilter((prev) => (prev === "triage" ? "all" : "triage"))}
             className={`rounded-lg border px-3 py-2 text-left transition-colors ${
-              statusFilter === "urgent"
+              statusFilter === "triage"
                 ? "border-orange-400/60 bg-orange-500/[0.16]"
                 : "border-orange-500/30 bg-orange-500/[0.08] hover:bg-orange-500/[0.12]"
             }`}
-            aria-pressed={statusFilter === "urgent"}
+            aria-pressed={statusFilter === "triage"}
           >
             <div className="text-[11px] uppercase tracking-[0.08em] text-orange-200/70">{t("cases-status-urgent")}</div>
             <div className="text-lg font-semibold text-orange-200">{visibleUrgentCount}</div>
