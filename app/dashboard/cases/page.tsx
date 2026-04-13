@@ -376,10 +376,19 @@ export default function CasesPage() {
             <div className="text-[11px] uppercase tracking-[0.08em] text-muted/70">{t("cases-all")}</div>
             <div className="text-lg font-semibold text-cream">{visibleCases.length}</div>
           </div>
-          <div className="rounded-lg border border-orange-500/30 bg-orange-500/[0.08] px-3 py-2">
+          <button
+            type="button"
+            onClick={() => setStatusFilter((prev) => (prev === "urgent" ? "all" : "urgent"))}
+            className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+              statusFilter === "urgent"
+                ? "border-orange-400/60 bg-orange-500/[0.16]"
+                : "border-orange-500/30 bg-orange-500/[0.08] hover:bg-orange-500/[0.12]"
+            }`}
+            aria-pressed={statusFilter === "urgent"}
+          >
             <div className="text-[11px] uppercase tracking-[0.08em] text-orange-200/70">{t("cases-status-urgent")}</div>
             <div className="text-lg font-semibold text-orange-200">{visibleUrgentCount}</div>
-          </div>
+          </button>
           <label className="text-sm text-muted">
             <span className="block text-[11px] uppercase tracking-[0.08em] text-muted/60 mb-1">{t("cases-search-label")}</span>
             <div className="relative">
