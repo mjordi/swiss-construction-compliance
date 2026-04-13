@@ -10,7 +10,7 @@ import {
 export type CaseDeadlineStatus = DeadlineResult["status"] | "immediate-notice";
 
 export type CaseRegimeFilter = LegalRegime | "all";
-export type CaseStatusFilter = DeadlineResult["status"] | "all";
+export type CaseStatusFilter = DeadlineResult["status"] | "triage" | "all";
 export type CaseSortMode = "nearest-deadline" | "most-urgent";
 
 export type FollowUpChecklistKey =
@@ -162,7 +162,8 @@ export function filterComplianceCases(
     const statusMatch =
       statusFilter === "all" ||
       item.status === statusFilter ||
-      (item.status === "immediate-notice" && statusFilter === "urgent");
+      (statusFilter === "triage" && (item.status === "urgent" || item.status === "expired")) ||
+      (item.status === "immediate-notice" && (statusFilter === "urgent" || statusFilter === "triage"));
 
     return regimeMatch && statusMatch;
   });
