@@ -226,6 +226,11 @@ export default function CasesPage() {
     [visibleCases]
   );
 
+  const visibleExpiredCount = useMemo(
+    () => visibleCases.filter((item) => item.status === "expired").length,
+    [visibleCases]
+  );
+
   const hasActiveFilters = useMemo(
     () => regimeFilter !== "all" || statusFilter !== "all" || searchTerm.trim().length > 0,
     [regimeFilter, statusFilter, searchTerm]
@@ -372,7 +377,7 @@ export default function CasesPage() {
 
       {/* Filters */}
       <section className="mb-6 p-4 rounded-2xl bg-white/[0.02] border border-white/[0.05] space-y-3">
-        <div className="grid gap-3 md:grid-cols-3">
+        <div className="grid gap-3 md:grid-cols-4">
           <div className="rounded-lg border border-white/[0.08] bg-black/20 px-3 py-2">
             <div className="text-[11px] uppercase tracking-[0.08em] text-muted/70">{t("cases-all")}</div>
             <div className="text-lg font-semibold text-cream">{visibleCases.length}</div>
@@ -381,6 +386,19 @@ export default function CasesPage() {
             <div className="text-[11px] uppercase tracking-[0.08em] text-orange-200/70">{t("cases-status-urgent")}</div>
             <div className="text-lg font-semibold text-orange-200">{visibleUrgentCount}</div>
           </div>
+          <button
+            type="button"
+            onClick={() => setStatusFilter((prev) => (prev === "expired" ? "all" : "expired"))}
+            className={`rounded-lg border px-3 py-2 text-left transition-colors ${
+              statusFilter === "expired"
+                ? "border-red-400/60 bg-red-500/[0.16]"
+                : "border-red-500/30 bg-red-500/[0.08] hover:bg-red-500/[0.12]"
+            }`}
+            aria-pressed={statusFilter === "expired"}
+          >
+            <div className="text-[11px] uppercase tracking-[0.08em] text-red-200/70">{t("cases-status-expired")}</div>
+            <div className="text-lg font-semibold text-red-200">{visibleExpiredCount}</div>
+          </button>
           <div className="text-sm text-muted">
             <label htmlFor={searchInputId} className="block text-[11px] uppercase tracking-[0.08em] text-muted/60 mb-1">
               {t("cases-search-label")}
