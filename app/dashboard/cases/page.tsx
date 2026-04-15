@@ -256,12 +256,6 @@ export default function CasesPage() {
     calendarReminderExported: t("cases-checklist-calendar-exported"),
   };
 
-  function refreshCases() {
-    const fetchId = ++latestFetchIdRef.current;
-    setLoading(true);
-    void runCasesRefresh(fetchId);
-  }
-
   async function toggleChecklistItem(caseId: string, key: FollowUpChecklistKey) {
     const updated = { ...effectiveChecklists[caseId], [key]: !effectiveChecklists[caseId]?.[key] };
     setChecklistsByCase((prev) => ({ ...prev, [caseId]: updated }));
