@@ -84,9 +84,16 @@ export default function CasesPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [checklistsByCase, setChecklistsByCase] = useState<Record<string, FollowUpChecklistState>>({});
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
+  const latestFetchIdRef = useRef(0);
 
-  const fetchCases = useCallback(async () => {
-    if (!user) return;
+  const runCasesRefresh = useCallback(async (fetchId: number) => {
+    if (!user) {
+      setDbCases([]);
+      setProtocolCounts({});
+      setLoading(false);
+      return;
+    }
+
     const [casesResult, protocolsResult] = await Promise.all([
       supabase
         .from("cases")
@@ -100,6 +107,8 @@ export default function CasesPage() {
         .not("case_id", "is", null),
     ]);
 
+    if (fetchId !== latestFetchIdRef.current) return;
+
     if (casesResult.data) setDbCases(casesResult.data as Case[]);
     if (protocolsResult.data) {
       const counts: Record<string, number> = {};
@@ -111,9 +120,17 @@ export default function CasesPage() {
     setLoading(false);
   }, [user, supabase]);
 
+  const triggerCasesRefresh = useCallback(() => {
+    const fetchId = ++latestFetchIdRef.current;
+    setLoading(true);
+    void runCasesRefresh(fetchId);
+  }, [runCasesRefresh]);
+
   useEffect(() => {
-    fetchCases();
-  }, [fetchCases]);
+    queueMicrotask(() => {
+      triggerCasesRefresh();
+    });
+  }, [triggerCasesRefresh]);
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString());
@@ -239,6 +256,12 @@ export default function CasesPage() {
     calendarReminderExported: t("cases-checklist-calendar-exported"),
   };
 
+  function refreshCases() {
+    const fetchId = ++latestFetchIdRef.current;
+    setLoading(true);
+    void runCasesRefresh(fetchId);
+  }
+
   async function toggleChecklistItem(caseId: string, key: FollowUpChecklistKey) {
     const updated = { ...effectiveChecklists[caseId], [key]: !effectiveChecklists[caseId]?.[key] };
     setChecklistsByCase((prev) => ({ ...prev, [caseId]: updated }));
@@ -281,7 +304,7 @@ export default function CasesPage() {
     setFormData({ projectName: "", canton: "ZH", contractDate: "", discoveryDate: "" });
     setShowForm(false);
     setSaving(false);
-    fetchCases();
+    triggerCasesRefresh();
   }
 
   async function handleDeleteCase(caseId: string, projectName: string) {
@@ -295,7 +318,7 @@ export default function CasesPage() {
       delete next[caseId];
       return next;
     });
-    fetchCases();
+    triggerCasesRefresh();
   }
 
   function clearFilters() {
