@@ -84,48 +84,53 @@ export default function CasesPage() {
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [checklistsByCase, setChecklistsByCase] = useState<Record<string, FollowUpChecklistState>>({});
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
+  const latestFetchIdRef = useRef(0);
 
-  const fetchCases = useCallback(async () => {
-    if (!user) return;
-    const { data } = await supabase
-      .from("cases")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: false });
-    if (data) setDbCases(data as Case[]);
+  const runCasesRefresh = useCallback(async (fetchId: number) => {
+    if (!user) {
+      setDbCases([]);
+      setProtocolCounts({});
+      setLoading(false);
+      return;
+    }
+
+    const [casesResult, protocolsResult] = await Promise.all([
+      supabase
+        .from("cases")
+        .select("*")
+        .eq("user_id", user.id)
+        .order("created_at", { ascending: false }),
+      supabase
+        .from("protocols")
+        .select("case_id")
+        .eq("user_id", user.id)
+        .not("case_id", "is", null),
+    ]);
+
+    if (fetchId !== latestFetchIdRef.current) return;
+
+    if (casesResult.data) setDbCases(casesResult.data as Case[]);
+    if (protocolsResult.data) {
+      const counts: Record<string, number> = {};
+      for (const p of protocolsResult.data) {
+        if (p.case_id) counts[p.case_id] = (counts[p.case_id] || 0) + 1;
+      }
+      setProtocolCounts(counts);
+    }
     setLoading(false);
   }, [user, supabase]);
 
+  const triggerCasesRefresh = useCallback(() => {
+    const fetchId = ++latestFetchIdRef.current;
+    setLoading(true);
+    void runCasesRefresh(fetchId);
+  }, [runCasesRefresh]);
+
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!user) return;
-      const [casesResult, protocolsResult] = await Promise.all([
-        supabase
-          .from("cases")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("protocols")
-          .select("case_id")
-          .eq("user_id", user.id)
-          .not("case_id", "is", null),
-      ]);
-      if (!cancelled) {
-        if (casesResult.data) setDbCases(casesResult.data as Case[]);
-        if (protocolsResult.data) {
-          const counts: Record<string, number> = {};
-          for (const p of protocolsResult.data) {
-            if (p.case_id) counts[p.case_id] = (counts[p.case_id] || 0) + 1;
-          }
-          setProtocolCounts(counts);
-        }
-        setLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [user, supabase]);
+    queueMicrotask(() => {
+      triggerCasesRefresh();
+    });
+  }, [triggerCasesRefresh]);
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams.toString());
@@ -293,7 +298,7 @@ export default function CasesPage() {
     setFormData({ projectName: "", canton: "ZH", contractDate: "", discoveryDate: "" });
     setShowForm(false);
     setSaving(false);
-    fetchCases();
+    triggerCasesRefresh();
   }
 
   async function handleDeleteCase(caseId: string, projectName: string) {
@@ -307,7 +312,7 @@ export default function CasesPage() {
       delete next[caseId];
       return next;
     });
-    fetchCases();
+    triggerCasesRefresh();
   }
 
   function clearFilters() {
