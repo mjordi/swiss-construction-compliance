@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Lock, Loader2, UserPlus, LogIn } from "lucide-react";
+import { Lock, Loader2, UserPlus, LogIn, FlaskConical } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import SiteHeader from "@/components/SiteHeader";
@@ -23,6 +23,8 @@ export default function Login() {
   const { login, signUp } = useAuth();
   const { t } = useLanguage();
   const supabaseConfigured = isSupabaseConfigured();
+  const demoEmail = process.env.NEXT_PUBLIC_DEMO_EMAIL;
+  const demoPassword = process.env.NEXT_PUBLIC_DEMO_PASSWORD;
 
   const attribution = useMemo<MarketingAttribution | null>(() => {
     captureMarketingAttributionFromLocation();
@@ -64,6 +66,26 @@ export default function Login() {
         }
         // On success, login() triggers window.location.href = "/dashboard"
         // which does a full page reload — keep spinner visible during navigation.
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Authentication failed. Please try again.");
+      setIsLoading(false);
+    }
+  };
+
+  const handleDemoLogin = async () => {
+    if (!demoEmail || !demoPassword) return;
+    setError(null);
+    setSuccess(null);
+    setIsSignUp(false);
+    setEmail(demoEmail);
+    setPassword(demoPassword);
+    setIsLoading(true);
+    try {
+      const { error: loginError } = await login(demoEmail, demoPassword);
+      if (loginError) {
+        setError(loginError.message);
+        setIsLoading(false);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Authentication failed. Please try again.");
@@ -176,6 +198,25 @@ export default function Login() {
                 )}
               </button>
             </form>
+
+            {demoEmail && demoPassword && (
+              <div className="mt-4">
+                <div className="flex items-center gap-3 mb-4">
+                  <div className="flex-1 h-px bg-white/[0.06]" />
+                  <span className="text-[11px] text-muted/50 uppercase tracking-[0.1em]">or</span>
+                  <div className="flex-1 h-px bg-white/[0.06]" />
+                </div>
+                <button
+                  type="button"
+                  onClick={handleDemoLogin}
+                  disabled={isLoading || !supabaseConfigured}
+                  className="w-full bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.08] hover:border-accent/30 text-muted hover:text-cream font-semibold py-2.5 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  <FlaskConical className="w-4 h-4" />
+                  Use Demo Account
+                </button>
+              </div>
+            )}
 
             <div className="mt-6 text-center">
               <button
