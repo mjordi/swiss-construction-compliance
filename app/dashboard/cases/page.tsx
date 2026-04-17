@@ -228,7 +228,14 @@ export default function CasesPage() {
   const visibleCases = useMemo(() => {
     if (statusFilter === "all") return searchScopedCases;
     if (statusFilter === "triage") {
-      return searchScopedCases.filter((item) => item.status === "urgent" || item.status === "expired");
+      return searchScopedCases.filter(
+        (item) => item.status === "urgent" || item.status === "expired" || item.status === "immediate-notice"
+      );
+    }
+    if (statusFilter === "urgent") {
+      return searchScopedCases.filter(
+        (item) => item.status === "urgent" || item.status === "immediate-notice"
+      );
     }
     return searchScopedCases.filter((item) => item.status === statusFilter);
   }, [searchScopedCases, statusFilter]);
@@ -237,9 +244,11 @@ export default function CasesPage() {
     () => ({
       ok: searchScopedCases.filter((item) => item.status === "ok").length,
       warning: searchScopedCases.filter((item) => item.status === "warning").length,
-      urgent: searchScopedCases.filter((item) => item.status === "urgent").length,
+      urgent: searchScopedCases.filter((item) => item.status === "urgent" || item.status === "immediate-notice").length,
       expired: searchScopedCases.filter((item) => item.status === "expired").length,
-      triage: searchScopedCases.filter((item) => item.status === "urgent" || item.status === "expired").length,
+      triage: searchScopedCases.filter(
+        (item) => item.status === "urgent" || item.status === "expired" || item.status === "immediate-notice"
+      ).length,
     }),
     [searchScopedCases]
   );
