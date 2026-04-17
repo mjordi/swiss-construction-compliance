@@ -215,19 +215,33 @@ export default function CasesPage() {
     return result;
   }, [dbCases, checklistsByCase]);
 
-  const visibleCases = useMemo(() => {
-    const filtered = applyComplianceCaseView(cases, regimeFilter, statusFilter, sortMode);
+  const searchScopedCases = useMemo(() => {
+    const filtered = applyComplianceCaseView(cases, regimeFilter, "all", sortMode);
     const query = searchTerm.trim().toLowerCase();
     if (!query) return filtered;
 
     return filtered.filter((item) =>
       `${item.projectName} ${item.canton}`.toLowerCase().includes(query)
     );
-  }, [cases, regimeFilter, statusFilter, sortMode, searchTerm]);
+  }, [cases, regimeFilter, sortMode, searchTerm]);
 
-  const visibleUrgentCount = useMemo(
-    () => visibleCases.filter((item) => item.status === "urgent" || item.status === "expired").length,
-    [visibleCases]
+  const visibleCases = useMemo(() => {
+    if (statusFilter === "all") return searchScopedCases;
+    if (statusFilter === "triage") {
+      return searchScopedCases.filter((item) => item.status === "urgent" || item.status === "expired");
+    }
+    return searchScopedCases.filter((item) => item.status === statusFilter);
+  }, [searchScopedCases, statusFilter]);
+
+  const statusCounters = useMemo(
+    () => ({
+      ok: searchScopedCases.filter((item) => item.status === "ok").length,
+      warning: searchScopedCases.filter((item) => item.status === "warning").length,
+      urgent: searchScopedCases.filter((item) => item.status === "urgent").length,
+      expired: searchScopedCases.filter((item) => item.status === "expired").length,
+      triage: searchScopedCases.filter((item) => item.status === "urgent" || item.status === "expired").length,
+    }),
+    [searchScopedCases]
   );
 
   const hasActiveFilters = useMemo(
@@ -392,7 +406,7 @@ export default function CasesPage() {
             aria-pressed={statusFilter === "triage"}
           >
             <div className="text-[11px] uppercase tracking-[0.08em] text-orange-200/70">{t("cases-status-urgent")}</div>
-            <div className="text-lg font-semibold text-orange-200">{visibleUrgentCount}</div>
+            <div className="text-lg font-semibold text-orange-200">{statusCounters.triage}</div>
           </button>
           <label className="text-sm text-muted">
             <span className="block text-[11px] uppercase tracking-[0.08em] text-muted/60 mb-1">{t("cases-search-label")}</span>
@@ -421,6 +435,37 @@ export default function CasesPage() {
               )}
             </div>
           </label>
+        </div>
+
+        <div className="grid gap-3 md:grid-cols-4">
+          <StatusCountCard
+            label={t("cases-status-on-track")}
+            count={statusCounters.ok}
+            active={statusFilter === "ok"}
+            tone="ok"
+            onClick={() => setStatusFilter((prev) => (prev === "ok" ? "all" : "ok"))}
+          />
+          <StatusCountCard
+            label={t("cases-status-attention")}
+            count={statusCounters.warning}
+            active={statusFilter === "warning"}
+            tone="warning"
+            onClick={() => setStatusFilter((prev) => (prev === "warning" ? "all" : "warning"))}
+          />
+          <StatusCountCard
+            label={t("cases-status-urgent")}
+            count={statusCounters.urgent}
+            active={statusFilter === "urgent"}
+            tone="urgent"
+            onClick={() => setStatusFilter((prev) => (prev === "urgent" ? "all" : "urgent"))}
+          />
+          <StatusCountCard
+            label={t("cases-status-expired")}
+            count={statusCounters.expired}
+            active={statusFilter === "expired"}
+            tone="expired"
+            onClick={() => setStatusFilter((prev) => (prev === "expired" ? "all" : "expired"))}
+          />
         </div>
 
         <div className="grid gap-3 md:grid-cols-3">
@@ -535,6 +580,46 @@ export default function CasesPage() {
         </div>
       )}
     </div>
+  );
+}
+
+function StatusCountCard({
+  label,
+  count,
+  active,
+  tone,
+  onClick,
+}: {
+  label: string;
+  count: number;
+  active: boolean;
+  tone: "ok" | "warning" | "urgent" | "expired";
+  onClick: () => void;
+}) {
+  const baseTone = {
+    ok: "border-green-500/25 bg-green-500/[0.06] text-green-200",
+    warning: "border-yellow-500/30 bg-yellow-500/[0.08] text-yellow-200",
+    urgent: "border-orange-500/30 bg-orange-500/[0.08] text-orange-200",
+    expired: "border-red-500/30 bg-red-500/[0.08] text-red-200",
+  }[tone];
+
+  const activeTone = {
+    ok: "border-green-400/60 bg-green-500/[0.16]",
+    warning: "border-yellow-400/60 bg-yellow-500/[0.16]",
+    urgent: "border-orange-400/60 bg-orange-500/[0.16]",
+    expired: "border-red-400/60 bg-red-500/[0.16]",
+  }[tone];
+
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      aria-pressed={active}
+      className={`rounded-lg border px-3 py-2 text-left transition-colors ${baseTone} ${active ? activeTone : "hover:bg-white/[0.08]"}`}
+    >
+      <div className="text-[11px] uppercase tracking-[0.08em] opacity-80">{label}</div>
+      <div className="text-lg font-semibold">{count}</div>
+    </button>
   );
 }
 
