@@ -15,6 +15,13 @@ import type { Case } from "@/lib/database.types";
 
 const PROJECT_DRAFT_STORAGE_KEY = "baucompliance:wizard-project-draft";
 
+type WizardDraft = {
+  name?: string;
+  contractor?: string;
+  client?: string;
+  defectDescription?: string;
+};
+
 const steps = [1, 2, 3];
 const INPUT_CLASS = "w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream placeholder-muted/40 focus:border-accent/40 outline-none transition-colors duration-200";
 
@@ -47,21 +54,28 @@ export default function Dashboard() {
         return;
       }
 
-      const parsedDraft = JSON.parse(rawDraft) as Partial<typeof projectData>;
+      const parsedDraft = JSON.parse(rawDraft) as WizardDraft;
       setProjectData((current) => ({
         ...current,
         name: parsedDraft.name ?? "",
         contractor: parsedDraft.contractor ?? "",
         client: parsedDraft.client ?? "",
       }));
+      setDefectDescription(parsedDraft.defectDescription ?? "");
     } catch (error) {
       console.warn("Unable to restore project draft", error);
     }
   }, []);
 
   useEffect(() => {
-    window.localStorage.setItem(PROJECT_DRAFT_STORAGE_KEY, JSON.stringify(projectData));
-  }, [projectData]);
+    window.localStorage.setItem(
+      PROJECT_DRAFT_STORAGE_KEY,
+      JSON.stringify({
+        ...projectData,
+        defectDescription,
+      } satisfies WizardDraft)
+    );
+  }, [projectData, defectDescription]);
 
   // Fetch user's cases for the case selector
   useEffect(() => {
