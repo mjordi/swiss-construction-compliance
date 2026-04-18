@@ -19,6 +19,10 @@ export default function Dashboard() {
     contractor: "",
     client: ""
   });
+  const isStepOneValid =
+    projectData.name.trim().length > 0 &&
+    projectData.contractor.trim().length > 0 &&
+    projectData.client.trim().length > 0;
   
   useEffect(() => {
     if (step === 2 && sigCanvas.current) {
@@ -79,6 +83,10 @@ export default function Dashboard() {
       setIsGenerating(false);
     }
   }
+
+  const handleClearSignature = () => {
+    sigPad?.clear();
+  };
 
   return (
     <div className="max-w-5xl mx-auto">
@@ -150,9 +158,10 @@ export default function Dashboard() {
                     </div>
 
                     <div className="pt-4">
-                        <button 
+                        <button
                             onClick={() => setStep(2)}
-                            className="w-full py-4 bg-white text-black font-bold rounded-xl hover:bg-slate-200 transition"
+                            disabled={!isStepOneValid}
+                            className="w-full py-4 bg-white text-black font-bold rounded-xl hover:bg-slate-200 transition disabled:opacity-40 disabled:cursor-not-allowed"
                         >
                             {t("btn-next")}
                         </button>
@@ -193,6 +202,15 @@ export default function Dashboard() {
                             className="absolute inset-0 w-full h-full"
                         />
                         <div className="absolute bottom-2 right-2 text-xs text-slate-300 pointer-events-none">{t("sign-here")}</div>
+                    </div>
+                    <div className="mt-3 flex justify-end">
+                      <button
+                        onClick={handleClearSignature}
+                        type="button"
+                        className="text-xs px-3 py-1.5 rounded-lg bg-white/5 text-slate-300 hover:bg-white/10"
+                      >
+                        Clear signature
+                      </button>
                     </div>
                 </div>
 
