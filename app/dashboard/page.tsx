@@ -20,6 +20,7 @@ type WizardDraft = {
   contractor?: string;
   client?: string;
   defectDescription?: string;
+  selectedCaseId?: string | null;
 };
 
 const steps = [1, 2, 3];
@@ -62,6 +63,7 @@ export default function Dashboard() {
         client: parsedDraft.client ?? "",
       }));
       setDefectDescription(parsedDraft.defectDescription ?? "");
+      setSelectedCaseId(parsedDraft.selectedCaseId ?? null);
     } catch (error) {
       console.warn("Unable to restore project draft", error);
     }
@@ -73,9 +75,10 @@ export default function Dashboard() {
       JSON.stringify({
         ...projectData,
         defectDescription,
+        selectedCaseId,
       } satisfies WizardDraft)
     );
-  }, [projectData, defectDescription]);
+  }, [projectData, defectDescription, selectedCaseId]);
 
   // Fetch user's cases for the case selector
   useEffect(() => {
