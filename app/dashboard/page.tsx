@@ -40,6 +40,7 @@ export default function Dashboard() {
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);
   const [userCases, setUserCases] = useState<Case[]>([]);
+  const [draftHydrated, setDraftHydrated] = useState(false);
   const [projectData, setProjectData] = useState({
     name: "",
     contractor: "",
@@ -54,6 +55,7 @@ export default function Dashboard() {
     try {
       const rawDraft = window.localStorage.getItem(PROJECT_DRAFT_STORAGE_KEY);
       if (!rawDraft) {
+        setDraftHydrated(true);
         return;
       }
 
@@ -69,10 +71,13 @@ export default function Dashboard() {
       setDraftUpdatedAt(parsedDraft.updatedAt ?? null);
     } catch (error) {
       console.warn("Unable to restore project draft", error);
+    } finally {
+      setDraftHydrated(true);
     }
   }, []);
 
   useEffect(() => {
+    if (!draftHydrated) return;
     const updatedAt = new Date().toISOString();
     setDraftUpdatedAt(updatedAt);
     window.localStorage.setItem(
@@ -84,7 +89,7 @@ export default function Dashboard() {
         updatedAt,
       } satisfies WizardDraft)
     );
-  }, [projectData, defectDescription, selectedCaseId]);
+  }, [draftHydrated, projectData, defectDescription, selectedCaseId]);
 
   const hasDraftContent =
     projectData.name.trim().length > 0 ||
@@ -290,9 +295,9 @@ export default function Dashboard() {
                 {hasDraftContent && (
                   <div className="rounded-lg border border-accent/20 bg-accent/[0.06] px-3 py-2.5 flex items-center justify-between gap-3">
                     <div>
-                      <div className="text-[11px] uppercase tracking-[0.08em] text-accent font-semibold">Draft active</div>
+                      <div className="text-[11px] uppercase tracking-[0.08em] text-accent font-semibold">{t("dashboard-draft-active")}</div>
                       <div className="text-[11px] text-muted">
-                        Last saved {draftUpdatedAt ? new Date(draftUpdatedAt).toLocaleString() : "just now"}
+                        {t("dashboard-draft-last-saved")} {draftUpdatedAt ? new Date(draftUpdatedAt).toLocaleString() : t("dashboard-draft-just-now")}
                       </div>
                     </div>
                     <button
@@ -300,7 +305,7 @@ export default function Dashboard() {
                       onClick={clearDraft}
                       className="text-[11px] text-muted hover:text-cream transition-colors duration-200"
                     >
-                      Discard draft
+                      {t("dashboard-draft-discard")}
                     </button>
                   </div>
                 )}
