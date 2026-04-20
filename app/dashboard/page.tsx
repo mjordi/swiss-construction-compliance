@@ -21,6 +21,7 @@ type WizardDraft = {
   client?: string;
   defectDescription?: string;
   selectedCaseId?: string | null;
+  updatedAt?: string;
 };
 
 const steps = [1, 2, 3];
@@ -37,6 +38,7 @@ export default function Dashboard() {
   const [sigPad, setSigPad] = useState<SignaturePad | null>(null);
   const [hasSignature, setHasSignature] = useState(false);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);
   const [userCases, setUserCases] = useState<Case[]>([]);
   const [projectData, setProjectData] = useState({
     name: "",
@@ -64,21 +66,40 @@ export default function Dashboard() {
       }));
       setDefectDescription(parsedDraft.defectDescription ?? "");
       setSelectedCaseId(parsedDraft.selectedCaseId ?? null);
+      setDraftUpdatedAt(parsedDraft.updatedAt ?? null);
     } catch (error) {
       console.warn("Unable to restore project draft", error);
     }
   }, []);
 
   useEffect(() => {
+    const updatedAt = new Date().toISOString();
+    setDraftUpdatedAt(updatedAt);
     window.localStorage.setItem(
       PROJECT_DRAFT_STORAGE_KEY,
       JSON.stringify({
         ...projectData,
         defectDescription,
         selectedCaseId,
+        updatedAt,
       } satisfies WizardDraft)
     );
   }, [projectData, defectDescription, selectedCaseId]);
+
+  const hasDraftContent =
+    projectData.name.trim().length > 0 ||
+    projectData.contractor.trim().length > 0 ||
+    projectData.client.trim().length > 0 ||
+    defectDescription.trim().length > 0 ||
+    Boolean(selectedCaseId);
+
+  const clearDraft = () => {
+    setProjectData({ name: "", contractor: "", client: "" });
+    setDefectDescription("");
+    setSelectedCaseId(null);
+    setDraftUpdatedAt(null);
+    window.localStorage.removeItem(PROJECT_DRAFT_STORAGE_KEY);
+  };
 
   // Fetch user's cases for the case selector
   useEffect(() => {
@@ -266,6 +287,24 @@ export default function Dashboard() {
                 <FileText className="w-4 h-4 text-accent" /> {t("step-1")}
               </h3>
               <div className="space-y-4">
+                {hasDraftContent && (
+                  <div className="rounded-lg border border-accent/20 bg-accent/[0.06] px-3 py-2.5 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-[0.08em] text-accent font-semibold">Draft active</div>
+                      <div className="text-[11px] text-muted">
+                        Last saved {draftUpdatedAt ? new Date(draftUpdatedAt).toLocaleString() : "just now"}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={clearDraft}
+                      className="text-[11px] text-muted hover:text-cream transition-colors duration-200"
+                    >
+                      Discard draft
+                    </button>
+                  </div>
+                )}
+
                 {userCases.length > 0 && (
                   <div>
                     <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("wizard-case-selector")}</label>
@@ -444,10 +483,7 @@ export default function Dashboard() {
                 </button>
                 <button
                   onClick={() => {
-                    setProjectData({ name: "", contractor: "", client: "" });
-                    setDefectDescription("");
-                    setSelectedCaseId(null);
-                    window.localStorage.removeItem(PROJECT_DRAFT_STORAGE_KEY);
+                    clearDraft();
                     setStep(1);
                   }}
                   className="px-8 py-3.5 bg-white/[0.03] border border-white/[0.06] text-cream font-semibold rounded-lg hover:bg-white/[0.05] transition-all duration-300"
