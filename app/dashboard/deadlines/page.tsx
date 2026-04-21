@@ -24,13 +24,16 @@ interface Deadline {
   status: "ok" | "warning" | "urgent" | "expired";
 }
 
-
 function getTodayLocalDateInputValue() {
   const now = new Date();
   const year = now.getFullYear();
   const month = String(now.getMonth() + 1).padStart(2, "0");
   const day = String(now.getDate()).padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function parseDateInputAsUTC(dateInput: string) {
+  return new Date(`${dateInput}T00:00:00Z`);
 }
 
 export default function DeadlinesPage() {
@@ -40,7 +43,7 @@ export default function DeadlinesPage() {
 
   function calculate() {
     if (!acceptanceDate) return;
-    const base = new Date(`${acceptanceDate}T00:00:00`);
+    const base = parseDateInputAsUTC(acceptanceDate);
     if (Number.isNaN(base.getTime())) return;
 
     const d60 = addDays(base, 60);
@@ -84,7 +87,7 @@ export default function DeadlinesPage() {
 
   function downloadICS() {
     if (!deadlines || !acceptanceDate) return;
-    const acceptanceDateLabel = new Date(acceptanceDate).toLocaleDateString("de-CH");
+    const acceptanceDateLabel = formatDateCH(parseDateInputAsUTC(acceptanceDate));
     const content = generateDeadlineCalendarICS(
       deadlines.map((d) => ({ key: d.key, date: d.date })),
       acceptanceDateLabel
