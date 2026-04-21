@@ -25,6 +25,14 @@ interface Deadline {
 }
 
 
+function getTodayLocalDateInputValue() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export default function DeadlinesPage() {
   const { t } = useLanguage();
   const [acceptanceDate, setAcceptanceDate] = useState<string>("");
@@ -144,7 +152,7 @@ export default function DeadlinesPage() {
             type="date"
             value={acceptanceDate}
             onChange={(e) => setAcceptanceDate(e.target.value)}
-            max={new Date().toISOString().split("T")[0]}
+            max={getTodayLocalDateInputValue()}
             className="flex-1 bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-3 text-cream focus:outline-none focus:border-accent/40 transition-colors duration-300 [color-scheme:dark]"
           />
           <button
