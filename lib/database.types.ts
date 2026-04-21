@@ -18,6 +18,7 @@ export interface Case {
     noticeDrafted: boolean;
     calendarReminderExported: boolean;
   };
+  status: "active" | "review" | "archived";
   created_at: string;
   updated_at: string;
 }

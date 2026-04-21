@@ -11,7 +11,7 @@ import { buildComplianceCaseTimeline } from "@/lib/case-timeline";
 interface VaultProjectCard {
   id: string;
   name: string;
-  status: "Active" | "Review";
+  status: "Active" | "Review" | "Archived";
   docs: number;
   compliance: number;
   updated: string;
@@ -107,15 +107,16 @@ export default function TechVault() {
       const checklistValues = Object.values(c.checklist ?? {});
       const completed = checklistValues.filter(Boolean).length;
       const total = checklistValues.length || 1;
+      const archived = c.status === "archived";
       return {
         id: c.id,
         name: c.project_name,
-        status: (statusByCase.get(c.id) as "Active" | "Review" | undefined) ?? "Active",
+        status: archived ? "Archived" : ((statusByCase.get(c.id) as "Active" | "Review" | undefined) ?? "Active"),
         docs: docsByCase[c.id] ?? 0,
         compliance: Math.round((completed / total) * 100),
         updated: formatRelativeUpdate(c.updated_at),
         updatedAt: new Date(c.updated_at).getTime(),
-        archived: false,
+        archived,
       };
     });
 
