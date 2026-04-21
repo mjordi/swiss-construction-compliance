@@ -159,6 +159,7 @@ export const de = {
   "deadlines-days-remaining": "Tage verbleibend",
   "deadlines-expired": "Abgelaufen",
   "deadlines-deadline-date": "Fristablauf",
+  "deadlines-timeline": "Zeitleiste",
 
   // Pricing
   "pricing-title": "Transparente Preise",
@@ -246,10 +247,6 @@ export const de = {
   "mobile-nav-menu": "Menü",
   "dashboard-signature-required": "Bitte zuerst eine Unterschrift erfassen.",
   "dashboard-project-placeholder": "z. B. Residentia West",
-  "dashboard-draft-active": "Entwurf aktiv",
-  "dashboard-draft-last-saved": "Zuletzt gespeichert",
-  "dashboard-draft-just-now": "gerade eben",
-  "dashboard-draft-discard": "Entwurf verwerfen",
   "dashboard-contractor-placeholder": "Firmenname AG",
   "dashboard-client-placeholder": "Name Bauherr",
   "dashboard-step1-required": "Bitte Projekt, Unternehmer und Bauherr ausfüllen, bevor Sie fortfahren.",
@@ -509,6 +506,7 @@ export const fr = {
   "deadlines-days-remaining": "jours restants",
   "deadlines-expired": "Expiré",
   "deadlines-deadline-date": "Échéance",
+  "deadlines-timeline": "Chronologie",
 
   // Pricing
   "pricing-title": "Tarifs transparents",
@@ -596,10 +594,6 @@ export const fr = {
   "mobile-nav-menu": "Menu",
   "dashboard-signature-required": "Veuillez d'abord fournir une signature.",
   "dashboard-project-placeholder": "p. ex. Residentia West",
-  "dashboard-draft-active": "Brouillon actif",
-  "dashboard-draft-last-saved": "Dernière sauvegarde",
-  "dashboard-draft-just-now": "à l'instant",
-  "dashboard-draft-discard": "Supprimer le brouillon",
   "dashboard-contractor-placeholder": "Nom de société SA",
   "dashboard-client-placeholder": "Nom du client",
   "dashboard-step1-required": "Veuillez renseigner projet, entrepreneur et client avant de continuer.",
@@ -859,6 +853,7 @@ export const it = {
   "deadlines-days-remaining": "giorni rimanenti",
   "deadlines-expired": "Scaduto",
   "deadlines-deadline-date": "Scadenza",
+  "deadlines-timeline": "Cronologia",
 
   // Pricing
   "pricing-title": "Prezzi trasparenti",
@@ -946,10 +941,6 @@ export const it = {
   "mobile-nav-menu": "Menu",
   "dashboard-signature-required": "Inserisci prima una firma.",
   "dashboard-project-placeholder": "es. Residentia West",
-  "dashboard-draft-active": "Bozza attiva",
-  "dashboard-draft-last-saved": "Ultimo salvataggio",
-  "dashboard-draft-just-now": "proprio adesso",
-  "dashboard-draft-discard": "Scarta bozza",
   "dashboard-contractor-placeholder": "Nome Azienda SA",
   "dashboard-client-placeholder": "Nome Cliente",
   "dashboard-step1-required": "Compila progetto, imprenditore e committente prima di continuare.",
@@ -1209,6 +1200,7 @@ export const en = {
   "deadlines-days-remaining": "days remaining",
   "deadlines-expired": "Expired",
   "deadlines-deadline-date": "Deadline",
+  "deadlines-timeline": "Timeline",
 
   // Pricing
   "pricing-title": "Transparent Pricing",
@@ -1300,10 +1292,6 @@ export const en = {
 
   "dashboard-signature-required": "Please provide a signature first.",
   "dashboard-project-placeholder": "e.g. Residentia West",
-  "dashboard-draft-active": "Draft active",
-  "dashboard-draft-last-saved": "Last saved",
-  "dashboard-draft-just-now": "just now",
-  "dashboard-draft-discard": "Discard draft",
   "dashboard-contractor-placeholder": "Company Name AG",
   "dashboard-client-placeholder": "Client Name",
   "dashboard-step1-required": "Please fill in project, contractor, and client before continuing.",
