@@ -24,6 +24,17 @@ interface Deadline {
   status: "ok" | "warning" | "urgent" | "expired";
 }
 
+function getTodayLocalDateInputValue() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function parseDateInputAsUTC(dateInput: string) {
+  return new Date(`${dateInput}T00:00:00Z`);
+}
 
 export default function DeadlinesPage() {
   const { t } = useLanguage();
@@ -32,7 +43,8 @@ export default function DeadlinesPage() {
 
   function calculate() {
     if (!acceptanceDate) return;
-    const base = new Date(acceptanceDate);
+    const base = parseDateInputAsUTC(acceptanceDate);
+    if (Number.isNaN(base.getTime())) return;
 
     const d60 = addDays(base, 60);
     const d5y = addYears(base, 5);
@@ -75,7 +87,7 @@ export default function DeadlinesPage() {
 
   function downloadICS() {
     if (!deadlines || !acceptanceDate) return;
-    const acceptanceDateLabel = new Date(acceptanceDate).toLocaleDateString("de-CH");
+    const acceptanceDateLabel = formatDateCH(parseDateInputAsUTC(acceptanceDate));
     const content = generateDeadlineCalendarICS(
       deadlines.map((d) => ({ key: d.key, date: d.date })),
       acceptanceDateLabel
@@ -143,6 +155,7 @@ export default function DeadlinesPage() {
             type="date"
             value={acceptanceDate}
             onChange={(e) => setAcceptanceDate(e.target.value)}
+            max={getTodayLocalDateInputValue()}
             className="flex-1 bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-3 text-cream focus:outline-none focus:border-accent/40 transition-colors duration-300 [color-scheme:dark]"
           />
           <button
@@ -181,7 +194,7 @@ export default function DeadlinesPage() {
 
           {/* Timeline visualization */}
           <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/[0.05] mb-6 relative overflow-hidden">
-            <div className="text-[11px] text-muted uppercase tracking-[0.12em] font-semibold mb-4">Zeitleiste</div>
+            <div className="text-[11px] text-muted uppercase tracking-[0.12em] font-semibold mb-4">{t("deadlines-timeline")}</div>
             <div className="relative">
               <div className="w-full h-1.5 bg-white/[0.04] rounded-full mb-1" />
               {deadlines.map((d, i) => {

@@ -159,6 +159,7 @@ export const de = {
   "deadlines-days-remaining": "Tage verbleibend",
   "deadlines-expired": "Abgelaufen",
   "deadlines-deadline-date": "Fristablauf",
+  "deadlines-timeline": "Zeitleiste",
 
   // Pricing
   "pricing-title": "Transparente Preise",
@@ -509,6 +510,7 @@ export const fr = {
   "deadlines-days-remaining": "jours restants",
   "deadlines-expired": "Expiré",
   "deadlines-deadline-date": "Échéance",
+  "deadlines-timeline": "Chronologie",
 
   // Pricing
   "pricing-title": "Tarifs transparents",
@@ -859,6 +861,7 @@ export const it = {
   "deadlines-days-remaining": "giorni rimanenti",
   "deadlines-expired": "Scaduto",
   "deadlines-deadline-date": "Scadenza",
+  "deadlines-timeline": "Cronologia",
 
   // Pricing
   "pricing-title": "Prezzi trasparenti",
@@ -1209,6 +1212,7 @@ export const en = {
   "deadlines-days-remaining": "days remaining",
   "deadlines-expired": "Expired",
   "deadlines-deadline-date": "Deadline",
+  "deadlines-timeline": "Timeline",
 
   // Pricing
   "pricing-title": "Transparent Pricing",
