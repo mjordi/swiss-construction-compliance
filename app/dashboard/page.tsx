@@ -441,6 +441,9 @@ export default function Dashboard() {
                   />
                   <div className="absolute bottom-2 right-3 text-[10px] text-slate-400 pointer-events-none">{t("sign-here")}</div>
                 </div>
+                {!hasSignature && (
+                  <p className="mt-2 text-[11px] text-muted">{t("dashboard-signature-required")}</p>
+                )}
               </div>
 
               <div className="flex gap-3">
