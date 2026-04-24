@@ -3,6 +3,7 @@ import {
   determineLegalRegime,
   formatDateCH,
   generateDeadlineICS,
+  validateRuegefristInput,
   type LegalRegime,
   type DeadlineResult,
 } from "@/lib/legal-utils";
@@ -44,6 +45,23 @@ export interface ComplianceCaseInput {
   discoveryDate: Date;
 }
 
+export type ComplianceCaseInputValidationError =
+  | "discovery-before-contract"
+  | "invalid-date";
+
+export function validateComplianceCaseInput(
+  input: ComplianceCaseInput
+): ComplianceCaseInputValidationError | null {
+  const contract = new Date(input.contractDate);
+  const discovery = new Date(input.discoveryDate);
+
+  if (Number.isNaN(contract.getTime()) || Number.isNaN(discovery.getTime())) {
+    return "invalid-date";
+  }
+
+  return validateRuegefristInput(contract, discovery);
+}
+
 export interface ComplianceCaseViewModel {
   id: string;
   projectName: string;
@@ -75,6 +93,20 @@ export interface ComplianceCaseViewModel {
 export function toComplianceCaseViewModel(
   input: ComplianceCaseInput
 ): ComplianceCaseViewModel {
+  const validationError = validateComplianceCaseInput(input);
+
+  if (validationError === "invalid-date") {
+    throw new Error(
+      `Invalid compliance case dates for case ${input.id}: expected valid contract and discovery dates.`
+    );
+  }
+
+  if (validationError === "discovery-before-contract") {
+    throw new Error(
+      `Invalid compliance case timeline for case ${input.id}: discovery date cannot be before contract date.`
+    );
+  }
+
   const regime = determineLegalRegime(input.contractDate);
   const result = calculateRuegefrist(input.contractDate, input.discoveryDate);
   const evidenceComplete = input.canton !== "VD";
