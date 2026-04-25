@@ -175,44 +175,54 @@ export default function Dashboard() {
 
     setIsGenerating(true);
 
-    // Save protocol to Supabase
-    if (user) {
-      const signatureData = sigPad ? sigPad.toDataURL() : null;
-      await supabase.from("protocols").insert({
-        user_id: user.id,
-        case_id: selectedCaseId,
-        project_name: projectData.name,
-        contractor: projectData.contractor,
-        client: projectData.client,
-        defect_description: defectDescription || null,
-        signature_data: signatureData,
-        status: "finalized",
-      });
+    try {
+      // Save protocol to Supabase
+      if (user) {
+        const signatureData = sigPad ? sigPad.toDataURL() : null;
+        const { error: insertError } = await supabase.from("protocols").insert({
+          user_id: user.id,
+          case_id: selectedCaseId,
+          project_name: projectData.name,
+          contractor: projectData.contractor,
+          client: projectData.client,
+          defect_description: defectDescription || null,
+          signature_data: signatureData,
+          status: "finalized",
+        });
 
-      // Auto-mark "defect documented" on the linked case
-      if (selectedCaseId) {
-        const { data: caseData } = await supabase
-          .from("cases")
-          .select("checklist")
-          .eq("id", selectedCaseId)
-          .single();
-        if (caseData?.checklist) {
-          const checklist = caseData.checklist as Record<string, boolean>;
-          if (!checklist.defectDocumented) {
-            await supabase
-              .from("cases")
-              .update({
-                checklist: { ...checklist, defectDocumented: true },
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", selectedCaseId);
+        if (insertError) {
+          throw insertError;
+        }
+
+        // Auto-mark "defect documented" on the linked case
+        if (selectedCaseId) {
+          const { data: caseData } = await supabase
+            .from("cases")
+            .select("checklist")
+            .eq("id", selectedCaseId)
+            .single();
+          if (caseData?.checklist) {
+            const checklist = caseData.checklist as Record<string, boolean>;
+            if (!checklist.defectDocumented) {
+              await supabase
+                .from("cases")
+                .update({
+                  checklist: { ...checklist, defectDocumented: true },
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", selectedCaseId);
+            }
           }
         }
       }
-    }
 
-    setIsGenerating(false);
-    setStep(3);
+      setStep(3);
+    } catch (error) {
+      console.error("Failed to save protocol", error);
+      alert(t("dashboard-save-failed"));
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleDownload = async () => {
