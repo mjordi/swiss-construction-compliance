@@ -9,6 +9,7 @@ import SignaturePad from 'signature_pad';
 import { useLanguage } from "@/context/LanguageContext";
 import type { TranslationKey } from "@/locales";
 import { buildComplianceRecord } from "@/lib/compliance-record";
+import { getEffectiveSelectedCaseId, hasStaleLinkedCase as isStaleLinkedCase } from "@/lib/dashboard-linked-case";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import type { Case } from "@/lib/database.types";
@@ -41,12 +42,27 @@ export default function Dashboard() {
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);
   const [userCases, setUserCases] = useState<Case[]>([]);
+  const [userCasesLoadedSuccessfully, setUserCasesLoadedSuccessfully] = useState(false);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [projectData, setProjectData] = useState({
     name: "",
     contractor: "",
     client: ""
   });
+  const selectedCase = useMemo(
+    () => userCases.find((candidate) => candidate.id === selectedCaseId) ?? null,
+    [userCases, selectedCaseId]
+  );
+  const hasStaleLinkedCase = isStaleLinkedCase(
+    selectedCaseId,
+    userCases,
+    userCasesLoadedSuccessfully
+  );
+  const effectiveSelectedCaseId = getEffectiveSelectedCaseId(
+    selectedCaseId,
+    userCases,
+    userCasesLoadedSuccessfully
+  );
   const canProceedStep1 =
     projectData.name.trim().length > 0 &&
     projectData.contractor.trim().length > 0 &&
@@ -109,16 +125,32 @@ export default function Dashboard() {
 
   // Fetch user's cases for the case selector
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setUserCases([]);
+      setUserCasesLoadedSuccessfully(false);
+      return;
+    }
+
     let cancelled = false;
+    setUserCasesLoadedSuccessfully(false);
+
     (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("cases")
         .select("*")
         .eq("user_id", user.id)
         .order("project_name", { ascending: true });
-      if (!cancelled && data) setUserCases(data as Case[]);
+
+      if (cancelled) return;
+      if (error) {
+        console.warn("Unable to load linked cases for dashboard wizard", error);
+        return;
+      }
+
+      setUserCases((data ?? []) as Case[]);
+      setUserCasesLoadedSuccessfully(true);
     })();
+
     return () => { cancelled = true; };
   }, [user, supabase]);
 
@@ -130,17 +162,12 @@ export default function Dashboard() {
           contractor: projectData.contractor,
           client: projectData.client,
           inspectionDate: new Date(),
-          caseId: selectedCaseId,
+          caseId: effectiveSelectedCaseId,
         },
         step,
         Boolean(sigPad && !sigPad.isEmpty())
       ),
-    [projectData, step, sigPad, selectedCaseId]
-  );
-
-  const selectedCase = useMemo(
-    () => userCases.find((candidate) => candidate.id === selectedCaseId) ?? null,
-    [userCases, selectedCaseId]
+    [projectData, step, sigPad, effectiveSelectedCaseId]
   );
 
   const selectedCaseDeadline = useMemo(() => {
@@ -202,19 +229,18 @@ export default function Dashboard() {
 
   const handleGenerateProtocol = async () => {
     if (sigPad && sigPad.isEmpty()) {
-        alert(t("dashboard-signature-required"));
-        return;
+      alert(t("dashboard-signature-required"));
+      return;
     }
 
     setIsGenerating(true);
 
     try {
-      // Save protocol to Supabase
       if (user) {
         const signatureData = sigPad ? sigPad.toDataURL() : null;
         const { error: insertError } = await supabase.from("protocols").insert({
           user_id: user.id,
-          case_id: selectedCaseId,
+          case_id: effectiveSelectedCaseId,
           project_name: projectData.name,
           contractor: projectData.contractor,
           client: projectData.client,
@@ -227,13 +253,13 @@ export default function Dashboard() {
           throw insertError;
         }
 
-        // Auto-mark "defect documented" on the linked case
-        if (selectedCaseId) {
+        if (effectiveSelectedCaseId) {
           const { data: caseData } = await supabase
             .from("cases")
             .select("checklist")
-            .eq("id", selectedCaseId)
+            .eq("id", effectiveSelectedCaseId)
             .single();
+
           if (caseData?.checklist) {
             const checklist = caseData.checklist as Record<string, boolean>;
             if (!checklist.defectDocumented) {
@@ -243,7 +269,7 @@ export default function Dashboard() {
                   checklist: { ...checklist, defectDocumented: true },
                   updated_at: new Date().toISOString(),
                 })
-                .eq("id", selectedCaseId);
+                .eq("id", effectiveSelectedCaseId);
             }
           }
         }
@@ -409,6 +435,22 @@ export default function Dashboard() {
                         </div>
                       </div>
                     )}
+                  </div>
+                )}
+
+                {hasStaleLinkedCase && (
+                  <div className="rounded-lg border border-amber-400/30 bg-amber-500/[0.08] px-3 py-2.5 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-[0.08em] text-amber-200 font-semibold">{t("dashboard-linked-case-missing-title")}</div>
+                      <div className="text-[11px] text-amber-100/80">{t("dashboard-linked-case-missing-desc")}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCaseId(null)}
+                      className="text-[11px] text-amber-100 hover:text-cream transition-colors duration-200"
+                    >
+                      {t("dashboard-linked-case-unlink")}
+                    </button>
                   </div>
                 )}
 
