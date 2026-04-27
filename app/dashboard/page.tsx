@@ -9,6 +9,7 @@ import SignaturePad from 'signature_pad';
 import { useLanguage } from "@/context/LanguageContext";
 import type { TranslationKey } from "@/locales";
 import { buildComplianceRecord } from "@/lib/compliance-record";
+import { getEffectiveSelectedCaseId, hasStaleLinkedCase as isStaleLinkedCase } from "@/lib/dashboard-linked-case";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import type { Case } from "@/lib/database.types";
@@ -40,6 +41,7 @@ export default function Dashboard() {
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);
   const [userCases, setUserCases] = useState<Case[]>([]);
+  const [userCasesLoadedSuccessfully, setUserCasesLoadedSuccessfully] = useState(false);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [projectData, setProjectData] = useState({
     name: "",
@@ -50,8 +52,16 @@ export default function Dashboard() {
     () => userCases.find((c) => c.id === selectedCaseId) ?? null,
     [userCases, selectedCaseId]
   );
-  const hasStaleLinkedCase = Boolean(selectedCaseId) && !selectedCase;
-  const effectiveSelectedCaseId = hasStaleLinkedCase ? null : selectedCaseId;
+  const hasStaleLinkedCase = isStaleLinkedCase(
+    selectedCaseId,
+    userCases,
+    userCasesLoadedSuccessfully
+  );
+  const effectiveSelectedCaseId = getEffectiveSelectedCaseId(
+    selectedCaseId,
+    userCases,
+    userCasesLoadedSuccessfully
+  );
   const canProceedStep1 =
     projectData.name.trim().length > 0 &&
     projectData.contractor.trim().length > 0 &&
@@ -114,16 +124,32 @@ export default function Dashboard() {
 
   // Fetch user's cases for the case selector
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setUserCases([]);
+      setUserCasesLoadedSuccessfully(false);
+      return;
+    }
+
     let cancelled = false;
+    setUserCasesLoadedSuccessfully(false);
+
     (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("cases")
         .select("*")
         .eq("user_id", user.id)
         .order("project_name", { ascending: true });
-      if (!cancelled && data) setUserCases(data as Case[]);
+
+      if (cancelled) return;
+      if (error) {
+        console.warn("Unable to load linked cases for dashboard wizard", error);
+        return;
+      }
+
+      setUserCases((data ?? []) as Case[]);
+      setUserCasesLoadedSuccessfully(true);
     })();
+
     return () => { cancelled = true; };
   }, [user, supabase]);
 
