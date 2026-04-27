@@ -46,6 +46,12 @@ export default function Dashboard() {
     contractor: "",
     client: ""
   });
+  const selectedCase = useMemo(
+    () => userCases.find((c) => c.id === selectedCaseId) ?? null,
+    [userCases, selectedCaseId]
+  );
+  const hasStaleLinkedCase = Boolean(selectedCaseId) && !selectedCase;
+  const effectiveSelectedCaseId = hasStaleLinkedCase ? null : selectedCaseId;
   const canProceedStep1 =
     projectData.name.trim().length > 0 &&
     projectData.contractor.trim().length > 0 &&
@@ -129,12 +135,12 @@ export default function Dashboard() {
           contractor: projectData.contractor,
           client: projectData.client,
           inspectionDate: new Date(),
-          caseId: selectedCaseId,
+          caseId: effectiveSelectedCaseId,
         },
         step,
         Boolean(sigPad && !sigPad.isEmpty())
       ),
-    [projectData, step, sigPad, selectedCaseId]
+    [projectData, step, sigPad, effectiveSelectedCaseId]
   );
 
   useEffect(() => {
@@ -180,7 +186,7 @@ export default function Dashboard() {
       const signatureData = sigPad ? sigPad.toDataURL() : null;
       await supabase.from("protocols").insert({
         user_id: user.id,
-        case_id: selectedCaseId,
+        case_id: effectiveSelectedCaseId,
         project_name: projectData.name,
         contractor: projectData.contractor,
         client: projectData.client,
@@ -190,11 +196,11 @@ export default function Dashboard() {
       });
 
       // Auto-mark "defect documented" on the linked case
-      if (selectedCaseId) {
+      if (effectiveSelectedCaseId) {
         const { data: caseData } = await supabase
           .from("cases")
           .select("checklist")
-          .eq("id", selectedCaseId)
+          .eq("id", effectiveSelectedCaseId)
           .single();
         if (caseData?.checklist) {
           const checklist = caseData.checklist as Record<string, boolean>;
@@ -205,7 +211,7 @@ export default function Dashboard() {
                 checklist: { ...checklist, defectDocumented: true },
                 updated_at: new Date().toISOString(),
               })
-              .eq("id", selectedCaseId);
+              .eq("id", effectiveSelectedCaseId);
           }
         }
       }
@@ -332,6 +338,22 @@ export default function Dashboard() {
                         </option>
                       ))}
                     </select>
+                  </div>
+                )}
+
+                {hasStaleLinkedCase && (
+                  <div className="rounded-lg border border-amber-400/30 bg-amber-500/[0.08] px-3 py-2.5 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-[0.08em] text-amber-200 font-semibold">{t("dashboard-linked-case-missing-title")}</div>
+                      <div className="text-[11px] text-amber-100/80">{t("dashboard-linked-case-missing-desc")}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCaseId(null)}
+                      className="text-[11px] text-amber-100 hover:text-cream transition-colors duration-200"
+                    >
+                      {t("dashboard-linked-case-unlink")}
+                    </button>
                   </div>
                 )}
 
