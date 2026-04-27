@@ -181,7 +181,17 @@ export function toComplianceCaseViewModel(
 export function buildComplianceCaseTimeline(
   cases: ComplianceCaseInput[]
 ): ComplianceCaseViewModel[] {
-  return cases.map(toComplianceCaseViewModel);
+  return cases.flatMap((input) => {
+    try {
+      return [toComplianceCaseViewModel(input)];
+    } catch (error) {
+      console.warn(
+        `[case-timeline] Skipping invalid compliance case ${input.id}`,
+        error
+      );
+      return [];
+    }
+  });
 }
 
 export function filterComplianceCases(

@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   applyComplianceCaseView,
   buildCaseDeadlineReminderICS,
@@ -71,6 +71,35 @@ describe("case timeline view model", () => {
 });
 
 describe("case timeline filtering and sorting", () => {
+  it("skips malformed cases instead of aborting timeline rendering", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const timeline = buildComplianceCaseTimeline([
+      {
+        id: "valid",
+        projectName: "Valid case",
+        canton: "ZH",
+        contractDate: new Date("2026-01-10"),
+        discoveryDate: new Date("2026-02-01"),
+      },
+      {
+        id: "invalid",
+        projectName: "Broken case",
+        canton: "BE",
+        contractDate: new Date("2026-03-01"),
+        discoveryDate: new Date("2026-02-01"),
+      },
+    ]);
+
+    expect(timeline).toHaveLength(1);
+    expect(timeline[0].id).toBe("valid");
+    expect(warn).toHaveBeenCalledWith(
+      "[case-timeline] Skipping invalid compliance case invalid",
+      expect.any(Error)
+    );
+
+    warn.mockRestore();
+  });
+
   const baseCases: ComplianceCaseInput[] = [
     {
       id: "old",
