@@ -7,6 +7,7 @@ import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import type { Case, Protocol } from "@/lib/database.types";
 import { buildComplianceCaseTimeline } from "@/lib/case-timeline";
+import { getVaultEmptyState, type VaultEmptyStateAction, type VaultTab } from "@/lib/vault";
 
 interface VaultProjectCard {
   id: string;
@@ -37,7 +38,7 @@ function formatRelativeUpdate(timestamp: string): string {
 export default function TechVault() {
   const { user } = useAuth();
   const supabase = getSupabase();
-  const [activeTab, setActiveTab] = useState("projects");
+  const [activeTab, setActiveTab] = useState<VaultTab>("projects");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -144,6 +145,29 @@ export default function TechVault() {
     [projects, activeTab, query]
   );
 
+  const emptyState = useMemo(
+    () =>
+      getVaultEmptyState({
+        activeTab,
+        query,
+      }),
+    [activeTab, query]
+  );
+
+  const handleEmptyStateAction = useCallback((action: VaultEmptyStateAction) => {
+    if (action === "clear-search") {
+      setQuery("");
+      return;
+    }
+    if (action === "show-projects") {
+      setActiveTab("projects");
+      return;
+    }
+    if (action === "show-archived") {
+      setActiveTab("archived");
+    }
+  }, []);
+
   return (
     <div className="max-w-6xl mx-auto h-[calc(100vh-100px)] flex flex-col">
       <header className="mb-8 flex justify-between items-end">
@@ -193,6 +217,25 @@ export default function TechVault() {
             <div className="h-full border border-red-500/30 bg-red-500/[0.06] rounded-2xl flex items-center justify-center text-red-300 gap-2">
               <AlertCircle className="w-5 h-5" /> {error}
             </div>
+          ) : filteredProjects.length === 0 ? (
+            <div className="h-full flex items-center justify-center">
+              <div className="max-w-md w-full border border-white/10 rounded-2xl p-8 text-center text-slate-300 bg-white/[0.02]">
+                <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4 text-slate-400">
+                  <Folder className="w-6 h-6" />
+                </div>
+                <h2 className="text-lg font-semibold text-white mb-2">{emptyState.title}</h2>
+                <p className="text-sm text-slate-400 mb-5">{emptyState.body}</p>
+                {emptyState.actionLabel && emptyState.action && (
+                  <button
+                    type="button"
+                    onClick={() => handleEmptyStateAction(emptyState.action)}
+                    className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+                  >
+                    {emptyState.actionLabel}
+                  </button>
+                )}
+              </div>
+            </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredProjects.map((project, i) => (
@@ -233,12 +276,6 @@ export default function TechVault() {
                   </div>
                 </motion.div>
               ))}
-
-              {filteredProjects.length === 0 && (
-                <div className="col-span-full border border-white/10 rounded-2xl p-8 text-center text-slate-400 bg-white/[0.02]">
-                  No projects match your current filter.
-                </div>
-              )}
 
               <div className="border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center p-6 text-slate-500 hover:text-white hover:border-white/20 hover:bg-white/5 cursor-pointer transition min-h-[200px]">
                 <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
