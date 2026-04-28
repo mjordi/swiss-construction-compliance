@@ -34,6 +34,7 @@ export default function Dashboard() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [defectDescription, setDefectDescription] = useState("");
   const sigCanvas = useRef<HTMLCanvasElement>(null);
+  const finalizeInFlightRef = useRef(false);
   const { t } = useLanguage();
   const { user } = useAuth();
   const supabase = getSupabase();
@@ -228,11 +229,16 @@ export default function Dashboard() {
   }, [step]);
 
   const handleGenerateProtocol = async () => {
+    if (finalizeInFlightRef.current) {
+      return;
+    }
+
     if (sigPad && sigPad.isEmpty()) {
       alert(t("dashboard-signature-required"));
       return;
     }
 
+    finalizeInFlightRef.current = true;
     setIsGenerating(true);
 
     try {
@@ -280,6 +286,7 @@ export default function Dashboard() {
       console.error("Failed to save protocol", error);
       alert(t("dashboard-save-failed"));
     } finally {
+      finalizeInFlightRef.current = false;
       setIsGenerating(false);
     }
   };
@@ -532,10 +539,11 @@ export default function Dashboard() {
                   </button>
                 </div>
                 <textarea
-                  className="w-full bg-transparent text-sm text-cream resize-none outline-none h-20 placeholder-muted/40"
+                  className="w-full bg-transparent text-sm text-cream resize-none outline-none h-20 placeholder-muted/40 disabled:opacity-70"
                   placeholder={t("defect-placeholder")}
                   value={defectDescription}
                   onChange={(e) => setDefectDescription(e.target.value)}
+                  disabled={isGenerating}
                 />
               </div>
 
@@ -548,7 +556,8 @@ export default function Dashboard() {
                       setHasSignature(false);
                     }}
                     type="button"
-                    className="text-[11px] text-muted hover:text-cream transition-colors duration-200"
+                    disabled={isGenerating}
+                    className="text-[11px] text-muted hover:text-cream transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-muted"
                   >
                     {t("btn-clear")}
                   </button>
@@ -568,7 +577,8 @@ export default function Dashboard() {
               <div className="flex gap-3">
                 <button
                   onClick={() => setStep(1)}
-                  className="px-5 py-3 bg-white/[0.03] border border-white/[0.06] text-muted font-semibold rounded-lg hover:text-cream hover:bg-white/[0.05] transition-all duration-200 text-sm"
+                  disabled={isGenerating}
+                  className="px-5 py-3 bg-white/[0.03] border border-white/[0.06] text-muted font-semibold rounded-lg hover:text-cream hover:bg-white/[0.05] transition-all duration-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-muted disabled:hover:bg-white/[0.03]"
                 >
                   {t("btn-back")}
                 </button>
