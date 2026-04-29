@@ -21,3 +21,19 @@ export function getEffectiveSelectedCaseId(
     ? null
     : selectedCaseId;
 }
+
+export function canFinalizeLinkedCase(
+  selectedCaseId: string | null,
+  userCases: Pick<Case, "id">[],
+  casesLoadedSuccessfully: boolean
+): boolean {
+  if (!selectedCaseId) {
+    return true;
+  }
+
+  if (!casesLoadedSuccessfully) {
+    return false;
+  }
+
+  return userCases.some((item) => item.id === selectedCaseId);
+}

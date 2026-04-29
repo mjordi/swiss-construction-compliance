@@ -9,7 +9,12 @@ import SignaturePad from 'signature_pad';
 import { useLanguage } from "@/context/LanguageContext";
 import type { TranslationKey } from "@/locales";
 import { buildComplianceRecord } from "@/lib/compliance-record";
-import { getEffectiveSelectedCaseId, hasStaleLinkedCase as isStaleLinkedCase } from "@/lib/dashboard-linked-case";
+import {
+  canFinalizeLinkedCase,
+  getEffectiveSelectedCaseId,
+  hasStaleLinkedCase as isStaleLinkedCase,
+} from "@/lib/dashboard-linked-case";
+import { hasLinkedCaseDefectDescription, shouldMarkLinkedCaseDefectDocumented } from "@/lib/protocol-finalization";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import type { Case } from "@/lib/database.types";
@@ -63,6 +68,15 @@ export default function Dashboard() {
     selectedCaseId,
     userCases,
     userCasesLoadedSuccessfully
+  );
+  const linkedCaseSelectionVerified = canFinalizeLinkedCase(
+    selectedCaseId,
+    userCases,
+    userCasesLoadedSuccessfully
+  );
+  const linkedCaseDefectDescriptionReady = hasLinkedCaseDefectDescription(
+    effectiveSelectedCaseId,
+    defectDescription
   );
   const canProceedStep1 =
     projectData.name.trim().length > 0 &&
@@ -238,6 +252,10 @@ export default function Dashboard() {
       return;
     }
 
+    if (!linkedCaseSelectionVerified || !linkedCaseDefectDescriptionReady) {
+      return;
+    }
+
     finalizeInFlightRef.current = true;
     setIsGenerating(true);
 
@@ -260,22 +278,36 @@ export default function Dashboard() {
         }
 
         if (effectiveSelectedCaseId) {
-          const { data: caseData } = await supabase
+          const { data: caseData, error: caseFetchError } = await supabase
             .from("cases")
             .select("checklist")
             .eq("id", effectiveSelectedCaseId)
             .single();
 
+          if (caseFetchError) {
+            console.error("Failed to load linked case checklist", caseFetchError);
+          }
+
           if (caseData?.checklist) {
             const checklist = caseData.checklist as Record<string, boolean>;
-            if (!checklist.defectDocumented) {
-              await supabase
+            if (
+              shouldMarkLinkedCaseDefectDocumented(
+                effectiveSelectedCaseId,
+                defectDescription,
+                checklist.defectDocumented
+              )
+            ) {
+              const { error: checklistUpdateError } = await supabase
                 .from("cases")
                 .update({
                   checklist: { ...checklist, defectDocumented: true },
                   updated_at: new Date().toISOString(),
                 })
                 .eq("id", effectiveSelectedCaseId);
+
+              if (checklistUpdateError) {
+                console.error("Failed to update linked case checklist", checklistUpdateError);
+              }
             }
           }
         }
@@ -538,13 +570,37 @@ export default function Dashboard() {
                     <Camera className="w-3 h-3" /> {t("btn-photo")}
                   </button>
                 </div>
+                {selectedCaseId && !linkedCaseSelectionVerified && (
+                  <div className="mb-4 rounded-lg border border-amber-400/30 bg-amber-500/[0.08] px-3 py-2.5 text-[11px] text-amber-100" role="alert">
+                    <div>{t("dashboard-linked-case-verification-required")}</div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCaseId(null)}
+                      className="mt-2 text-[11px] font-semibold text-amber-100 underline underline-offset-2 hover:text-cream"
+                    >
+                      {t("dashboard-linked-case-unlink")}
+                    </button>
+                  </div>
+                )}
+
                 <textarea
                   className="w-full bg-transparent text-sm text-cream resize-none outline-none h-20 placeholder-muted/40 disabled:opacity-70"
                   placeholder={t("defect-placeholder")}
                   value={defectDescription}
                   onChange={(e) => setDefectDescription(e.target.value)}
                   disabled={isGenerating}
+                  aria-invalid={!linkedCaseDefectDescriptionReady}
+                  aria-describedby={!linkedCaseDefectDescriptionReady ? "dashboard-linked-case-defect-required" : undefined}
                 />
+                {!linkedCaseDefectDescriptionReady && (
+                  <p
+                    id="dashboard-linked-case-defect-required"
+                    role="alert"
+                    className="mt-2 text-[11px] text-amber-200"
+                  >
+                    {t("dashboard-linked-case-defect-required")}
+                  </p>
+                )}
               </div>
 
               <div className="mb-6">
@@ -584,7 +640,7 @@ export default function Dashboard() {
                 </button>
                 <button
                   onClick={handleGenerateProtocol}
-                  disabled={isGenerating || !hasSignature}
+                  disabled={isGenerating || !hasSignature || !linkedCaseSelectionVerified || !linkedCaseDefectDescriptionReady}
                   className="flex-1 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 transition-colors duration-200 flex items-center justify-center gap-2 shadow-lg shadow-accent/10 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
