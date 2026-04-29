@@ -30,7 +30,9 @@ const INPUT_CLASS = "w-full bg-white/[0.03] border border-white/[0.08] rounded-l
 export default function Dashboard() {
   const [step, setStep] = useState(1);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [defectDescription, setDefectDescription] = useState("");
+  const [noDefectsConfirmed, setNoDefectsConfirmed] = useState(false);
   const sigCanvas = useRef<HTMLCanvasElement>(null);
   const { t } = useLanguage();
   const { user } = useAuth();
@@ -101,6 +103,7 @@ export default function Dashboard() {
   const clearDraft = () => {
     setProjectData({ name: "", contractor: "", client: "" });
     setDefectDescription("");
+    setNoDefectsConfirmed(false);
     setSelectedCaseId(null);
     setDraftUpdatedAt(null);
     window.localStorage.removeItem(PROJECT_DRAFT_STORAGE_KEY);
@@ -168,51 +171,70 @@ export default function Dashboard() {
   }, [step]);
 
   const handleGenerateProtocol = async () => {
+    if (defectDescription.trim().length === 0 && !noDefectsConfirmed) {
+      setSubmissionError(t("dashboard-defect-required"));
+      return;
+    }
+
     if (sigPad && sigPad.isEmpty()) {
         alert(t("dashboard-signature-required"));
         return;
     }
 
+    setSubmissionError(null);
     setIsGenerating(true);
 
-    // Save protocol to Supabase
-    if (user) {
-      const signatureData = sigPad ? sigPad.toDataURL() : null;
-      await supabase.from("protocols").insert({
-        user_id: user.id,
-        case_id: selectedCaseId,
-        project_name: projectData.name,
-        contractor: projectData.contractor,
-        client: projectData.client,
-        defect_description: defectDescription || null,
-        signature_data: signatureData,
-        status: "finalized",
-      });
+    try {
+      // Save protocol to Supabase
+      if (user) {
+        const signatureData = sigPad ? sigPad.toDataURL() : null;
+        const { error: protocolError } = await supabase.from("protocols").insert({
+          user_id: user.id,
+          case_id: selectedCaseId,
+          project_name: projectData.name,
+          contractor: projectData.contractor,
+          client: projectData.client,
+          defect_description: defectDescription || null,
+          signature_data: signatureData,
+          status: "finalized",
+        });
 
-      // Auto-mark "defect documented" on the linked case
-      if (selectedCaseId) {
-        const { data: caseData } = await supabase
-          .from("cases")
-          .select("checklist")
-          .eq("id", selectedCaseId)
-          .single();
-        if (caseData?.checklist) {
-          const checklist = caseData.checklist as Record<string, boolean>;
-          if (!checklist.defectDocumented) {
-            await supabase
-              .from("cases")
-              .update({
-                checklist: { ...checklist, defectDocumented: true },
-                updated_at: new Date().toISOString(),
-              })
-              .eq("id", selectedCaseId);
+        if (protocolError) throw protocolError;
+
+        // Auto-mark "defect documented" on the linked case
+        if (selectedCaseId) {
+          const { data: caseData, error: caseLoadError } = await supabase
+            .from("cases")
+            .select("checklist")
+            .eq("id", selectedCaseId)
+            .single();
+
+          if (caseLoadError) throw caseLoadError;
+
+          if (caseData?.checklist) {
+            const checklist = caseData.checklist as Record<string, boolean>;
+            if (!checklist.defectDocumented) {
+              const { error: caseUpdateError } = await supabase
+                .from("cases")
+                .update({
+                  checklist: { ...checklist, defectDocumented: true },
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", selectedCaseId);
+
+              if (caseUpdateError) throw caseUpdateError;
+            }
           }
         }
       }
-    }
 
-    setIsGenerating(false);
-    setStep(3);
+      setStep(3);
+    } catch (error) {
+      console.error("Protocol finalization failed", error);
+      setSubmissionError(t("dashboard-finalize-error"));
+    } finally {
+      setIsGenerating(false);
+    }
   };
 
   const handleDownload = async () => {
@@ -418,6 +440,15 @@ export default function Dashboard() {
                   value={defectDescription}
                   onChange={(e) => setDefectDescription(e.target.value)}
                 />
+                <label className="mt-3 flex items-center gap-2 text-xs text-muted">
+                  <input
+                    type="checkbox"
+                    checked={noDefectsConfirmed}
+                    onChange={(e) => setNoDefectsConfirmed(e.target.checked)}
+                    className="h-4 w-4 rounded border-white/20 bg-transparent"
+                  />
+                  <span>{t("dashboard-no-defects-confirmed")}</span>
+                </label>
               </div>
 
               <div className="mb-6">
@@ -452,13 +483,16 @@ export default function Dashboard() {
                 </button>
                 <button
                   onClick={handleGenerateProtocol}
-                  disabled={isGenerating || !hasSignature}
+                  disabled={isGenerating || !hasSignature || (defectDescription.trim().length === 0 && !noDefectsConfirmed)}
                   className="flex-1 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 transition-colors duration-200 flex items-center justify-center gap-2 shadow-lg shadow-accent/10 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
                   {isGenerating ? t("btn-generating") : t("btn-finalize")}
                 </button>
               </div>
+              {submissionError && (
+                <p className="mt-3 text-xs text-rose-300">{submissionError}</p>
+              )}
             </motion.div>
           )}
 
