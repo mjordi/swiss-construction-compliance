@@ -438,13 +438,23 @@ export default function Dashboard() {
                   className="w-full bg-transparent text-sm text-cream resize-none outline-none h-20 placeholder-muted/40"
                   placeholder={t("defect-placeholder")}
                   value={defectDescription}
-                  onChange={(e) => setDefectDescription(e.target.value)}
+                  onChange={(e) => {
+                    setDefectDescription(e.target.value);
+                    if (submissionError) {
+                      setSubmissionError(null);
+                    }
+                  }}
                 />
                 <label className="mt-3 flex items-center gap-2 text-xs text-muted">
                   <input
                     type="checkbox"
                     checked={noDefectsConfirmed}
-                    onChange={(e) => setNoDefectsConfirmed(e.target.checked)}
+                    onChange={(e) => {
+                      setNoDefectsConfirmed(e.target.checked);
+                      if (submissionError) {
+                        setSubmissionError(null);
+                      }
+                    }}
                     className="h-4 w-4 rounded border-white/20 bg-transparent"
                   />
                   <span>{t("dashboard-no-defects-confirmed")}</span>
@@ -483,7 +493,7 @@ export default function Dashboard() {
                 </button>
                 <button
                   onClick={handleGenerateProtocol}
-                  disabled={isGenerating || !hasSignature || (defectDescription.trim().length === 0 && !noDefectsConfirmed)}
+                  disabled={isGenerating || !hasSignature}
                   className="flex-1 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 transition-colors duration-200 flex items-center justify-center gap-2 shadow-lg shadow-accent/10 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
