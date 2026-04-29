@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   applyComplianceCaseView,
   buildCaseDeadlineReminderICS,
@@ -8,6 +8,7 @@ import {
   isDeadlineReminderIcsExportEligible,
   sortComplianceCases,
   toComplianceCaseViewModel,
+  validateComplianceCaseInput,
   type ComplianceCaseInput,
 } from "../lib/case-timeline";
 
@@ -19,6 +20,21 @@ function daysFromToday(days: number): Date {
 }
 
 describe("case timeline view model", () => {
+  it("rejects impossible timelines where discovery is before contract", () => {
+    const input = {
+      id: "invalid-1",
+      projectName: "Broken timeline",
+      canton: "ZH",
+      contractDate: new Date("2026-03-01"),
+      discoveryDate: new Date("2026-02-28"),
+    };
+
+    expect(validateComplianceCaseInput(input)).toBe("discovery-before-contract");
+    expect(() => toComplianceCaseViewModel(input)).toThrow(
+      "discovery date cannot be before contract date"
+    );
+  });
+
   it("maps contracts before 2026-01-01 to old law", () => {
     const vm = toComplianceCaseViewModel({
       id: "old-1",
@@ -55,6 +71,35 @@ describe("case timeline view model", () => {
 });
 
 describe("case timeline filtering and sorting", () => {
+  it("skips malformed cases instead of aborting timeline rendering", () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {});
+    const timeline = buildComplianceCaseTimeline([
+      {
+        id: "valid",
+        projectName: "Valid case",
+        canton: "ZH",
+        contractDate: new Date("2026-01-10"),
+        discoveryDate: new Date("2026-02-01"),
+      },
+      {
+        id: "invalid",
+        projectName: "Broken case",
+        canton: "BE",
+        contractDate: new Date("2026-03-01"),
+        discoveryDate: new Date("2026-02-01"),
+      },
+    ]);
+
+    expect(timeline).toHaveLength(1);
+    expect(timeline[0].id).toBe("valid");
+    expect(warn).toHaveBeenCalledWith(
+      "[case-timeline] Skipping invalid compliance case invalid",
+      expect.any(Error)
+    );
+
+    warn.mockRestore();
+  });
+
   const baseCases: ComplianceCaseInput[] = [
     {
       id: "old",

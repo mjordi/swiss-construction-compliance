@@ -6,6 +6,13 @@ export default defineConfig({
     environment: "jsdom",
     globals: true,
     setupFiles: [],
+    exclude: [
+      "**/node_modules/**",
+      "**/.next/**",
+      "**/.backup-*/**",
+      "**/openclaw-backup/**",
+      "**/swiss-construction-compliance/**",
+    ],
   },
   resolve: {
     alias: {
