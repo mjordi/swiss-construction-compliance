@@ -201,29 +201,35 @@ export default function Dashboard() {
 
         if (protocolError) throw protocolError;
 
-        // Auto-mark "defect documented" on the linked case
+        // Auto-mark "defect documented" on the linked case.
+        // This is a best-effort follow-up; do not fail finalization after the
+        // protocol row has already been written.
         if (selectedCaseId) {
-          const { data: caseData, error: caseLoadError } = await supabase
-            .from("cases")
-            .select("checklist")
-            .eq("id", selectedCaseId)
-            .single();
+          try {
+            const { data: caseData, error: caseLoadError } = await supabase
+              .from("cases")
+              .select("checklist")
+              .eq("id", selectedCaseId)
+              .single();
 
-          if (caseLoadError) throw caseLoadError;
+            if (caseLoadError) throw caseLoadError;
 
-          if (caseData?.checklist) {
-            const checklist = caseData.checklist as Record<string, boolean>;
-            if (!checklist.defectDocumented) {
-              const { error: caseUpdateError } = await supabase
-                .from("cases")
-                .update({
-                  checklist: { ...checklist, defectDocumented: true },
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("id", selectedCaseId);
+            if (caseData?.checklist) {
+              const checklist = caseData.checklist as Record<string, boolean>;
+              if (!checklist.defectDocumented) {
+                const { error: caseUpdateError } = await supabase
+                  .from("cases")
+                  .update({
+                    checklist: { ...checklist, defectDocumented: true },
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("id", selectedCaseId);
 
-              if (caseUpdateError) throw caseUpdateError;
+                if (caseUpdateError) throw caseUpdateError;
+              }
             }
+          } catch (caseSyncError) {
+            console.warn("Protocol finalized but linked case checklist sync failed", caseSyncError);
           }
         }
       }
