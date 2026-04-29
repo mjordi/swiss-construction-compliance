@@ -9,20 +9,12 @@ import SignaturePad from 'signature_pad';
 import { useLanguage } from "@/context/LanguageContext";
 import type { TranslationKey } from "@/locales";
 import { buildComplianceRecord } from "@/lib/compliance-record";
+import { buildProtocolDefectDescription, buildWizardDraft, type WizardDraft } from "@/lib/dashboard-protocol";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import type { Case } from "@/lib/database.types";
 
 const PROJECT_DRAFT_STORAGE_KEY = "baucompliance:wizard-project-draft";
-
-type WizardDraft = {
-  name?: string;
-  contractor?: string;
-  client?: string;
-  defectDescription?: string;
-  selectedCaseId?: string | null;
-  updatedAt?: string;
-};
 
 const steps = [1, 2, 3];
 const INPUT_CLASS = "w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream placeholder-muted/40 focus:border-accent/40 outline-none transition-colors duration-200";
@@ -69,6 +61,7 @@ export default function Dashboard() {
         client: parsedDraft.client ?? "",
       }));
       setDefectDescription(parsedDraft.defectDescription ?? "");
+      setNoDefectsConfirmed(Boolean(parsedDraft.noDefectsConfirmed));
       setSelectedCaseId(parsedDraft.selectedCaseId ?? null);
       setDraftUpdatedAt(parsedDraft.updatedAt ?? null);
     } catch (error) {
@@ -84,20 +77,24 @@ export default function Dashboard() {
     setDraftUpdatedAt(updatedAt);
     window.localStorage.setItem(
       PROJECT_DRAFT_STORAGE_KEY,
-      JSON.stringify({
-        ...projectData,
-        defectDescription,
-        selectedCaseId,
-        updatedAt,
-      } satisfies WizardDraft)
+      JSON.stringify(
+        buildWizardDraft({
+          ...projectData,
+          defectDescription,
+          noDefectsConfirmed,
+          selectedCaseId,
+          updatedAt,
+        })
+      )
     );
-  }, [draftHydrated, projectData, defectDescription, selectedCaseId]);
+  }, [draftHydrated, projectData, defectDescription, noDefectsConfirmed, selectedCaseId]);
 
   const hasDraftContent =
     projectData.name.trim().length > 0 ||
     projectData.contractor.trim().length > 0 ||
     projectData.client.trim().length > 0 ||
     defectDescription.trim().length > 0 ||
+    noDefectsConfirmed ||
     Boolean(selectedCaseId);
 
   const clearDraft = () => {
@@ -188,13 +185,17 @@ export default function Dashboard() {
       // Save protocol to Supabase
       if (user) {
         const signatureData = sigPad ? sigPad.toDataURL() : null;
+        const protocolDefectDescription = buildProtocolDefectDescription(
+          defectDescription,
+          noDefectsConfirmed
+        );
         const { error: protocolError } = await supabase.from("protocols").insert({
           user_id: user.id,
           case_id: selectedCaseId,
           project_name: projectData.name,
           contractor: projectData.contractor,
           client: projectData.client,
-          defect_description: defectDescription || null,
+          defect_description: protocolDefectDescription,
           signature_data: signatureData,
           status: "finalized",
         });
