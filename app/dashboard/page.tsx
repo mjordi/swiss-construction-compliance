@@ -10,6 +10,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import type { TranslationKey } from "@/locales";
 import { buildComplianceRecord } from "@/lib/compliance-record";
 import { getEffectiveSelectedCaseId, hasStaleLinkedCase as isStaleLinkedCase } from "@/lib/dashboard-linked-case";
+import { buildProtocolDefectDescription, buildWizardDraft, type WizardDraft } from "@/lib/dashboard-protocol";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import type { Case } from "@/lib/database.types";
@@ -17,22 +18,15 @@ import { calculateRuegefrist, determineLegalRegime, formatDateCH } from "@/lib/l
 
 const PROJECT_DRAFT_STORAGE_KEY = "baucompliance:wizard-project-draft";
 
-type WizardDraft = {
-  name?: string;
-  contractor?: string;
-  client?: string;
-  defectDescription?: string;
-  selectedCaseId?: string | null;
-  updatedAt?: string;
-};
-
 const steps = [1, 2, 3];
 const INPUT_CLASS = "w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream placeholder-muted/40 focus:border-accent/40 outline-none transition-colors duration-200";
 
 export default function Dashboard() {
   const [step, setStep] = useState(1);
   const [isGenerating, setIsGenerating] = useState(false);
+  const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [defectDescription, setDefectDescription] = useState("");
+  const [noDefectsConfirmed, setNoDefectsConfirmed] = useState(false);
   const sigCanvas = useRef<HTMLCanvasElement>(null);
   const finalizeInFlightRef = useRef(false);
   const { t } = useLanguage();
@@ -85,6 +79,7 @@ export default function Dashboard() {
         client: parsedDraft.client ?? "",
       }));
       setDefectDescription(parsedDraft.defectDescription ?? "");
+      setNoDefectsConfirmed(Boolean(parsedDraft.noDefectsConfirmed));
       setSelectedCaseId(parsedDraft.selectedCaseId ?? null);
       setDraftUpdatedAt(parsedDraft.updatedAt ?? null);
     } catch (error) {
@@ -100,25 +95,30 @@ export default function Dashboard() {
     setDraftUpdatedAt(updatedAt);
     window.localStorage.setItem(
       PROJECT_DRAFT_STORAGE_KEY,
-      JSON.stringify({
-        ...projectData,
-        defectDescription,
-        selectedCaseId,
-        updatedAt,
-      } satisfies WizardDraft)
+      JSON.stringify(
+        buildWizardDraft({
+          ...projectData,
+          defectDescription,
+          noDefectsConfirmed,
+          selectedCaseId,
+          updatedAt,
+        })
+      )
     );
-  }, [draftHydrated, projectData, defectDescription, selectedCaseId]);
+  }, [draftHydrated, projectData, defectDescription, noDefectsConfirmed, selectedCaseId]);
 
   const hasDraftContent =
     projectData.name.trim().length > 0 ||
     projectData.contractor.trim().length > 0 ||
     projectData.client.trim().length > 0 ||
     defectDescription.trim().length > 0 ||
+    noDefectsConfirmed ||
     Boolean(selectedCaseId);
 
   const clearDraft = () => {
     setProjectData({ name: "", contractor: "", client: "" });
     setDefectDescription("");
+    setNoDefectsConfirmed(false);
     setSelectedCaseId(null);
     setDraftUpdatedAt(null);
     window.localStorage.removeItem(PROJECT_DRAFT_STORAGE_KEY);
@@ -233,58 +233,78 @@ export default function Dashboard() {
       return;
     }
 
+    if (defectDescription.trim().length === 0 && !noDefectsConfirmed) {
+      setSubmissionError(t("dashboard-defect-required"));
+      return;
+    }
+
     if (sigPad && sigPad.isEmpty()) {
       alert(t("dashboard-signature-required"));
       return;
     }
 
     finalizeInFlightRef.current = true;
+    setSubmissionError(null);
     setIsGenerating(true);
 
     try {
+      // Save protocol to Supabase
       if (user) {
         const signatureData = sigPad ? sigPad.toDataURL() : null;
-        const { error: insertError } = await supabase.from("protocols").insert({
+        const protocolDefectDescription = buildProtocolDefectDescription(
+          defectDescription,
+          noDefectsConfirmed
+        );
+        const { error: protocolError } = await supabase.from("protocols").insert({
           user_id: user.id,
           case_id: effectiveSelectedCaseId,
           project_name: projectData.name,
           contractor: projectData.contractor,
           client: projectData.client,
-          defect_description: defectDescription || null,
+          defect_description: protocolDefectDescription,
           signature_data: signatureData,
           status: "finalized",
         });
 
-        if (insertError) {
-          throw insertError;
-        }
+        if (protocolError) throw protocolError;
 
+        // Auto-mark "defect documented" on the linked case.
+        // This is a best-effort follow-up; do not fail finalization after the
+        // protocol row has already been written.
         if (effectiveSelectedCaseId) {
-          const { data: caseData } = await supabase
-            .from("cases")
-            .select("checklist")
-            .eq("id", effectiveSelectedCaseId)
-            .single();
+          try {
+            const { data: caseData, error: caseLoadError } = await supabase
+              .from("cases")
+              .select("checklist")
+              .eq("id", effectiveSelectedCaseId)
+              .single();
 
-          if (caseData?.checklist) {
-            const checklist = caseData.checklist as Record<string, boolean>;
-            if (!checklist.defectDocumented) {
-              await supabase
-                .from("cases")
-                .update({
-                  checklist: { ...checklist, defectDocumented: true },
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("id", effectiveSelectedCaseId);
+            if (caseLoadError) throw caseLoadError;
+
+            if (caseData?.checklist) {
+              const checklist = caseData.checklist as Record<string, boolean>;
+              if (!checklist.defectDocumented) {
+                const { error: caseUpdateError } = await supabase
+                  .from("cases")
+                  .update({
+                    checklist: { ...checklist, defectDocumented: true },
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("id", effectiveSelectedCaseId);
+
+                if (caseUpdateError) throw caseUpdateError;
+              }
             }
+          } catch (caseSyncError) {
+            console.warn("Protocol finalized but linked case checklist sync failed", caseSyncError);
           }
         }
       }
 
       setStep(3);
     } catch (error) {
-      console.error("Failed to save protocol", error);
-      alert(t("dashboard-save-failed"));
+      console.error("Protocol finalization failed", error);
+      setSubmissionError(t("dashboard-finalize-error"));
     } finally {
       finalizeInFlightRef.current = false;
       setIsGenerating(false);
@@ -542,9 +562,28 @@ export default function Dashboard() {
                   className="w-full bg-transparent text-sm text-cream resize-none outline-none h-20 placeholder-muted/40 disabled:opacity-70"
                   placeholder={t("defect-placeholder")}
                   value={defectDescription}
-                  onChange={(e) => setDefectDescription(e.target.value)}
+                  onChange={(e) => {
+                    setDefectDescription(e.target.value);
+                    if (submissionError) {
+                      setSubmissionError(null);
+                    }
+                  }}
                   disabled={isGenerating}
                 />
+                <label className="mt-3 flex items-center gap-2 text-xs text-muted">
+                  <input
+                    type="checkbox"
+                    checked={noDefectsConfirmed}
+                    onChange={(e) => {
+                      setNoDefectsConfirmed(e.target.checked);
+                      if (submissionError) {
+                        setSubmissionError(null);
+                      }
+                    }}
+                    className="h-4 w-4 rounded border-white/20 bg-transparent"
+                  />
+                  <span>{t("dashboard-no-defects-confirmed")}</span>
+                </label>
               </div>
 
               <div className="mb-6">
@@ -591,6 +630,9 @@ export default function Dashboard() {
                   {isGenerating ? t("btn-generating") : t("btn-finalize")}
                 </button>
               </div>
+              {submissionError && (
+                <p className="mt-3 text-xs text-rose-300">{submissionError}</p>
+              )}
             </motion.div>
           )}
 
