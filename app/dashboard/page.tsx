@@ -18,6 +18,10 @@ import { calculateRuegefrist, determineLegalRegime, formatDateCH } from "@/lib/l
 
 const PROJECT_DRAFT_STORAGE_KEY = "baucompliance:wizard-project-draft";
 
+const clearPersistedWizardDraft = () => {
+  window.localStorage.removeItem(PROJECT_DRAFT_STORAGE_KEY);
+};
+
 const steps = [1, 2, 3];
 const INPUT_CLASS = "w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream placeholder-muted/40 focus:border-accent/40 outline-none transition-colors duration-200";
 
@@ -121,7 +125,7 @@ export default function Dashboard() {
     setNoDefectsConfirmed(false);
     setSelectedCaseId(null);
     setDraftUpdatedAt(null);
-    window.localStorage.removeItem(PROJECT_DRAFT_STORAGE_KEY);
+    clearPersistedWizardDraft();
   };
 
   // Fetch user's cases for the case selector
@@ -301,6 +305,8 @@ export default function Dashboard() {
         }
       }
 
+      clearPersistedWizardDraft();
+      setDraftUpdatedAt(null);
       setStep(3);
     } catch (error) {
       console.error("Protocol finalization failed", error);
