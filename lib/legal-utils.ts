@@ -36,6 +36,28 @@ export interface RuegefristResult {
 }
 
 /**
+ * Parse an HTML date input value (YYYY-MM-DD) as a local calendar date.
+ * Avoids timezone shifts from `new Date("YYYY-MM-DD")` (parsed as UTC).
+ */
+export function parseDateInput(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+
+  const [, y, m, d] = match;
+  const parsed = new Date(Number(y), Number(m) - 1, Number(d));
+
+  if (
+    parsed.getFullYear() !== Number(y) ||
+    parsed.getMonth() !== Number(m) - 1 ||
+    parsed.getDate() !== Number(d)
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+/**
  * Determine which legal regime applies based on contract date.
  * Contracts signed on or after 2026-01-01 fall under the new OR.
  */
