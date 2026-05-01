@@ -10,7 +10,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import type { TranslationKey } from "@/locales";
 import { buildComplianceRecord } from "@/lib/compliance-record";
 import { getEffectiveSelectedCaseId, hasStaleLinkedCase as isStaleLinkedCase } from "@/lib/dashboard-linked-case";
-import { buildProtocolDefectDescription, buildWizardDraft, type WizardDraft } from "@/lib/dashboard-protocol";
+import { buildProtocolDefectDescription, buildWizardDraft, getProtocolFinalizeReadiness, type WizardDraft } from "@/lib/dashboard-protocol";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import type { Case } from "@/lib/database.types";
@@ -66,6 +66,11 @@ export default function Dashboard() {
     projectData.name.trim().length > 0 &&
     projectData.contractor.trim().length > 0 &&
     projectData.client.trim().length > 0;
+  const finalizeReadiness = getProtocolFinalizeReadiness(
+    defectDescription,
+    noDefectsConfirmed,
+    hasSignature
+  );
 
   useEffect(() => {
     try {
@@ -237,12 +242,12 @@ export default function Dashboard() {
       return;
     }
 
-    if (defectDescription.trim().length === 0 && !noDefectsConfirmed) {
+    if (!finalizeReadiness.hasDefectInput) {
       setSubmissionError(t("dashboard-defect-required"));
       return;
     }
 
-    if (sigPad && sigPad.isEmpty()) {
+    if (!finalizeReadiness.hasSignature) {
       alert(t("dashboard-signature-required"));
       return;
     }
@@ -590,6 +595,9 @@ export default function Dashboard() {
                   />
                   <span>{t("dashboard-no-defects-confirmed")}</span>
                 </label>
+                {!finalizeReadiness.hasDefectInput && (
+                  <p className="mt-3 text-xs text-amber-200/80">{t("dashboard-defect-required")}</p>
+                )}
               </div>
 
               <div className="mb-6">
@@ -629,7 +637,7 @@ export default function Dashboard() {
                 </button>
                 <button
                   onClick={handleGenerateProtocol}
-                  disabled={isGenerating || !hasSignature}
+                  disabled={isGenerating || !finalizeReadiness.canFinalize}
                   className="flex-1 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 transition-colors duration-200 flex items-center justify-center gap-2 shadow-lg shadow-accent/10 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}

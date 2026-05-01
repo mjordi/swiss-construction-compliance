@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   buildProtocolDefectDescription,
   buildWizardDraft,
+  getProtocolFinalizeReadiness,
   NO_VISIBLE_DEFECTS_CONFIRMED_MARKER,
 } from "../lib/dashboard-protocol";
 
@@ -38,6 +39,26 @@ describe("dashboard protocol helpers", () => {
       noDefectsConfirmed: true,
       selectedCaseId: "case-123",
       updatedAt: "2026-04-29T10:00:00.000Z",
+    });
+  });
+
+  it("marks finalize ready only when defect capture and signature requirements are both satisfied", () => {
+    expect(getProtocolFinalizeReadiness("", false, false)).toEqual({
+      hasDefectInput: false,
+      hasSignature: false,
+      canFinalize: false,
+    });
+
+    expect(getProtocolFinalizeReadiness(" Crack by balcony door ", false, true)).toEqual({
+      hasDefectInput: true,
+      hasSignature: true,
+      canFinalize: true,
+    });
+
+    expect(getProtocolFinalizeReadiness("", true, true)).toEqual({
+      hasDefectInput: true,
+      hasSignature: true,
+      canFinalize: true,
     });
   });
 });

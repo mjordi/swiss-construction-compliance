@@ -40,3 +40,21 @@ export function buildWizardDraft(
     updatedAt: draft.updatedAt,
   };
 }
+
+export function getProtocolFinalizeReadiness(
+  defectDescription: string,
+  noDefectsConfirmed: boolean,
+  hasSignature: boolean,
+): {
+  hasDefectInput: boolean;
+  hasSignature: boolean;
+  canFinalize: boolean;
+} {
+  const hasDefectInput = defectDescription.trim().length > 0 || noDefectsConfirmed;
+
+  return {
+    hasDefectInput,
+    hasSignature,
+    canFinalize: hasDefectInput && hasSignature,
+  };
+}
