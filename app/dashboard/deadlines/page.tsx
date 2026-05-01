@@ -27,7 +27,11 @@ interface Deadline {
 
 export default function DeadlinesPage() {
   const { t } = useLanguage();
-  const [acceptanceDate, setAcceptanceDate] = useState<string>("");
+  const [acceptanceDate, setAcceptanceDate] = useState<string>(() => {
+    if (typeof window === "undefined") return "";
+    const params = new URLSearchParams(window.location.search);
+    return params.get("acceptance") ?? "";
+  });
   const [deadlines, setDeadlines] = useState<Deadline[] | null>(null);
 
   function calculate() {
@@ -66,11 +70,26 @@ export default function DeadlinesPage() {
     ];
 
     setDeadlines(computed);
+
+    const params = new URLSearchParams(window.location.search);
+    params.set("acceptance", acceptanceDate);
+    window.history.replaceState(null, "", `?${params.toString()}`);
   }
 
   function reset() {
     setAcceptanceDate("");
     setDeadlines(null);
+    const params = new URLSearchParams(window.location.search);
+    params.delete("acceptance");
+    const query = params.toString();
+    window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
+  }
+
+  function copyShareLink() {
+    if (!acceptanceDate) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("acceptance", acceptanceDate);
+    void navigator.clipboard.writeText(url.toString());
   }
 
   function downloadICS() {
@@ -170,13 +189,21 @@ export default function DeadlinesPage() {
         <div className="space-y-5">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-semibold text-cream">{t("deadlines-result-title")}</h2>
-            <button
-              onClick={downloadICS}
-              className="flex items-center gap-2 px-4 py-2 bg-white/[0.03] border border-white/[0.06] hover:border-accent/30 text-muted hover:text-accent text-[13px] font-medium rounded-lg transition-all duration-300"
-            >
-              <Download className="w-4 h-4" />
-              {t("deadlines-download-ics")}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={copyShareLink}
+                className="flex items-center gap-2 px-4 py-2 bg-white/[0.03] border border-white/[0.06] hover:border-accent/30 text-muted hover:text-accent text-[13px] font-medium rounded-lg transition-all duration-300"
+              >
+                Link
+              </button>
+              <button
+                onClick={downloadICS}
+                className="flex items-center gap-2 px-4 py-2 bg-white/[0.03] border border-white/[0.06] hover:border-accent/30 text-muted hover:text-accent text-[13px] font-medium rounded-lg transition-all duration-300"
+              >
+                <Download className="w-4 h-4" />
+                {t("deadlines-download-ics")}
+              </button>
+            </div>
           </div>
 
           {/* Timeline visualization */}
