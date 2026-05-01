@@ -238,17 +238,20 @@ export interface CalendarDeadlineInput {
 
 export function generateDeadlineCalendarICS(
   deadlines: CalendarDeadlineInput[],
-  acceptanceDateLabel: string
+  acceptanceDateLabel: string,
+  reminderOffsets: number[] = [14, 7, 1]
 ): string {
   const now = new Date();
   const stamp = now.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-  const reminderOffsets = [14, 7, 1] as const;
+  const sortedOffsets = [...new Set(reminderOffsets)]
+    .filter((offset) => Number.isFinite(offset) && offset >= 1)
+    .sort((a, b) => b - a);
 
   const events = deadlines
     .map((deadline, index) => {
       const dateStr = deadline.date.toISOString().split("T")[0].replace(/-/g, "");
       const endDateStr = addDays(deadline.date, 1).toISOString().split("T")[0].replace(/-/g, "");
-      const alarms = reminderOffsets
+      const alarms = sortedOffsets
         .map((offset) => {
           const reminderStr = addDays(deadline.date, -offset)
             .toISOString()
