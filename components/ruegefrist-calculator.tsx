@@ -16,6 +16,7 @@ import {
   calculateRuegefrist,
   formatDateCH,
   generateDeadlineICS,
+  parseDateInput,
   validateRuegefristInput,
   type RuegefristResult,
 } from "@/lib/legal-utils";
@@ -85,15 +86,20 @@ export default function RuegefristCalculator() {
 
   const validationError =
     contractDate && discoveryDate
-      ? validateRuegefristInput(new Date(contractDate), new Date(discoveryDate))
+      ? (() => {
+          const parsedContractDate = parseDateInput(contractDate);
+          const parsedDiscoveryDate = parseDateInput(discoveryDate);
+          if (!parsedContractDate || !parsedDiscoveryDate) return null;
+          return validateRuegefristInput(parsedContractDate, parsedDiscoveryDate);
+        })()
       : null;
 
   function calculate() {
     if (!contractDate || !discoveryDate || validationError) return;
-    const r = calculateRuegefrist(
-      new Date(contractDate),
-      new Date(discoveryDate)
-    );
+    const parsedContractDate = parseDateInput(contractDate);
+    const parsedDiscoveryDate = parseDateInput(discoveryDate);
+    if (!parsedContractDate || !parsedDiscoveryDate) return;
+    const r = calculateRuegefrist(parsedContractDate, parsedDiscoveryDate);
     setResult(r);
   }
 

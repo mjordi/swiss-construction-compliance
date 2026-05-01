@@ -40,6 +40,7 @@ export default function DeadlinesPage() {
   const { t } = useLanguage();
   const [acceptanceDate, setAcceptanceDate] = useState<string>("");
   const [deadlines, setDeadlines] = useState<Deadline[] | null>(null);
+  const [reminderOffsets, setReminderOffsets] = useState<number[]>([14, 7, 1]);
 
   function calculate() {
     if (!acceptanceDate) return;
@@ -90,7 +91,8 @@ export default function DeadlinesPage() {
     const acceptanceDateLabel = formatDateCH(parseDateInputAsUTC(acceptanceDate));
     const content = generateDeadlineCalendarICS(
       deadlines.map((d) => ({ key: d.key, date: d.date })),
-      acceptanceDateLabel
+      acceptanceDateLabel,
+      reminderOffsets
     );
     const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -133,6 +135,15 @@ export default function DeadlinesPage() {
   };
 
   const maxDays = 1825;
+  const reminderOptions = [30, 14, 7, 3, 1] as const;
+
+  function toggleReminder(offset: number) {
+    setReminderOffsets((current) =>
+      current.includes(offset)
+        ? current.filter((value) => value !== offset)
+        : [...current, offset]
+    );
+  }
 
   return (
     <div>
@@ -175,6 +186,27 @@ export default function DeadlinesPage() {
               {t("deadlines-reset")}
             </button>
           )}
+        </div>
+        <div className="mt-4 pt-4 border-t border-white/[0.06]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-2">
+            Kalender-Erinnerungen
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {reminderOptions.map((offset) => (
+              <button
+                key={offset}
+                type="button"
+                onClick={() => toggleReminder(offset)}
+                className={`px-3 py-1.5 rounded-md text-xs border transition-colors duration-200 ${
+                  reminderOffsets.includes(offset)
+                    ? "bg-accent/20 border-accent/40 text-accent"
+                    : "bg-white/[0.03] border-white/[0.08] text-muted hover:text-cream"
+                }`}
+              >
+                {offset} Tage
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 

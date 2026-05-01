@@ -36,6 +36,28 @@ export interface RuegefristResult {
 }
 
 /**
+ * Parse an HTML date input value (YYYY-MM-DD) as a local calendar date.
+ * Avoids timezone shifts from `new Date("YYYY-MM-DD")` (parsed as UTC).
+ */
+export function parseDateInput(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+
+  const [, y, m, d] = match;
+  const parsed = new Date(Number(y), Number(m) - 1, Number(d));
+
+  if (
+    parsed.getFullYear() !== Number(y) ||
+    parsed.getMonth() !== Number(m) - 1 ||
+    parsed.getDate() !== Number(d)
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+/**
  * Determine which legal regime applies based on contract date.
  * Contracts signed on or after 2026-01-01 fall under the new OR.
  */
@@ -216,17 +238,20 @@ export interface CalendarDeadlineInput {
 
 export function generateDeadlineCalendarICS(
   deadlines: CalendarDeadlineInput[],
-  acceptanceDateLabel: string
+  acceptanceDateLabel: string,
+  reminderOffsets: number[] = [14, 7, 1]
 ): string {
   const now = new Date();
   const stamp = now.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-  const reminderOffsets = [14, 7, 1] as const;
+  const sortedOffsets = [...new Set(reminderOffsets)]
+    .filter((offset) => Number.isFinite(offset) && offset >= 1)
+    .sort((a, b) => b - a);
 
   const events = deadlines
     .map((deadline, index) => {
       const dateStr = deadline.date.toISOString().split("T")[0].replace(/-/g, "");
       const endDateStr = addDays(deadline.date, 1).toISOString().split("T")[0].replace(/-/g, "");
-      const alarms = reminderOffsets
+      const alarms = sortedOffsets
         .map((offset) => {
           const reminderStr = addDays(deadline.date, -offset)
             .toISOString()

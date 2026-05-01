@@ -6,8 +6,25 @@ import {
   generateDeadlineICS,
   generateDeadlineCalendarICS,
   validateRuegefristInput,
+  parseDateInput,
   OR_REVISION_DATE,
 } from "../lib/legal-utils";
+
+describe("parseDateInput", () => {
+  it("parses valid YYYY-MM-DD inputs", () => {
+    const parsed = parseDateInput("2026-04-30");
+    expect(parsed).not.toBeNull();
+    expect(parsed?.getFullYear()).toBe(2026);
+    expect(parsed?.getMonth()).toBe(3);
+    expect(parsed?.getDate()).toBe(30);
+  });
+
+  it("returns null for invalid calendar dates", () => {
+    expect(parseDateInput("2026-02-30")).toBeNull();
+    expect(parseDateInput("2026-13-01")).toBeNull();
+    expect(parseDateInput("not-a-date")).toBeNull();
+  });
+});
 
 describe("determineLegalRegime", () => {
   it("returns 'old' for contracts before 2026-01-01", () => {
