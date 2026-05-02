@@ -52,6 +52,8 @@ export default function Dashboard() {
     projectData.name.trim().length > 0 &&
     projectData.contractor.trim().length > 0 &&
     projectData.client.trim().length > 0;
+  const hasDefectDescription = defectDescription.trim().length > 0;
+  const canFinalizeProtocol = hasSignature && (hasDefectDescription || noDefectsConfirmed);
 
   useEffect(() => {
     try {
@@ -171,7 +173,7 @@ export default function Dashboard() {
   }, [step]);
 
   const handleGenerateProtocol = async () => {
-    if (defectDescription.trim().length === 0 && !noDefectsConfirmed) {
+    if (!hasDefectDescription && !noDefectsConfirmed) {
       setSubmissionError(t("dashboard-defect-required"));
       return;
     }
@@ -188,13 +190,14 @@ export default function Dashboard() {
       // Save protocol to Supabase
       if (user) {
         const signatureData = sigPad ? sigPad.toDataURL() : null;
+        const normalizedDefectDescription = noDefectsConfirmed ? null : defectDescription.trim() || null;
         const { error: protocolError } = await supabase.from("protocols").insert({
           user_id: user.id,
           case_id: selectedCaseId,
           project_name: projectData.name,
           contractor: projectData.contractor,
           client: projectData.client,
-          defect_description: defectDescription || null,
+          defect_description: normalizedDefectDescription,
           signature_data: signatureData,
           status: "finalized",
         });
@@ -435,16 +438,24 @@ export default function Dashboard() {
                   </button>
                 </div>
                 <textarea
-                  className="w-full bg-transparent text-sm text-cream resize-none outline-none h-20 placeholder-muted/40"
+                  className="w-full bg-transparent text-sm text-cream resize-none outline-none h-20 placeholder-muted/40 disabled:opacity-60"
                   placeholder={t("defect-placeholder")}
                   value={defectDescription}
+                  disabled={noDefectsConfirmed}
                   onChange={(e) => setDefectDescription(e.target.value)}
                 />
                 <label className="mt-3 flex items-center gap-2 text-xs text-muted">
                   <input
                     type="checkbox"
                     checked={noDefectsConfirmed}
-                    onChange={(e) => setNoDefectsConfirmed(e.target.checked)}
+                    onChange={(e) => {
+                      const checked = e.target.checked;
+                      setNoDefectsConfirmed(checked);
+                      if (checked) {
+                        setDefectDescription("");
+                        setSubmissionError(null);
+                      }
+                    }}
                     className="h-4 w-4 rounded border-white/20 bg-transparent"
                   />
                   <span>{t("dashboard-no-defects-confirmed")}</span>
@@ -483,7 +494,7 @@ export default function Dashboard() {
                 </button>
                 <button
                   onClick={handleGenerateProtocol}
-                  disabled={isGenerating || !hasSignature || (defectDescription.trim().length === 0 && !noDefectsConfirmed)}
+                  disabled={isGenerating || !canFinalizeProtocol}
                   className="flex-1 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 transition-colors duration-200 flex items-center justify-center gap-2 shadow-lg shadow-accent/10 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}
