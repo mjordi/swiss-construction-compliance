@@ -1,49 +1,65 @@
+import type { TranslationKey } from "@/locales";
+
 export type VaultTab = "projects" | "archived";
 export type VaultEmptyStateAction = "clear-search" | "show-projects" | "show-archived" | null;
 
 export interface VaultEmptyState {
-  title: string;
-  body: string;
-  actionLabel: string | null;
+  titleKey: TranslationKey;
+  titleParams?: Record<string, string>;
+  bodyKey: TranslationKey;
+  actionLabelKey: TranslationKey | null;
   action: VaultEmptyStateAction;
 }
 
 export interface VaultEmptyStateInput {
   activeTab: VaultTab;
   query: string;
+  hasActiveProjects?: boolean;
+  hasArchivedProjects?: boolean;
 }
 
 export function getVaultEmptyState({
   activeTab,
   query,
+  hasActiveProjects = false,
+  hasArchivedProjects = false,
 }: VaultEmptyStateInput): VaultEmptyState {
   const normalizedQuery = query.trim();
 
   if (normalizedQuery) {
     return {
-      title: `No vault results for “${normalizedQuery}”`,
-      body:
+      titleKey: "vault-empty-search-title",
+      titleParams: { query: normalizedQuery },
+      bodyKey:
         activeTab === "archived"
-          ? "Try a different project name or clear the search to review archived evidence again."
-          : "Try a different project name or clear the search to get back to your active evidence projects.",
-      actionLabel: "Clear search",
+          ? "vault-empty-search-body-archived"
+          : "vault-empty-search-body-projects",
+      actionLabelKey: "vault-empty-action-clear-search",
       action: "clear-search",
     };
   }
 
   if (activeTab === "archived") {
     return {
-      title: "No archived projects yet",
-      body: "Archive a project later, or jump back to active projects now to review live evidence.",
-      actionLabel: "View active projects",
-      action: "show-projects",
+      titleKey: "vault-empty-archived-title",
+      bodyKey: hasActiveProjects
+        ? "vault-empty-archived-body"
+        : "vault-empty-archived-body-no-active",
+      actionLabelKey: hasActiveProjects
+        ? "vault-empty-action-show-projects"
+        : null,
+      action: hasActiveProjects ? "show-projects" : null,
     };
   }
 
   return {
-    title: "No active projects yet",
-    body: "Switch to archived projects to review older records, or create a new project to start storing evidence here.",
-    actionLabel: "View archived projects",
-    action: "show-archived",
+    titleKey: "vault-empty-projects-title",
+    bodyKey: hasArchivedProjects
+      ? "vault-empty-projects-body"
+      : "vault-empty-projects-body-no-archived",
+    actionLabelKey: hasArchivedProjects
+      ? "vault-empty-action-show-archived"
+      : null,
+    action: hasArchivedProjects ? "show-archived" : null,
   };
 }
