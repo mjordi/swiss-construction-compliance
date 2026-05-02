@@ -8,30 +8,60 @@ describe("getVaultEmptyState", () => {
       query: "zurich",
     });
 
-    expect(state.title).toContain("zurich");
+    expect(state.titleKey).toBe("vault-empty-search-title");
+    expect(state.titleParams).toEqual({ query: "zurich" });
+    expect(state.bodyKey).toBe("vault-empty-search-body-projects");
     expect(state.action).toBe("clear-search");
-    expect(state.actionLabel).toBe("Clear search");
+    expect(state.actionLabelKey).toBe("vault-empty-action-clear-search");
   });
 
   it("suggests switching back to active projects when archived is empty but active work exists", () => {
     const state = getVaultEmptyState({
       activeTab: "archived",
       query: "",
+      hasActiveProjects: true,
     });
 
-    expect(state.title).toBe("No archived projects yet");
+    expect(state.titleKey).toBe("vault-empty-archived-title");
+    expect(state.titleParams).toBeUndefined();
+    expect(state.bodyKey).toBe("vault-empty-archived-body");
     expect(state.action).toBe("show-projects");
-    expect(state.actionLabel).toBe("View active projects");
+    expect(state.actionLabelKey).toBe("vault-empty-action-show-projects");
   });
 
   it("suggests switching to archived projects when only archived evidence exists", () => {
     const state = getVaultEmptyState({
       activeTab: "projects",
       query: "",
+      hasArchivedProjects: true,
     });
 
-    expect(state.title).toBe("No active projects yet");
+    expect(state.titleKey).toBe("vault-empty-projects-title");
+    expect(state.titleParams).toBeUndefined();
+    expect(state.bodyKey).toBe("vault-empty-projects-body");
     expect(state.action).toBe("show-archived");
-    expect(state.actionLabel).toBe("View archived projects");
+    expect(state.actionLabelKey).toBe("vault-empty-action-show-archived");
+  });
+
+  it("avoids misleading tab-switch CTAs when there is no opposite tab content", () => {
+    const archivedState = getVaultEmptyState({
+      activeTab: "archived",
+      query: "",
+      hasActiveProjects: false,
+    });
+
+    expect(archivedState.bodyKey).toBe("vault-empty-archived-body-no-active");
+    expect(archivedState.action).toBeNull();
+    expect(archivedState.actionLabelKey).toBeNull();
+
+    const projectsState = getVaultEmptyState({
+      activeTab: "projects",
+      query: "",
+      hasArchivedProjects: false,
+    });
+
+    expect(projectsState.bodyKey).toBe("vault-empty-projects-body-no-archived");
+    expect(projectsState.action).toBeNull();
+    expect(projectsState.actionLabelKey).toBeNull();
   });
 });
