@@ -48,6 +48,25 @@ describe("locales", () => {
     }
   });
 
+  it("includes settings profile feedback keys in every locale", () => {
+    const requiredSettingsKeys = [
+      "settings-profile-title",
+      "settings-email",
+      "settings-name",
+      "settings-company",
+      "settings-save",
+      "settings-saved",
+      "settings-profile-load-error",
+      "settings-profile-save-error",
+    ] as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      for (const key of requiredSettingsKeys) {
+        expect(translations[key], `Locale '${lang}' missing settings key '${key}'`).toBeDefined();
+      }
+    }
+  });
+
   it("preserves the vault empty-search query placeholder across locales", () => {
     for (const [lang, translations] of Object.entries(locales)) {
       expect(
