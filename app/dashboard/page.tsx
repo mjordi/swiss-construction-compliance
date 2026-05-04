@@ -9,19 +9,17 @@ import SignaturePad from 'signature_pad';
 import { useLanguage } from "@/context/LanguageContext";
 import type { TranslationKey } from "@/locales";
 import { buildComplianceRecord } from "@/lib/compliance-record";
+import { getEffectiveSelectedCaseId, hasStaleLinkedCase as isStaleLinkedCase } from "@/lib/dashboard-linked-case";
+import { buildProtocolDefectDescription, buildWizardDraft, getProtocolFinalizeReadiness, type WizardDraft } from "@/lib/dashboard-protocol";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import type { Case } from "@/lib/database.types";
+import { calculateRuegefrist, determineLegalRegime, formatDateCH } from "@/lib/legal-utils";
 
 const PROJECT_DRAFT_STORAGE_KEY = "baucompliance:wizard-project-draft";
 
-type WizardDraft = {
-  name?: string;
-  contractor?: string;
-  client?: string;
-  defectDescription?: string;
-  selectedCaseId?: string | null;
-  updatedAt?: string;
+const clearPersistedWizardDraft = () => {
+  window.localStorage.removeItem(PROJECT_DRAFT_STORAGE_KEY);
 };
 
 const steps = [1, 2, 3];
@@ -34,6 +32,7 @@ export default function Dashboard() {
   const [defectDescription, setDefectDescription] = useState("");
   const [noDefectsConfirmed, setNoDefectsConfirmed] = useState(false);
   const sigCanvas = useRef<HTMLCanvasElement>(null);
+  const finalizeInFlightRef = useRef(false);
   const { t } = useLanguage();
   const { user } = useAuth();
   const supabase = getSupabase();
@@ -42,18 +41,36 @@ export default function Dashboard() {
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
   const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);
   const [userCases, setUserCases] = useState<Case[]>([]);
+  const [userCasesLoadedSuccessfully, setUserCasesLoadedSuccessfully] = useState(false);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const [projectData, setProjectData] = useState({
     name: "",
     contractor: "",
     client: ""
   });
+  const selectedCase = useMemo(
+    () => userCases.find((candidate) => candidate.id === selectedCaseId) ?? null,
+    [userCases, selectedCaseId]
+  );
+  const hasStaleLinkedCase = isStaleLinkedCase(
+    selectedCaseId,
+    userCases,
+    userCasesLoadedSuccessfully
+  );
+  const effectiveSelectedCaseId = getEffectiveSelectedCaseId(
+    selectedCaseId,
+    userCases,
+    userCasesLoadedSuccessfully
+  );
   const canProceedStep1 =
     projectData.name.trim().length > 0 &&
     projectData.contractor.trim().length > 0 &&
     projectData.client.trim().length > 0;
-  const hasDefectDescription = defectDescription.trim().length > 0;
-  const canFinalizeProtocol = hasSignature && (hasDefectDescription || noDefectsConfirmed);
+  const finalizeReadiness = getProtocolFinalizeReadiness(
+    defectDescription,
+    noDefectsConfirmed,
+    hasSignature
+  );
 
   useEffect(() => {
     try {
@@ -71,6 +88,7 @@ export default function Dashboard() {
         client: parsedDraft.client ?? "",
       }));
       setDefectDescription(parsedDraft.defectDescription ?? "");
+      setNoDefectsConfirmed(Boolean(parsedDraft.noDefectsConfirmed));
       setSelectedCaseId(parsedDraft.selectedCaseId ?? null);
       setDraftUpdatedAt(parsedDraft.updatedAt ?? null);
     } catch (error) {
@@ -86,20 +104,24 @@ export default function Dashboard() {
     setDraftUpdatedAt(updatedAt);
     window.localStorage.setItem(
       PROJECT_DRAFT_STORAGE_KEY,
-      JSON.stringify({
-        ...projectData,
-        defectDescription,
-        selectedCaseId,
-        updatedAt,
-      } satisfies WizardDraft)
+      JSON.stringify(
+        buildWizardDraft({
+          ...projectData,
+          defectDescription,
+          noDefectsConfirmed,
+          selectedCaseId,
+          updatedAt,
+        })
+      )
     );
-  }, [draftHydrated, projectData, defectDescription, selectedCaseId]);
+  }, [draftHydrated, projectData, defectDescription, noDefectsConfirmed, selectedCaseId]);
 
   const hasDraftContent =
     projectData.name.trim().length > 0 ||
     projectData.contractor.trim().length > 0 ||
     projectData.client.trim().length > 0 ||
     defectDescription.trim().length > 0 ||
+    noDefectsConfirmed ||
     Boolean(selectedCaseId);
 
   const clearDraft = () => {
@@ -108,21 +130,37 @@ export default function Dashboard() {
     setNoDefectsConfirmed(false);
     setSelectedCaseId(null);
     setDraftUpdatedAt(null);
-    window.localStorage.removeItem(PROJECT_DRAFT_STORAGE_KEY);
+    clearPersistedWizardDraft();
   };
 
   // Fetch user's cases for the case selector
   useEffect(() => {
-    if (!user) return;
+    if (!user) {
+      setUserCases([]);
+      setUserCasesLoadedSuccessfully(false);
+      return;
+    }
+
     let cancelled = false;
+    setUserCasesLoadedSuccessfully(false);
+
     (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("cases")
         .select("*")
         .eq("user_id", user.id)
         .order("project_name", { ascending: true });
-      if (!cancelled && data) setUserCases(data as Case[]);
+
+      if (cancelled) return;
+      if (error) {
+        console.warn("Unable to load linked cases for dashboard wizard", error);
+        return;
+      }
+
+      setUserCases((data ?? []) as Case[]);
+      setUserCasesLoadedSuccessfully(true);
     })();
+
     return () => { cancelled = true; };
   }, [user, supabase]);
 
@@ -134,13 +172,40 @@ export default function Dashboard() {
           contractor: projectData.contractor,
           client: projectData.client,
           inspectionDate: new Date(),
-          caseId: selectedCaseId,
+          caseId: effectiveSelectedCaseId,
         },
         step,
         Boolean(sigPad && !sigPad.isEmpty())
       ),
-    [projectData, step, sigPad, selectedCaseId]
+    [projectData, step, sigPad, effectiveSelectedCaseId]
   );
+
+  const selectedCaseDeadline = useMemo(() => {
+    if (!selectedCase) return null;
+
+    const contractDate = new Date(selectedCase.contract_date);
+    const discoveryDate = new Date(selectedCase.discovery_date);
+    const regime = determineLegalRegime(contractDate);
+
+    if (regime === "old") {
+      return {
+        regime,
+        status: "urgent" as const,
+        dateLabel: null,
+      };
+    }
+
+    const result = calculateRuegefrist(contractDate, discoveryDate);
+    const deadline = result.ruegefrist60;
+
+    if (!deadline) return null;
+
+    return {
+      regime,
+      status: deadline.status,
+      dateLabel: formatDateCH(deadline.date),
+    };
+  }, [selectedCase]);
 
   useEffect(() => {
     if (step === 2 && sigCanvas.current) {
@@ -173,16 +238,21 @@ export default function Dashboard() {
   }, [step]);
 
   const handleGenerateProtocol = async () => {
-    if (!hasDefectDescription && !noDefectsConfirmed) {
+    if (finalizeInFlightRef.current) {
+      return;
+    }
+
+    if (!finalizeReadiness.hasDefectInput) {
       setSubmissionError(t("dashboard-defect-required"));
       return;
     }
 
-    if (sigPad && sigPad.isEmpty()) {
-        alert(t("dashboard-signature-required"));
-        return;
+    if (!finalizeReadiness.hasSignature) {
+      alert(t("dashboard-signature-required"));
+      return;
     }
 
+    finalizeInFlightRef.current = true;
     setSubmissionError(null);
     setIsGenerating(true);
 
@@ -190,52 +260,64 @@ export default function Dashboard() {
       // Save protocol to Supabase
       if (user) {
         const signatureData = sigPad ? sigPad.toDataURL() : null;
-        const normalizedDefectDescription = noDefectsConfirmed ? null : defectDescription.trim() || null;
+        const protocolDefectDescription = buildProtocolDefectDescription(
+          defectDescription,
+          noDefectsConfirmed
+        );
         const { error: protocolError } = await supabase.from("protocols").insert({
           user_id: user.id,
-          case_id: selectedCaseId,
+          case_id: effectiveSelectedCaseId,
           project_name: projectData.name,
           contractor: projectData.contractor,
           client: projectData.client,
-          defect_description: normalizedDefectDescription,
+          defect_description: protocolDefectDescription,
           signature_data: signatureData,
           status: "finalized",
         });
 
         if (protocolError) throw protocolError;
 
-        // Auto-mark "defect documented" on the linked case
-        if (selectedCaseId) {
-          const { data: caseData, error: caseLoadError } = await supabase
-            .from("cases")
-            .select("checklist")
-            .eq("id", selectedCaseId)
-            .single();
+        // Auto-mark "defect documented" on the linked case.
+        // This is a best-effort follow-up; do not fail finalization after the
+        // protocol row has already been written.
+        if (effectiveSelectedCaseId) {
+          try {
+            const { data: caseData, error: caseLoadError } = await supabase
+              .from("cases")
+              .select("checklist")
+              .eq("id", effectiveSelectedCaseId)
+              .single();
 
-          if (caseLoadError) throw caseLoadError;
+            if (caseLoadError) throw caseLoadError;
 
-          if (caseData?.checklist) {
-            const checklist = caseData.checklist as Record<string, boolean>;
-            if (!checklist.defectDocumented) {
-              const { error: caseUpdateError } = await supabase
-                .from("cases")
-                .update({
-                  checklist: { ...checklist, defectDocumented: true },
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("id", selectedCaseId);
+            if (caseData?.checklist) {
+              const checklist = caseData.checklist as Record<string, boolean>;
+              if (!checklist.defectDocumented) {
+                const { error: caseUpdateError } = await supabase
+                  .from("cases")
+                  .update({
+                    checklist: { ...checklist, defectDocumented: true },
+                    updated_at: new Date().toISOString(),
+                  })
+                  .eq("id", effectiveSelectedCaseId);
 
-              if (caseUpdateError) throw caseUpdateError;
+                if (caseUpdateError) throw caseUpdateError;
+              }
             }
+          } catch (caseSyncError) {
+            console.warn("Protocol finalized but linked case checklist sync failed", caseSyncError);
           }
         }
       }
 
+      clearPersistedWizardDraft();
+      setDraftUpdatedAt(null);
       setStep(3);
     } catch (error) {
       console.error("Protocol finalization failed", error);
       setSubmissionError(t("dashboard-finalize-error"));
     } finally {
+      finalizeInFlightRef.current = false;
       setIsGenerating(false);
     }
   };
@@ -357,6 +439,56 @@ export default function Dashboard() {
                         </option>
                       ))}
                     </select>
+
+                    {selectedCaseDeadline && (
+                      <div className="mt-2 rounded-lg border border-blue-500/20 bg-blue-500/[0.06] px-3 py-2.5">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-300">
+                            {t("dashboard-linked-case-context")}
+                          </span>
+                          <span
+                            className={`text-[10px] px-2 py-0.5 rounded-full border ${
+                              selectedCaseDeadline.status === "expired"
+                                ? "text-rose-300 border-rose-300/30 bg-rose-500/10"
+                                : selectedCaseDeadline.status === "urgent"
+                                ? "text-amber-200 border-amber-200/30 bg-amber-500/10"
+                                : selectedCaseDeadline.status === "warning"
+                                ? "text-yellow-200 border-yellow-200/30 bg-yellow-500/10"
+                                : "text-emerald-200 border-emerald-200/30 bg-emerald-500/10"
+                            }`}
+                          >
+                            {selectedCaseDeadline.status === "ok"
+                              ? t("cases-status-on-track")
+                              : selectedCaseDeadline.status === "warning"
+                              ? t("cases-status-attention")
+                              : selectedCaseDeadline.status === "urgent"
+                              ? t("cases-status-urgent")
+                              : t("cases-status-expired")}
+                          </span>
+                        </div>
+                        <div className="mt-1 text-[11px] text-blue-200/80">
+                          {selectedCaseDeadline.regime === "old"
+                            ? t("dashboard-linked-case-immediate-notice")
+                            : `${t("dashboard-linked-case-deadline-date")}: ${selectedCaseDeadline.dateLabel}`}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {hasStaleLinkedCase && (
+                  <div className="rounded-lg border border-amber-400/30 bg-amber-500/[0.08] px-3 py-2.5 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="text-[11px] uppercase tracking-[0.08em] text-amber-200 font-semibold">{t("dashboard-linked-case-missing-title")}</div>
+                      <div className="text-[11px] text-amber-100/80">{t("dashboard-linked-case-missing-desc")}</div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCaseId(null)}
+                      className="text-[11px] text-amber-100 hover:text-cream transition-colors duration-200"
+                    >
+                      {t("dashboard-linked-case-unlink")}
+                    </button>
                   </div>
                 )}
 
@@ -438,21 +570,24 @@ export default function Dashboard() {
                   </button>
                 </div>
                 <textarea
-                  className="w-full bg-transparent text-sm text-cream resize-none outline-none h-20 placeholder-muted/40 disabled:opacity-60"
+                  className="w-full bg-transparent text-sm text-cream resize-none outline-none h-20 placeholder-muted/40 disabled:opacity-70"
                   placeholder={t("defect-placeholder")}
                   value={defectDescription}
-                  disabled={noDefectsConfirmed}
-                  onChange={(e) => setDefectDescription(e.target.value)}
+                  onChange={(e) => {
+                    setDefectDescription(e.target.value);
+                    if (submissionError) {
+                      setSubmissionError(null);
+                    }
+                  }}
+                  disabled={isGenerating}
                 />
                 <label className="mt-3 flex items-center gap-2 text-xs text-muted">
                   <input
                     type="checkbox"
                     checked={noDefectsConfirmed}
                     onChange={(e) => {
-                      const checked = e.target.checked;
-                      setNoDefectsConfirmed(checked);
-                      if (checked) {
-                        setDefectDescription("");
+                      setNoDefectsConfirmed(e.target.checked);
+                      if (submissionError) {
                         setSubmissionError(null);
                       }
                     }}
@@ -460,6 +595,9 @@ export default function Dashboard() {
                   />
                   <span>{t("dashboard-no-defects-confirmed")}</span>
                 </label>
+                {!finalizeReadiness.hasDefectInput && (
+                  <p className="mt-3 text-xs text-amber-200/80">{t("dashboard-defect-required")}</p>
+                )}
               </div>
 
               <div className="mb-6">
@@ -471,7 +609,8 @@ export default function Dashboard() {
                       setHasSignature(false);
                     }}
                     type="button"
-                    className="text-[11px] text-muted hover:text-cream transition-colors duration-200"
+                    disabled={isGenerating}
+                    className="text-[11px] text-muted hover:text-cream transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-muted"
                   >
                     {t("btn-clear")}
                   </button>
@@ -483,18 +622,22 @@ export default function Dashboard() {
                   />
                   <div className="absolute bottom-2 right-3 text-[10px] text-slate-400 pointer-events-none">{t("sign-here")}</div>
                 </div>
+                {!hasSignature && (
+                  <p className="mt-2 text-[11px] text-muted">{t("dashboard-signature-required")}</p>
+                )}
               </div>
 
               <div className="flex gap-3">
                 <button
                   onClick={() => setStep(1)}
-                  className="px-5 py-3 bg-white/[0.03] border border-white/[0.06] text-muted font-semibold rounded-lg hover:text-cream hover:bg-white/[0.05] transition-all duration-200 text-sm"
+                  disabled={isGenerating}
+                  className="px-5 py-3 bg-white/[0.03] border border-white/[0.06] text-muted font-semibold rounded-lg hover:text-cream hover:bg-white/[0.05] transition-all duration-200 text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:text-muted disabled:hover:bg-white/[0.03]"
                 >
                   {t("btn-back")}
                 </button>
                 <button
                   onClick={handleGenerateProtocol}
-                  disabled={isGenerating || !canFinalizeProtocol}
+                  disabled={isGenerating || !finalizeReadiness.canFinalize}
                   className="flex-1 py-3 bg-accent text-white font-semibold rounded-lg hover:bg-accent/90 transition-colors duration-200 flex items-center justify-center gap-2 shadow-lg shadow-accent/10 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle className="w-4 h-4" />}

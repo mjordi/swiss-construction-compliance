@@ -4,14 +4,17 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Folder, FileText, MoreVertical, Plus, Search, ShieldCheck, Loader2, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
+import { useLanguage } from "@/context/LanguageContext";
 import { getSupabase } from "@/lib/supabase";
 import type { Case, Protocol } from "@/lib/database.types";
 import { buildComplianceCaseTimeline } from "@/lib/case-timeline";
+import { getVaultEmptyState, type VaultEmptyStateAction, type VaultTab } from "@/lib/vault";
+import type { TranslationKey } from "@/locales";
 
 interface VaultProjectCard {
   id: string;
   name: string;
-  status: "Active" | "Review";
+  status: "active" | "review" | "archived";
   docs: number;
   compliance: number;
   updated: string;
@@ -19,25 +22,52 @@ interface VaultProjectCard {
   archived: boolean;
 }
 
-function formatRelativeUpdate(timestamp: string): string {
+const statusLabelKey: Record<VaultProjectCard["status"], TranslationKey> = {
+  active: "vault-status-active",
+  review: "vault-status-review",
+  archived: "vault-status-archived",
+};
+
+function interpolateTranslation(template: string, params?: Record<string, string>) {
+  if (!params) return template;
+
+  return Object.entries(params).reduce(
+    (result, [key, value]) => result.replaceAll(`{${key}}`, value),
+    template
+  );
+}
+
+function formatRelativeUpdate(timestamp: string, lang: string): string {
   const now = Date.now();
   const then = new Date(timestamp).getTime();
   const diffMs = Math.max(0, now - then);
 
-  const hourMs = 1000 * 60 * 60;
+  const minuteMs = 1000 * 60;
+  const hourMs = minuteMs * 60;
   const dayMs = hourMs * 24;
   const weekMs = dayMs * 7;
+  const relativeTime = new Intl.RelativeTimeFormat(lang, { numeric: "auto", style: "short" });
 
-  if (diffMs < hourMs) return "updated <1h ago";
-  if (diffMs < dayMs) return `updated ${Math.floor(diffMs / hourMs)}h ago`;
-  if (diffMs < weekMs) return `updated ${Math.floor(diffMs / dayMs)}d ago`;
-  return `updated ${Math.floor(diffMs / weekMs)}w ago`;
+  if (diffMs < hourMs) {
+    return relativeTime.format(-Math.max(1, Math.floor(diffMs / minuteMs)), "minute");
+  }
+
+  if (diffMs < dayMs) {
+    return relativeTime.format(-Math.max(1, Math.floor(diffMs / hourMs)), "hour");
+  }
+
+  if (diffMs < weekMs) {
+    return relativeTime.format(-Math.max(1, Math.floor(diffMs / dayMs)), "day");
+  }
+
+  return relativeTime.format(-Math.max(1, Math.floor(diffMs / weekMs)), "week");
 }
 
 export default function TechVault() {
   const { user } = useAuth();
-  const supabase = getSupabase();
-  const [activeTab, setActiveTab] = useState("projects");
+  const { lang, t } = useLanguage();
+  const supabase = useMemo(() => getSupabase(), []);
+  const [activeTab, setActiveTab] = useState<VaultTab>("projects");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -69,7 +99,7 @@ export default function TechVault() {
     if (fetchId !== latestFetchIdRef.current) return;
 
     if (casesResult.error || protocolsResult.error) {
-      setError("Could not load vault projects right now.");
+      setError(t("vault-error-load"));
       setProjects([]);
       setLoading(false);
       return;
@@ -92,8 +122,8 @@ export default function TechVault() {
       timeline.map((t) => [
         t.id,
         t.status === "warning" || t.status === "urgent" || t.status === "expired" || t.status === "immediate-notice"
-          ? "Review"
-          : "Active",
+          ? "review"
+          : "active",
       ])
     );
 
@@ -107,21 +137,22 @@ export default function TechVault() {
       const checklistValues = Object.values(c.checklist ?? {});
       const completed = checklistValues.filter(Boolean).length;
       const total = checklistValues.length || 1;
+      const archived = c.status === "archived";
       return {
         id: c.id,
         name: c.project_name,
-        status: (statusByCase.get(c.id) as "Active" | "Review" | undefined) ?? "Active",
+        status: archived ? "archived" : ((statusByCase.get(c.id) as "active" | "review" | undefined) ?? "active"),
         docs: docsByCase[c.id] ?? 0,
         compliance: Math.round((completed / total) * 100),
-        updated: formatRelativeUpdate(c.updated_at),
+        updated: formatRelativeUpdate(c.updated_at, lang),
         updatedAt: new Date(c.updated_at).getTime(),
-        archived: false,
+        archived,
       };
     });
 
     setProjects(nextProjects);
     setLoading(false);
-  }, [user, supabase]);
+  }, [user, supabase, lang, t]);
 
   useEffect(() => {
     const fetchId = ++latestFetchIdRef.current;
@@ -137,21 +168,61 @@ export default function TechVault() {
         .filter((project) => {
           const q = query.trim().toLowerCase();
           if (!q) return true;
-          return project.name.toLowerCase().includes(q) || project.status.toLowerCase().includes(q);
+          return project.name.toLowerCase().includes(q) || t(statusLabelKey[project.status]).toLowerCase().includes(q);
         })
         .sort((a, b) => b.updatedAt - a.updatedAt),
-    [projects, activeTab, query]
+    [projects, activeTab, query, t]
   );
+
+  const emptyState = useMemo(
+    () =>
+      getVaultEmptyState({
+        activeTab,
+        query,
+        hasActiveProjects: projects.some((project) => !project.archived),
+        hasArchivedProjects: projects.some((project) => project.archived),
+      }),
+    [activeTab, projects, query]
+  );
+
+  const emptyStateTitle = useMemo(
+    () => interpolateTranslation(t(emptyState.titleKey), emptyState.titleParams),
+    [emptyState.titleKey, emptyState.titleParams, t]
+  );
+
+  const emptyStateBody = useMemo(
+    () => t(emptyState.bodyKey),
+    [emptyState.bodyKey, t]
+  );
+
+  const emptyStateActionLabel = useMemo(
+    () => (emptyState.actionLabelKey ? t(emptyState.actionLabelKey) : null),
+    [emptyState.actionLabelKey, t]
+  );
+
+  const handleEmptyStateAction = useCallback((action: VaultEmptyStateAction) => {
+    if (action === "clear-search") {
+      setQuery("");
+      return;
+    }
+    if (action === "show-projects") {
+      setActiveTab("projects");
+      return;
+    }
+    if (action === "show-archived") {
+      setActiveTab("archived");
+    }
+  }, []);
 
   return (
     <div className="max-w-6xl mx-auto h-[calc(100vh-100px)] flex flex-col">
       <header className="mb-8 flex justify-between items-end">
         <div>
-          <h1 className="text-3xl font-bold mb-2">Technical Vault</h1>
-          <p className="text-slate-400">Secure, compliant storage for 2026 mandated documentation.</p>
+          <h1 className="text-3xl font-bold mb-2">{t("vault-title")}</h1>
+          <p className="text-slate-400">{t("vault-subtitle")}</p>
         </div>
         <button className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition text-sm font-bold border border-white/5">
-          <Plus className="w-4 h-4" /> New Project
+          <Plus className="w-4 h-4" /> {t("vault-new-project")}
         </button>
       </header>
 
@@ -162,20 +233,20 @@ export default function TechVault() {
               onClick={() => setActiveTab("projects")}
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${activeTab === "projects" ? "bg-accent text-white shadow-lg" : "text-slate-400 hover:text-white"}`}
             >
-              Projects
+              {t("vault-tab-projects")}
             </button>
             <button
               onClick={() => setActiveTab("archived")}
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${activeTab === "archived" ? "bg-accent text-white shadow-lg" : "text-slate-400 hover:text-white"}`}
             >
-              Archived
+              {t("vault-tab-archived")}
             </button>
           </div>
           <div className="relative">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="text"
-              placeholder="Search projects or status..."
+              placeholder={t("vault-search-placeholder")}
               className="bg-black/20 border border-white/5 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-accent/50 w-64 transition"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
@@ -186,11 +257,30 @@ export default function TechVault() {
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (
             <div className="h-full flex items-center justify-center text-slate-400">
-              <Loader2 className="w-5 h-5 animate-spin mr-2" /> Loading vault projects...
+              <Loader2 className="w-5 h-5 animate-spin mr-2" /> {t("vault-loading")}
             </div>
           ) : error ? (
             <div className="h-full border border-red-500/30 bg-red-500/[0.06] rounded-2xl flex items-center justify-center text-red-300 gap-2">
               <AlertCircle className="w-5 h-5" /> {error}
+            </div>
+          ) : filteredProjects.length === 0 ? (
+            <div className="h-full flex items-center justify-center">
+              <div className="max-w-md w-full border border-white/10 rounded-2xl p-8 text-center text-slate-300 bg-white/[0.02]">
+                <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mx-auto mb-4 text-slate-400">
+                  <Folder className="w-6 h-6" />
+                </div>
+                <h2 className="text-lg font-semibold text-white mb-2">{emptyStateTitle}</h2>
+                <p className="text-sm text-slate-400 mb-5">{emptyStateBody}</p>
+                {emptyStateActionLabel && emptyState.action && (
+                  <button
+                    type="button"
+                    onClick={() => handleEmptyStateAction(emptyState.action)}
+                    className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+                  >
+                    {emptyStateActionLabel}
+                  </button>
+                )}
+              </div>
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -214,15 +304,17 @@ export default function TechVault() {
                   </div>
 
                   <h3 className="text-lg font-bold mb-1 group-hover:text-accent transition-colors">{project.name}</h3>
-                  <p className="text-xs text-slate-500 mb-6">Last {project.updated}</p>
+                  <p className="text-xs text-slate-500 mb-6">
+                    {interpolateTranslation(t("vault-last-updated"), { relative: project.updated })}
+                  </p>
 
                   <div className="flex items-center justify-between text-sm mb-3">
                     <div className="flex items-center gap-2 text-slate-300">
                       <FileText className="w-4 h-4 text-slate-500" />
-                      <span>{project.docs} Docs</span>
+                      <span>{project.docs} {t("vault-docs-label")}</span>
                     </div>
-                    <span className={`text-xs px-2 py-1 rounded-md ${project.status === "Review" ? "text-yellow-300 bg-yellow-400/10" : "text-emerald-300 bg-emerald-400/10"}`}>
-                      {project.status}
+                    <span className={`text-xs px-2 py-1 rounded-md ${project.status === "review" ? "text-yellow-300 bg-yellow-400/10" : "text-emerald-300 bg-emerald-400/10"}`}>
+                      {t(statusLabelKey[project.status])}
                     </span>
                   </div>
 
@@ -233,17 +325,11 @@ export default function TechVault() {
                 </motion.div>
               ))}
 
-              {filteredProjects.length === 0 && (
-                <div className="col-span-full border border-white/10 rounded-2xl p-8 text-center text-slate-400 bg-white/[0.02]">
-                  No projects match your current filter.
-                </div>
-              )}
-
               <div className="border-2 border-dashed border-white/10 rounded-2xl flex flex-col items-center justify-center p-6 text-slate-500 hover:text-white hover:border-white/20 hover:bg-white/5 cursor-pointer transition min-h-[200px]">
                 <div className="w-12 h-12 rounded-full bg-white/5 flex items-center justify-center mb-4">
                   <Plus className="w-6 h-6" />
                 </div>
-                <span className="font-medium text-sm">Create New Project</span>
+                <span className="font-medium text-sm">{t("vault-create-project")}</span>
               </div>
             </div>
           )}

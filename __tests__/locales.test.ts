@@ -5,6 +5,123 @@ const locales = { de, fr, it: itLocale, en };
 const referenceKeys = Object.keys(de).sort();
 
 describe("locales", () => {
+  it("includes vault localization keys in every locale", () => {
+    const requiredVaultKeys = [
+      "vault-title",
+      "vault-subtitle",
+      "vault-tab-projects",
+      "vault-tab-archived",
+      "vault-search-placeholder",
+      "vault-loading",
+      "vault-error-load",
+      "vault-status-active",
+      "vault-status-review",
+      "vault-status-archived",
+      "vault-docs-label",
+      "vault-last-prefix",
+      "vault-last-updated",
+      "vault-updated-prefix",
+      "vault-updated-unit-hours",
+      "vault-updated-unit-days",
+      "vault-updated-unit-weeks",
+      "vault-updated-less-than-hour",
+      "vault-empty-search-title",
+      "vault-empty-search-body-projects",
+      "vault-empty-search-body-archived",
+      "vault-empty-archived-title",
+      "vault-empty-archived-body",
+      "vault-empty-archived-body-no-active",
+      "vault-empty-projects-title",
+      "vault-empty-projects-body",
+      "vault-empty-projects-body-no-archived",
+      "vault-empty-action-clear-search",
+      "vault-empty-action-show-projects",
+      "vault-empty-action-show-archived",
+      "vault-new-project",
+      "vault-create-project",
+    ] as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      for (const key of requiredVaultKeys) {
+        expect(translations[key], `Locale '${lang}' missing vault key '${key}'`).toBeDefined();
+      }
+    }
+  });
+
+  it("includes settings profile feedback keys in every locale", () => {
+    const requiredSettingsKeys = [
+      "settings-profile-title",
+      "settings-email",
+      "settings-name",
+      "settings-company",
+      "settings-save",
+      "settings-saved",
+      "settings-profile-load-error",
+      "settings-profile-save-error",
+    ] as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      for (const key of requiredSettingsKeys) {
+        expect(translations[key], `Locale '${lang}' missing settings key '${key}'`).toBeDefined();
+      }
+    }
+  });
+
+  it("includes login localization and feedback keys in every locale", () => {
+    const requiredLoginKeys = [
+      "login-subtitle",
+      "login-email-label",
+      "login-email-placeholder",
+      "login-password-label",
+      "login-password-placeholder",
+      "login-authenticating",
+      "login-encryption",
+      "login-demo-divider",
+      "login-demo-account",
+      "login-source-prefix",
+      "login-signup-title",
+      "login-signup-subtitle",
+      "login-signup-btn",
+      "login-signup-success",
+      "login-name-label",
+      "login-name-placeholder",
+      "login-have-account",
+      "login-no-account",
+      "login-error-name-required",
+      "login-error-config",
+      "login-error-invalid-credentials",
+      "login-error-email-not-confirmed",
+      "login-error-user-exists",
+      "login-error-password-too-short",
+      "login-error-signup-disabled",
+      "login-error-generic",
+    ] as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      for (const key of requiredLoginKeys) {
+        expect(translations[key], `Locale '${lang}' missing login key '${key}'`).toBeDefined();
+      }
+    }
+  });
+
+  it("preserves the vault empty-search query placeholder across locales", () => {
+    for (const [lang, translations] of Object.entries(locales)) {
+      expect(
+        translations["vault-empty-search-title"],
+        `Locale '${lang}' must preserve the {query} placeholder`
+      ).toContain("{query}");
+    }
+  });
+
+  it("preserves the vault last-updated placeholder across locales", () => {
+    for (const [lang, translations] of Object.entries(locales)) {
+      expect(
+        translations["vault-last-updated"],
+        `Locale '${lang}' must preserve the {relative} placeholder`
+      ).toContain("{relative}");
+    }
+  });
+
   it("all locales export the same keys as 'de'", () => {
     for (const [lang, translations] of Object.entries(locales)) {
       const keys = Object.keys(translations).sort();

@@ -1,11 +1,13 @@
 "use client";
 
-import { useState, useEffect } from "react";
-import { Shield, LogOut, Loader2, Check, User } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { Shield, LogOut, Loader2, Check, User, AlertCircle } from "lucide-react";
 import PageHeader from "@/components/dashboard/PageHeader";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
+import { hasSettingsProfileChanges, normalizeSettingsProfileSnapshot } from "@/lib/settings";
+import type { TranslationKey } from "@/locales";
 
 export default function Settings() {
   const { t } = useLanguage();
@@ -14,6 +16,8 @@ export default function Settings() {
 
   const [fullName, setFullName] = useState("");
   const [company, setCompany] = useState("");
+  const [loadedProfile, setLoadedProfile] = useState<{ fullName: string; company: string } | null>(null);
+  const [profileError, setProfileError] = useState<TranslationKey | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
 
@@ -24,30 +28,77 @@ export default function Settings() {
 
   useEffect(() => {
     if (!user) return;
-    supabase
+
+    let cancelled = false;
+
+    void supabase
       .from("profiles")
       .select("full_name, company")
       .eq("id", user.id)
-      .single()
-      .then(({ data }: { data: { full_name: string | null; company: string | null } | null }) => {
-        if (data) {
-          setFullName(data.full_name ?? "");
-          setCompany(data.company ?? "");
+      .maybeSingle()
+      .then(({ data, error }: { data: { full_name: string | null; company: string | null } | null; error: { message: string } | null }) => {
+        if (cancelled) return;
+
+        if (error) {
+          setProfileError("settings-profile-load-error");
+          return;
         }
+
+        const nextProfile = normalizeSettingsProfileSnapshot({
+          fullName: data?.full_name ?? "",
+          company: data?.company ?? "",
+        });
+
+        setLoadedProfile(nextProfile);
+        setFullName(nextProfile.fullName);
+        setCompany(nextProfile.company);
+        setProfileError(null);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setProfileError("settings-profile-load-error");
       });
+
+    return () => {
+      cancelled = true;
+    };
   }, [user, supabase]);
 
+  const hasUnsavedProfileChanges = useMemo(
+    () => hasSettingsProfileChanges({ fullName, company }, loadedProfile),
+    [company, fullName, loadedProfile]
+  );
+
   const handleSaveProfile = async () => {
-    if (!user) return;
+    if (!user || !hasUnsavedProfileChanges) return;
+
+    const normalizedProfile = normalizeSettingsProfileSnapshot({ fullName, company });
+
     setSaving(true);
     setSaved(false);
-    await supabase
-      .from("profiles")
-      .update({ full_name: fullName, company })
-      .eq("id", user.id);
-    setSaving(false);
-    setSaved(true);
-    setTimeout(() => setSaved(false), 2000);
+    setProfileError(null);
+
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ full_name: normalizedProfile.fullName, company: normalizedProfile.company })
+        .eq("id", user.id);
+
+      if (error) {
+        setProfileError("settings-profile-save-error");
+        return;
+      }
+
+      setLoadedProfile(normalizedProfile);
+      setFullName(normalizedProfile.fullName);
+      setCompany(normalizedProfile.company);
+      setSaved(true);
+      setTimeout(() => setSaved(false), 2000);
+    } catch {
+      setProfileError("settings-profile-save-error");
+    } finally {
+      setSaving(false);
+    }
   };
 
   const handleUpdatePassword = async () => {
@@ -108,7 +159,11 @@ export default function Settings() {
               <input
                 type="text"
                 value={fullName}
-                onChange={(e) => setFullName(e.target.value)}
+                onChange={(e) => {
+                  setFullName(e.target.value);
+                  setSaved(false);
+                  setProfileError(null);
+                }}
                 className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none transition-colors duration-200"
               />
             </div>
@@ -119,15 +174,26 @@ export default function Settings() {
               <input
                 type="text"
                 value={company}
-                onChange={(e) => setCompany(e.target.value)}
+                onChange={(e) => {
+                  setCompany(e.target.value);
+                  setSaved(false);
+                  setProfileError(null);
+                }}
                 className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none transition-colors duration-200"
               />
             </div>
           </div>
 
+          {profileError && (
+            <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-400/15 bg-red-400/[0.06] px-4 py-3 text-[13px] text-red-300">
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+              <span>{t(profileError)}</span>
+            </div>
+          )}
+
           <button
             onClick={handleSaveProfile}
-            disabled={saving}
+            disabled={saving || !hasUnsavedProfileChanges}
             className="px-5 py-2.5 bg-accent hover:bg-accent/90 disabled:opacity-50 text-white font-semibold rounded-lg transition-colors duration-200 flex items-center gap-2 text-sm"
           >
             {saving ? (
