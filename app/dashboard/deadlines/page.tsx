@@ -24,6 +24,38 @@ interface Deadline {
   status: "ok" | "warning" | "urgent" | "expired";
 }
 
+function buildDeadlines(base: Date): Deadline[] {
+  const d60 = addDays(base, 60);
+  const d5y = addYears(base, 5);
+  const d2y = addYears(base, 2);
+
+  return [
+    {
+      key: "60-Tage-Rügefrist (OR Art. 370a)",
+      titleKey: "deadlines-60day-title",
+      descKey: "deadlines-60day-desc",
+      date: d60,
+      daysRemaining: getDaysRemaining(d60),
+      status: getStatus(getDaysRemaining(d60)),
+    },
+    {
+      key: "2-Jahres-SIA-Frist (SIA 118)",
+      titleKey: "deadlines-2year-title",
+      descKey: "deadlines-2year-desc",
+      date: d2y,
+      daysRemaining: getDaysRemaining(d2y),
+      status: getStatus(getDaysRemaining(d2y)),
+    },
+    {
+      key: "5-Jahres-Verjährungsfrist (OR Art. 371)",
+      titleKey: "deadlines-5year-title",
+      descKey: "deadlines-5year-desc",
+      date: d5y,
+      daysRemaining: getDaysRemaining(d5y),
+      status: getStatus(getDaysRemaining(d5y)),
+    },
+  ];
+}
 
 export default function DeadlinesPage() {
   const { t } = useLanguage();
@@ -32,12 +64,17 @@ export default function DeadlinesPage() {
     const params = new URLSearchParams(window.location.search);
     return sanitizeDateQueryParam(params.get("acceptance"));
   });
-  const [deadlines, setDeadlines] = useState<Deadline[] | null>(null);
+  const [deadlines, setDeadlines] = useState<Deadline[] | null>(() => {
+    const parsedAcceptanceDate = parseDateInput(acceptanceDate);
+    return parsedAcceptanceDate ? buildDeadlines(parsedAcceptanceDate) : null;
+  });
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const acceptance = params.get("acceptance");
-    if (!acceptance || sanitizeDateQueryParam(acceptance)) return;
+    const sanitizedAcceptance = sanitizeDateQueryParam(acceptance);
+
+    if (!acceptance || sanitizedAcceptance) return;
 
     params.delete("acceptance");
     const query = params.toString();
@@ -58,36 +95,7 @@ export default function DeadlinesPage() {
 
     const base = parsedAcceptanceDate;
 
-    const d60 = addDays(base, 60);
-    const d5y = addYears(base, 5);
-    const d2y = addYears(base, 2);
-
-    const computed: Deadline[] = [
-      {
-        key: "60-Tage-Rügefrist (OR Art. 370a)",
-        titleKey: "deadlines-60day-title",
-        descKey: "deadlines-60day-desc",
-        date: d60,
-        daysRemaining: getDaysRemaining(d60),
-        status: getStatus(getDaysRemaining(d60)),
-      },
-      {
-        key: "2-Jahres-SIA-Frist (SIA 118)",
-        titleKey: "deadlines-2year-title",
-        descKey: "deadlines-2year-desc",
-        date: d2y,
-        daysRemaining: getDaysRemaining(d2y),
-        status: getStatus(getDaysRemaining(d2y)),
-      },
-      {
-        key: "5-Jahres-Verjährungsfrist (OR Art. 371)",
-        titleKey: "deadlines-5year-title",
-        descKey: "deadlines-5year-desc",
-        date: d5y,
-        daysRemaining: getDaysRemaining(d5y),
-        status: getStatus(getDaysRemaining(d5y)),
-      },
-    ];
+    const computed = buildDeadlines(base);
 
     setDeadlines(computed);
 
