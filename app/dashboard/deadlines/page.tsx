@@ -57,28 +57,43 @@ function buildDeadlines(base: Date): Deadline[] {
   ];
 }
 
+function getTodayLocalDateInputValue() {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
 export default function DeadlinesPage() {
   const { t } = useLanguage();
-  const [acceptanceDate, setAcceptanceDate] = useState<string>(() => {
-    if (typeof window === "undefined") return "";
-    const params = new URLSearchParams(window.location.search);
-    return sanitizeDateQueryParam(params.get("acceptance"));
-  });
-  const [deadlines, setDeadlines] = useState<Deadline[] | null>(() => {
-    const parsedAcceptanceDate = parseDateInput(acceptanceDate);
-    return parsedAcceptanceDate ? buildDeadlines(parsedAcceptanceDate) : null;
-  });
+  const [acceptanceDate, setAcceptanceDate] = useState<string>("");
+  const [deadlines, setDeadlines] = useState<Deadline[] | null>(null);
+  const [reminderOffsets, setReminderOffsets] = useState<number[]>([14, 7, 1]);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const acceptance = params.get("acceptance");
     const sanitizedAcceptance = sanitizeDateQueryParam(acceptance);
 
-    if (!acceptance || sanitizedAcceptance) return;
+    if (!acceptance) return;
 
-    params.delete("acceptance");
-    const query = params.toString();
-    window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
+    if (!sanitizedAcceptance) {
+      params.delete("acceptance");
+      const query = params.toString();
+      window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
+      return;
+    }
+
+    const parsedAcceptanceDate = parseDateInput(sanitizedAcceptance);
+    if (!parsedAcceptanceDate) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      setAcceptanceDate(sanitizedAcceptance);
+      setDeadlines(buildDeadlines(parsedAcceptanceDate));
+    });
+
+    return () => window.cancelAnimationFrame(frame);
   }, []);
 
   function calculate() {
@@ -93,10 +108,7 @@ export default function DeadlinesPage() {
       return;
     }
 
-    const base = parsedAcceptanceDate;
-
-    const computed = buildDeadlines(base);
-
+    const computed = buildDeadlines(parsedAcceptanceDate);
     setDeadlines(computed);
 
     const params = new URLSearchParams(window.location.search);
@@ -127,7 +139,8 @@ export default function DeadlinesPage() {
     const acceptanceDateLabel = formatDateCH(parsedAcceptanceDate);
     const content = generateDeadlineCalendarICS(
       deadlines.map((d) => ({ key: d.key, date: d.date })),
-      acceptanceDateLabel
+      acceptanceDateLabel,
+      reminderOffsets
     );
     const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -170,6 +183,15 @@ export default function DeadlinesPage() {
   };
 
   const maxDays = 1825;
+  const reminderOptions = [30, 14, 7, 3, 1] as const;
+
+  function toggleReminder(offset: number) {
+    setReminderOffsets((current) =>
+      current.includes(offset)
+        ? current.filter((value) => value !== offset)
+        : [...current, offset]
+    );
+  }
 
   return (
     <div>
@@ -184,14 +206,16 @@ export default function DeadlinesPage() {
 
       {/* Input form */}
       <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05] mb-8">
-        <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-2">
+        <label htmlFor="acceptance-date" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-2">
           {t("deadlines-input-label")}
         </label>
         <div className="flex gap-4 flex-col sm:flex-row">
           <input
+            id="acceptance-date"
             type="date"
             value={acceptanceDate}
             onChange={(e) => setAcceptanceDate(e.target.value)}
+            max={getTodayLocalDateInputValue()}
             className="flex-1 bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-3 text-cream focus:outline-none focus:border-accent/40 transition-colors duration-300 [color-scheme:dark]"
           />
           <button
@@ -211,6 +235,27 @@ export default function DeadlinesPage() {
               {t("deadlines-reset")}
             </button>
           )}
+        </div>
+        <div className="mt-4 pt-4 border-t border-white/[0.06]">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-2">
+            Kalender-Erinnerungen
+          </p>
+          <div className="flex flex-wrap gap-2">
+            {reminderOptions.map((offset) => (
+              <button
+                key={offset}
+                type="button"
+                onClick={() => toggleReminder(offset)}
+                className={`px-3 py-1.5 rounded-md text-xs border transition-colors duration-200 ${
+                  reminderOffsets.includes(offset)
+                    ? "bg-accent/20 border-accent/40 text-accent"
+                    : "bg-white/[0.03] border-white/[0.08] text-muted hover:text-cream"
+                }`}
+              >
+                {offset} Tage
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -238,7 +283,7 @@ export default function DeadlinesPage() {
 
           {/* Timeline visualization */}
           <div className="p-5 rounded-2xl bg-white/[0.02] border border-white/[0.05] mb-6 relative overflow-hidden">
-            <div className="text-[11px] text-muted uppercase tracking-[0.12em] font-semibold mb-4">Zeitleiste</div>
+            <div className="text-[11px] text-muted uppercase tracking-[0.12em] font-semibold mb-4">{t("deadlines-timeline")}</div>
             <div className="relative">
               <div className="w-full h-1.5 bg-white/[0.04] rounded-full mb-1" />
               {deadlines.map((d, i) => {
@@ -279,13 +324,13 @@ export default function DeadlinesPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <Icon className={`w-5 h-5 ${cfg.text}`} />
-                      <span className="font-semibold text-cream">{t(d.titleKey )}</span>
+                      <span className="font-semibold text-cream">{t(d.titleKey)}</span>
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${cfg.text} bg-current/[0.06]`}>
                         {cfg.label}
                       </span>
                     </div>
                     <p className="text-sm text-muted mb-3">
-                      {t(d.descKey )}
+                      {t(d.descKey)}
                     </p>
                     <div className="flex items-center gap-2 text-sm">
                       <span className="text-muted/60">{t("deadlines-deadline-date")}:</span>

@@ -24,16 +24,20 @@ describe("deadlines share-link restoration", () => {
     window.history.replaceState(null, "", "/dashboard/deadlines");
   });
 
-  it("restores computed deadlines on load from a valid acceptance query param", async () => {
+  it("hydrates shared acceptance links after the initial render", async () => {
     window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
 
     render(<DeadlinesPage />);
+
+    const input = screen.getByLabelText("deadlines-input-label") as HTMLInputElement;
+    expect(input.value).toBe("");
+    expect(screen.queryByText("deadlines-result-title")).toBeNull();
 
     await waitFor(() => {
       expect(screen.getByText("deadlines-result-title")).toBeTruthy();
     });
 
-    expect(screen.getByDisplayValue("2026-04-30")).toBeTruthy();
+    expect(input.value).toBe("2026-04-30");
     expect(screen.getByText("deadlines-60day-title")).toBeTruthy();
     expect(screen.getByText("deadlines-2year-title")).toBeTruthy();
     expect(screen.getByText("deadlines-5year-title")).toBeTruthy();
