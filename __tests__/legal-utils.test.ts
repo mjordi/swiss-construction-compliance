@@ -7,6 +7,7 @@ import {
   generateDeadlineCalendarICS,
   validateRuegefristInput,
   parseDateInput,
+  parseDateInputAsUTC,
   sanitizeDateQueryParam,
   OR_REVISION_DATE,
 } from "../lib/legal-utils";
@@ -24,6 +25,19 @@ describe("parseDateInput", () => {
     expect(parseDateInput("2026-02-30")).toBeNull();
     expect(parseDateInput("2026-13-01")).toBeNull();
     expect(parseDateInput("not-a-date")).toBeNull();
+  });
+});
+
+describe("parseDateInputAsUTC", () => {
+  it("preserves the entered calendar day when serialized as ISO", () => {
+    const parsed = parseDateInputAsUTC("2026-04-30");
+    expect(parsed).not.toBeNull();
+    expect(parsed?.toISOString().split("T")[0]).toBe("2026-04-30");
+  });
+
+  it("returns null for invalid calendar dates", () => {
+    expect(parseDateInputAsUTC("2026-02-30")).toBeNull();
+    expect(parseDateInputAsUTC("not-a-date")).toBeNull();
   });
 });
 

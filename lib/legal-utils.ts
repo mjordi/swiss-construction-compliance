@@ -57,6 +57,22 @@ export function parseDateInput(value: string): Date | null {
   return parsed;
 }
 
+/**
+ * Parse an HTML date input value (YYYY-MM-DD) as a UTC calendar date.
+ * Useful when downstream code serializes with toISOString() and must preserve
+ * the same calendar day across timezones.
+ */
+export function parseDateInputAsUTC(value: string): Date | null {
+  const parsedLocalDate = parseDateInput(value);
+  if (!parsedLocalDate) return null;
+
+  const year = parsedLocalDate.getFullYear();
+  const month = parsedLocalDate.getMonth();
+  const day = parsedLocalDate.getDate();
+
+  return new Date(Date.UTC(year, month, day));
+}
+
 export function sanitizeDateQueryParam(value: string | null): string {
   if (!value) return "";
   return parseDateInput(value) ? value : "";

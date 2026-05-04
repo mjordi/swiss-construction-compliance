@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { Clock, Download, RotateCcw, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
-import { addDays, addYears, getDaysRemaining, formatDateCH, generateDeadlineCalendarICS, parseDateInput, sanitizeDateQueryParam } from "@/lib/legal-utils";
+import { addDays, addYears, getDaysRemaining, formatDateCH, generateDeadlineCalendarICS, parseDateInput, parseDateInputAsUTC, sanitizeDateQueryParam } from "@/lib/legal-utils";
 import PageHeader from "@/components/dashboard/PageHeader";
 import type { TranslationKey } from "@/locales";
 
@@ -85,7 +85,7 @@ export default function DeadlinesPage() {
       return;
     }
 
-    const parsedAcceptanceDate = parseDateInput(sanitizedAcceptance);
+    const parsedAcceptanceDate = parseDateInputAsUTC(sanitizedAcceptance);
     if (!parsedAcceptanceDate) return;
 
     const frame = window.requestAnimationFrame(() => {
@@ -97,7 +97,7 @@ export default function DeadlinesPage() {
   }, []);
 
   function calculate() {
-    const parsedAcceptanceDate = parseDateInput(acceptanceDate);
+    const parsedAcceptanceDate = parseDateInputAsUTC(acceptanceDate);
     if (!parsedAcceptanceDate) {
       setAcceptanceDate("");
       setDeadlines(null);
