@@ -7,6 +7,7 @@ import {
   generateDeadlineCalendarICS,
   validateRuegefristInput,
   parseDateInput,
+  sanitizeDateQueryParam,
   OR_REVISION_DATE,
 } from "../lib/legal-utils";
 
@@ -23,6 +24,18 @@ describe("parseDateInput", () => {
     expect(parseDateInput("2026-02-30")).toBeNull();
     expect(parseDateInput("2026-13-01")).toBeNull();
     expect(parseDateInput("not-a-date")).toBeNull();
+  });
+});
+
+describe("sanitizeDateQueryParam", () => {
+  it("preserves valid YYYY-MM-DD query values", () => {
+    expect(sanitizeDateQueryParam("2026-04-30")).toBe("2026-04-30");
+  });
+
+  it("clears malformed or invalid query values", () => {
+    expect(sanitizeDateQueryParam("foo")).toBe("");
+    expect(sanitizeDateQueryParam("2026-02-30")).toBe("");
+    expect(sanitizeDateQueryParam(null)).toBe("");
   });
 });
 

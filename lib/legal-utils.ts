@@ -57,6 +57,11 @@ export function parseDateInput(value: string): Date | null {
   return parsed;
 }
 
+export function sanitizeDateQueryParam(value: string | null): string {
+  if (!value) return "";
+  return parseDateInput(value) ? value : "";
+}
+
 /**
  * Determine which legal regime applies based on contract date.
  * Contracts signed on or after 2026-01-01 fall under the new OR.

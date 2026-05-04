@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Clock, Download, RotateCcw, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
-import { addDays, addYears, getDaysRemaining, formatDateCH, generateDeadlineCalendarICS } from "@/lib/legal-utils";
+import { addDays, addYears, getDaysRemaining, formatDateCH, generateDeadlineCalendarICS, parseDateInput, sanitizeDateQueryParam } from "@/lib/legal-utils";
 import PageHeader from "@/components/dashboard/PageHeader";
 import type { TranslationKey } from "@/locales";
 
@@ -30,13 +30,33 @@ export default function DeadlinesPage() {
   const [acceptanceDate, setAcceptanceDate] = useState<string>(() => {
     if (typeof window === "undefined") return "";
     const params = new URLSearchParams(window.location.search);
-    return params.get("acceptance") ?? "";
+    return sanitizeDateQueryParam(params.get("acceptance"));
   });
   const [deadlines, setDeadlines] = useState<Deadline[] | null>(null);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const acceptance = params.get("acceptance");
+    if (!acceptance || sanitizeDateQueryParam(acceptance)) return;
+
+    params.delete("acceptance");
+    const query = params.toString();
+    window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
+  }, []);
+
   function calculate() {
-    if (!acceptanceDate) return;
-    const base = new Date(acceptanceDate);
+    const parsedAcceptanceDate = parseDateInput(acceptanceDate);
+    if (!parsedAcceptanceDate) {
+      setAcceptanceDate("");
+      setDeadlines(null);
+      const params = new URLSearchParams(window.location.search);
+      params.delete("acceptance");
+      const query = params.toString();
+      window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
+      return;
+    }
+
+    const base = parsedAcceptanceDate;
 
     const d60 = addDays(base, 60);
     const d5y = addYears(base, 5);
@@ -86,15 +106,17 @@ export default function DeadlinesPage() {
   }
 
   function copyShareLink() {
-    if (!acceptanceDate) return;
+    const parsedAcceptanceDate = parseDateInput(acceptanceDate);
+    if (!parsedAcceptanceDate) return;
     const url = new URL(window.location.href);
     url.searchParams.set("acceptance", acceptanceDate);
     void navigator.clipboard.writeText(url.toString());
   }
 
   function downloadICS() {
-    if (!deadlines || !acceptanceDate) return;
-    const acceptanceDateLabel = new Date(acceptanceDate).toLocaleDateString("de-CH");
+    const parsedAcceptanceDate = parseDateInput(acceptanceDate);
+    if (!deadlines || !parsedAcceptanceDate) return;
+    const acceptanceDateLabel = formatDateCH(parsedAcceptanceDate);
     const content = generateDeadlineCalendarICS(
       deadlines.map((d) => ({ key: d.key, date: d.date })),
       acceptanceDateLabel
