@@ -67,6 +67,43 @@ describe("locales", () => {
     }
   });
 
+  it("includes login localization and feedback keys in every locale", () => {
+    const requiredLoginKeys = [
+      "login-subtitle",
+      "login-email-label",
+      "login-email-placeholder",
+      "login-password-label",
+      "login-password-placeholder",
+      "login-authenticating",
+      "login-encryption",
+      "login-demo-divider",
+      "login-demo-account",
+      "login-source-prefix",
+      "login-signup-title",
+      "login-signup-subtitle",
+      "login-signup-btn",
+      "login-signup-success",
+      "login-name-label",
+      "login-name-placeholder",
+      "login-have-account",
+      "login-no-account",
+      "login-error-name-required",
+      "login-error-config",
+      "login-error-invalid-credentials",
+      "login-error-email-not-confirmed",
+      "login-error-user-exists",
+      "login-error-password-too-short",
+      "login-error-signup-disabled",
+      "login-error-generic",
+    ] as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      for (const key of requiredLoginKeys) {
+        expect(translations[key], `Locale '${lang}' missing login key '${key}'`).toBeDefined();
+      }
+    }
+  });
+
   it("preserves the vault empty-search query placeholder across locales", () => {
     for (const [lang, translations] of Object.entries(locales)) {
       expect(
