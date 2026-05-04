@@ -1,9 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Clock, Download, RotateCcw, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
-import { addDays, addYears, getDaysRemaining, formatDateCH, generateDeadlineCalendarICS } from "@/lib/legal-utils";
+import { addDays, addYears, getDaysRemaining, formatDateCH, generateDeadlineCalendarICS, parseDateInput, parseDateInputAsUTC, sanitizeDateQueryParam } from "@/lib/legal-utils";
 import PageHeader from "@/components/dashboard/PageHeader";
 import type { TranslationKey } from "@/locales";
 
@@ -24,6 +24,39 @@ interface Deadline {
   status: "ok" | "warning" | "urgent" | "expired";
 }
 
+function buildDeadlines(base: Date): Deadline[] {
+  const d60 = addDays(base, 60);
+  const d5y = addYears(base, 5);
+  const d2y = addYears(base, 2);
+
+  return [
+    {
+      key: "60-Tage-Rügefrist (OR Art. 370a)",
+      titleKey: "deadlines-60day-title",
+      descKey: "deadlines-60day-desc",
+      date: d60,
+      daysRemaining: getDaysRemaining(d60),
+      status: getStatus(getDaysRemaining(d60)),
+    },
+    {
+      key: "2-Jahres-SIA-Frist (SIA 118)",
+      titleKey: "deadlines-2year-title",
+      descKey: "deadlines-2year-desc",
+      date: d2y,
+      daysRemaining: getDaysRemaining(d2y),
+      status: getStatus(getDaysRemaining(d2y)),
+    },
+    {
+      key: "5-Jahres-Verjährungsfrist (OR Art. 371)",
+      titleKey: "deadlines-5year-title",
+      descKey: "deadlines-5year-desc",
+      date: d5y,
+      daysRemaining: getDaysRemaining(d5y),
+      status: getStatus(getDaysRemaining(d5y)),
+    },
+  ];
+}
+
 function getTodayLocalDateInputValue() {
   const now = new Date();
   const year = now.getFullYear();
@@ -32,63 +65,78 @@ function getTodayLocalDateInputValue() {
   return `${year}-${month}-${day}`;
 }
 
-function parseDateInputAsUTC(dateInput: string) {
-  return new Date(`${dateInput}T00:00:00Z`);
-}
-
 export default function DeadlinesPage() {
   const { t } = useLanguage();
   const [acceptanceDate, setAcceptanceDate] = useState<string>("");
   const [deadlines, setDeadlines] = useState<Deadline[] | null>(null);
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([14, 7, 1]);
 
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const acceptance = params.get("acceptance");
+    const sanitizedAcceptance = sanitizeDateQueryParam(acceptance);
+
+    if (!acceptance) return;
+
+    if (!sanitizedAcceptance) {
+      params.delete("acceptance");
+      const query = params.toString();
+      window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
+      return;
+    }
+
+    const parsedAcceptanceDate = parseDateInputAsUTC(sanitizedAcceptance);
+    if (!parsedAcceptanceDate) return;
+
+    const frame = window.requestAnimationFrame(() => {
+      setAcceptanceDate(sanitizedAcceptance);
+      setDeadlines(buildDeadlines(parsedAcceptanceDate));
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, []);
+
   function calculate() {
-    if (!acceptanceDate) return;
-    const base = parseDateInputAsUTC(acceptanceDate);
-    if (Number.isNaN(base.getTime())) return;
+    const parsedAcceptanceDate = parseDateInputAsUTC(acceptanceDate);
+    if (!parsedAcceptanceDate) {
+      setAcceptanceDate("");
+      setDeadlines(null);
+      const params = new URLSearchParams(window.location.search);
+      params.delete("acceptance");
+      const query = params.toString();
+      window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
+      return;
+    }
 
-    const d60 = addDays(base, 60);
-    const d5y = addYears(base, 5);
-    const d2y = addYears(base, 2);
-
-    const computed: Deadline[] = [
-      {
-        key: "60-Tage-Rügefrist (OR Art. 370a)",
-        titleKey: "deadlines-60day-title",
-        descKey: "deadlines-60day-desc",
-        date: d60,
-        daysRemaining: getDaysRemaining(d60),
-        status: getStatus(getDaysRemaining(d60)),
-      },
-      {
-        key: "2-Jahres-SIA-Frist (SIA 118)",
-        titleKey: "deadlines-2year-title",
-        descKey: "deadlines-2year-desc",
-        date: d2y,
-        daysRemaining: getDaysRemaining(d2y),
-        status: getStatus(getDaysRemaining(d2y)),
-      },
-      {
-        key: "5-Jahres-Verjährungsfrist (OR Art. 371)",
-        titleKey: "deadlines-5year-title",
-        descKey: "deadlines-5year-desc",
-        date: d5y,
-        daysRemaining: getDaysRemaining(d5y),
-        status: getStatus(getDaysRemaining(d5y)),
-      },
-    ];
-
+    const computed = buildDeadlines(parsedAcceptanceDate);
     setDeadlines(computed);
+
+    const params = new URLSearchParams(window.location.search);
+    params.set("acceptance", acceptanceDate);
+    window.history.replaceState(null, "", `?${params.toString()}`);
   }
 
   function reset() {
     setAcceptanceDate("");
     setDeadlines(null);
+    const params = new URLSearchParams(window.location.search);
+    params.delete("acceptance");
+    const query = params.toString();
+    window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
+  }
+
+  function copyShareLink() {
+    const parsedAcceptanceDate = parseDateInput(acceptanceDate);
+    if (!parsedAcceptanceDate) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("acceptance", acceptanceDate);
+    void navigator.clipboard.writeText(url.toString());
   }
 
   function downloadICS() {
-    if (!deadlines || !acceptanceDate) return;
-    const acceptanceDateLabel = formatDateCH(parseDateInputAsUTC(acceptanceDate));
+    const parsedAcceptanceDate = parseDateInput(acceptanceDate);
+    if (!deadlines || !parsedAcceptanceDate) return;
+    const acceptanceDateLabel = formatDateCH(parsedAcceptanceDate);
     const content = generateDeadlineCalendarICS(
       deadlines.map((d) => ({ key: d.key, date: d.date })),
       acceptanceDateLabel,
@@ -158,11 +206,12 @@ export default function DeadlinesPage() {
 
       {/* Input form */}
       <div className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05] mb-8">
-        <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-2">
+        <label htmlFor="acceptance-date" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-2">
           {t("deadlines-input-label")}
         </label>
         <div className="flex gap-4 flex-col sm:flex-row">
           <input
+            id="acceptance-date"
             type="date"
             value={acceptanceDate}
             onChange={(e) => setAcceptanceDate(e.target.value)}
@@ -215,13 +264,21 @@ export default function DeadlinesPage() {
         <div className="space-y-5">
           <div className="flex items-center justify-between mb-2">
             <h2 className="text-lg font-semibold text-cream">{t("deadlines-result-title")}</h2>
-            <button
-              onClick={downloadICS}
-              className="flex items-center gap-2 px-4 py-2 bg-white/[0.03] border border-white/[0.06] hover:border-accent/30 text-muted hover:text-accent text-[13px] font-medium rounded-lg transition-all duration-300"
-            >
-              <Download className="w-4 h-4" />
-              {t("deadlines-download-ics")}
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={copyShareLink}
+                className="flex items-center gap-2 px-4 py-2 bg-white/[0.03] border border-white/[0.06] hover:border-accent/30 text-muted hover:text-accent text-[13px] font-medium rounded-lg transition-all duration-300"
+              >
+                Link
+              </button>
+              <button
+                onClick={downloadICS}
+                className="flex items-center gap-2 px-4 py-2 bg-white/[0.03] border border-white/[0.06] hover:border-accent/30 text-muted hover:text-accent text-[13px] font-medium rounded-lg transition-all duration-300"
+              >
+                <Download className="w-4 h-4" />
+                {t("deadlines-download-ics")}
+              </button>
+            </div>
           </div>
 
           {/* Timeline visualization */}
@@ -267,13 +324,13 @@ export default function DeadlinesPage() {
                   <div className="flex-1">
                     <div className="flex items-center gap-2 mb-1">
                       <Icon className={`w-5 h-5 ${cfg.text}`} />
-                      <span className="font-semibold text-cream">{t(d.titleKey )}</span>
+                      <span className="font-semibold text-cream">{t(d.titleKey)}</span>
                       <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md ${cfg.text} bg-current/[0.06]`}>
                         {cfg.label}
                       </span>
                     </div>
                     <p className="text-sm text-muted mb-3">
-                      {t(d.descKey )}
+                      {t(d.descKey)}
                     </p>
                     <div className="flex items-center gap-2 text-sm">
                       <span className="text-muted/60">{t("deadlines-deadline-date")}:</span>
