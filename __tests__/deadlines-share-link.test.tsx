@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
+const legalUtilsMocks = vi.hoisted(() => ({
+  parseDateInput: vi.fn(),
+  generateDeadlineCalendarICS: vi.fn(),
+}));
+
 vi.mock("@/context/LanguageContext", () => ({
   useLanguage: () => ({
     lang: "en",
@@ -18,17 +23,44 @@ vi.mock("@/components/dashboard/PageHeader", () => ({
   ),
 }));
 
+vi.mock("@/lib/legal-utils", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/legal-utils")>();
+
+  legalUtilsMocks.parseDateInput.mockImplementation(actual.parseDateInput);
+  legalUtilsMocks.generateDeadlineCalendarICS.mockImplementation(actual.generateDeadlineCalendarICS);
+
+  return {
+    ...actual,
+    parseDateInput: legalUtilsMocks.parseDateInput,
+    generateDeadlineCalendarICS: legalUtilsMocks.generateDeadlineCalendarICS,
+  };
+});
+
 import DeadlinesPage from "@/app/dashboard/deadlines/page";
 
 describe("deadlines share-link restoration", () => {
   const writeText = vi.fn<() => Promise<void>>();
+  const createObjectURL = vi.fn(() => "blob:deadlines-ics");
+  const revokeObjectURL = vi.fn();
 
   beforeEach(() => {
     writeText.mockReset();
     writeText.mockResolvedValue(undefined);
+    legalUtilsMocks.parseDateInput.mockClear();
+    legalUtilsMocks.generateDeadlineCalendarICS.mockClear();
+    createObjectURL.mockClear();
+    revokeObjectURL.mockClear();
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: { writeText },
+    });
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURL,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURL,
     });
     window.history.replaceState(null, "", "/dashboard/deadlines");
   });
@@ -89,5 +121,30 @@ describe("deadlines share-link restoration", () => {
     });
 
     expect(screen.getByRole("button", { name: "deadlines-share-link-copied" })).toBeTruthy();
+  });
+
+  it("keeps the exported acceptance-date label on the selected calendar day", async () => {
+    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+    legalUtilsMocks.parseDateInput.mockImplementationOnce((value: string) => {
+      if (value === "2026-04-30") {
+        return new Date("2026-04-29T22:00:00.000Z");
+      }
+      return null;
+    });
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("deadlines-result-title")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "deadlines-download-ics" }));
+
+    await waitFor(() => {
+      expect(legalUtilsMocks.generateDeadlineCalendarICS).toHaveBeenCalled();
+    });
+
+    const acceptanceDateLabel = legalUtilsMocks.generateDeadlineCalendarICS.mock.calls.at(-1)?.[1];
+    expect(acceptanceDateLabel).toBe("30 April 2026");
   });
 });
