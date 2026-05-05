@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Clock, Download, RotateCcw, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
-import { addDays, addYears, getDaysRemaining, formatDateCH, generateDeadlineCalendarICS, parseDateInput, parseDateInputAsUTC, sanitizeDateQueryParam } from "@/lib/legal-utils";
+import { addDays, addYears, getDaysRemaining, generateDeadlineCalendarICS, parseDateInputAsUTC, sanitizeDateQueryParam } from "@/lib/legal-utils";
 import PageHeader from "@/components/dashboard/PageHeader";
 import type { TranslationKey } from "@/locales";
 
@@ -65,11 +65,24 @@ function getTodayLocalDateInputValue() {
   return `${year}-${month}-${day}`;
 }
 
+function formatLocalizedDate(date: Date, lang: string) {
+  const locale = lang === "fr" ? "fr-CH" : lang === "it" ? "it-CH" : lang === "en" ? "en-CH" : "de-CH";
+  return date.toLocaleDateString(locale, {
+    timeZone: "UTC",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
 export default function DeadlinesPage() {
-  const { t } = useLanguage();
+  const { lang, t } = useLanguage();
   const [acceptanceDate, setAcceptanceDate] = useState<string>("");
   const [deadlines, setDeadlines] = useState<Deadline[] | null>(null);
+  const [calculatedAcceptanceDate, setCalculatedAcceptanceDate] = useState<string | null>(null);
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([14, 7, 1]);
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
+  const shareLinkResetTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -90,16 +103,27 @@ export default function DeadlinesPage() {
 
     const frame = window.requestAnimationFrame(() => {
       setAcceptanceDate(sanitizedAcceptance);
+      setCalculatedAcceptanceDate(sanitizedAcceptance);
       setDeadlines(buildDeadlines(parsedAcceptanceDate));
     });
 
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
+  useEffect(() => {
+    return () => {
+      if (shareLinkResetTimerRef.current !== null) {
+        window.clearTimeout(shareLinkResetTimerRef.current);
+      }
+    };
+  }, []);
+
   function calculate() {
+    setShareLinkCopied(false);
     const parsedAcceptanceDate = parseDateInputAsUTC(acceptanceDate);
     if (!parsedAcceptanceDate) {
       setAcceptanceDate("");
+      setCalculatedAcceptanceDate(null);
       setDeadlines(null);
       const params = new URLSearchParams(window.location.search);
       params.delete("acceptance");
@@ -110,6 +134,7 @@ export default function DeadlinesPage() {
 
     const computed = buildDeadlines(parsedAcceptanceDate);
     setDeadlines(computed);
+    setCalculatedAcceptanceDate(acceptanceDate);
 
     const params = new URLSearchParams(window.location.search);
     params.set("acceptance", acceptanceDate);
@@ -118,6 +143,8 @@ export default function DeadlinesPage() {
 
   function reset() {
     setAcceptanceDate("");
+    setCalculatedAcceptanceDate(null);
+    setShareLinkCopied(false);
     setDeadlines(null);
     const params = new URLSearchParams(window.location.search);
     params.delete("acceptance");
@@ -125,18 +152,32 @@ export default function DeadlinesPage() {
     window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
   }
 
-  function copyShareLink() {
-    const parsedAcceptanceDate = parseDateInput(acceptanceDate);
-    if (!parsedAcceptanceDate) return;
+  async function copyShareLink() {
+    if (!calculatedAcceptanceDate || !deadlines) return;
     const url = new URL(window.location.href);
-    url.searchParams.set("acceptance", acceptanceDate);
-    void navigator.clipboard.writeText(url.toString());
+    url.searchParams.set("acceptance", calculatedAcceptanceDate);
+
+    if (shareLinkResetTimerRef.current !== null) {
+      window.clearTimeout(shareLinkResetTimerRef.current);
+    }
+
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setShareLinkCopied(true);
+      shareLinkResetTimerRef.current = window.setTimeout(() => {
+        setShareLinkCopied(false);
+        shareLinkResetTimerRef.current = null;
+      }, 2000);
+    } catch {
+      setShareLinkCopied(false);
+    }
   }
 
   function downloadICS() {
-    const parsedAcceptanceDate = parseDateInput(acceptanceDate);
-    if (!deadlines || !parsedAcceptanceDate) return;
-    const acceptanceDateLabel = formatDateCH(parsedAcceptanceDate);
+    if (!deadlines || !calculatedAcceptanceDate) return;
+    const parsedAcceptanceDate = parseDateInputAsUTC(calculatedAcceptanceDate);
+    if (!parsedAcceptanceDate) return;
+    const acceptanceDateLabel = formatLocalizedDate(parsedAcceptanceDate, lang);
     const content = generateDeadlineCalendarICS(
       deadlines.map((d) => ({ key: d.key, date: d.date })),
       acceptanceDateLabel,
@@ -146,7 +187,7 @@ export default function DeadlinesPage() {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `baucompliance-fristen-${acceptanceDate}.ics`;
+    a.download = `baucompliance-fristen-${calculatedAcceptanceDate}.ics`;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -214,7 +255,10 @@ export default function DeadlinesPage() {
             id="acceptance-date"
             type="date"
             value={acceptanceDate}
-            onChange={(e) => setAcceptanceDate(e.target.value)}
+            onChange={(e) => {
+              setAcceptanceDate(e.target.value);
+              setShareLinkCopied(false);
+            }}
             max={getTodayLocalDateInputValue()}
             className="flex-1 bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-3 text-cream focus:outline-none focus:border-accent/40 transition-colors duration-300 [color-scheme:dark]"
           />
@@ -238,7 +282,7 @@ export default function DeadlinesPage() {
         </div>
         <div className="mt-4 pt-4 border-t border-white/[0.06]">
           <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-2">
-            Kalender-Erinnerungen
+            {t("deadlines-reminder-label")}
           </p>
           <div className="flex flex-wrap gap-2">
             {reminderOptions.map((offset) => (
@@ -252,7 +296,7 @@ export default function DeadlinesPage() {
                     : "bg-white/[0.03] border-white/[0.08] text-muted hover:text-cream"
                 }`}
               >
-                {offset} Tage
+                {offset} {t("deadlines-reminder-days")}
               </button>
             ))}
           </div>
@@ -269,7 +313,7 @@ export default function DeadlinesPage() {
                 onClick={copyShareLink}
                 className="flex items-center gap-2 px-4 py-2 bg-white/[0.03] border border-white/[0.06] hover:border-accent/30 text-muted hover:text-accent text-[13px] font-medium rounded-lg transition-all duration-300"
               >
-                Link
+                {shareLinkCopied ? t("deadlines-share-link-copied") : t("deadlines-share-link")}
               </button>
               <button
                 onClick={downloadICS}
@@ -294,7 +338,7 @@ export default function DeadlinesPage() {
                 const cfg = statusConfig[d.status];
                 return (
                   <div key={i} className="flex items-center gap-3 mt-4">
-                    <div className="w-32 text-[12px] text-muted text-right">{formatDateCH(d.date)}</div>
+                    <div className="w-32 text-[12px] text-muted text-right">{formatLocalizedDate(d.date, lang)}</div>
                     <div className="flex-1 relative">
                       <div className="w-full h-1.5 bg-white/[0.04] rounded-full overflow-hidden">
                         <div
@@ -306,7 +350,7 @@ export default function DeadlinesPage() {
                     <div className={`w-20 text-[12px] font-semibold ${cfg.text} text-right`}>
                       {d.daysRemaining < 0
                         ? t("deadlines-expired")
-                        : `${d.daysRemaining}d`}
+                        : `${d.daysRemaining} ${t("deadlines-reminder-days")}`}
                     </div>
                   </div>
                 );
@@ -334,7 +378,7 @@ export default function DeadlinesPage() {
                     </p>
                     <div className="flex items-center gap-2 text-sm">
                       <span className="text-muted/60">{t("deadlines-deadline-date")}:</span>
-                      <span className="font-semibold text-cream">{formatDateCH(d.date)}</span>
+                      <span className="font-semibold text-cream">{formatLocalizedDate(d.date, lang)}</span>
                     </div>
                   </div>
                   <div className={`text-right ${cfg.text}`}>
