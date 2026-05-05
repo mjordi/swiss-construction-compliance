@@ -67,6 +67,21 @@ describe("locales", () => {
     }
   });
 
+  it("includes deadlines localization keys in every locale", () => {
+    const requiredDeadlineKeys = [
+      "deadlines-reminder-label",
+      "deadlines-reminder-days",
+      "deadlines-share-link",
+      "deadlines-share-link-copied",
+    ] as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      for (const key of requiredDeadlineKeys) {
+        expect(translations[key], `Locale '${lang}' missing deadlines key '${key}'`).toBeDefined();
+      }
+    }
+  });
+
   it("includes login localization and feedback keys in every locale", () => {
     const requiredLoginKeys = [
       "login-subtitle",
