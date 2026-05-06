@@ -84,6 +84,13 @@ export default function CasesPage() {
   const [checklistsByCase, setChecklistsByCase] = useState<Record<string, FollowUpChecklistState>>({});
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
   const latestFetchIdRef = useRef(0);
+  const filterStateRef = useRef({
+    regimeFilter,
+    statusFilter,
+    sortMode,
+    searchTerm,
+  });
+  const skipNextUrlWriteRef = useRef(false);
 
   const runCasesRefresh = useCallback(async (fetchId: number) => {
     if (!user) {
@@ -132,6 +139,49 @@ export default function CasesPage() {
   }, [triggerCasesRefresh]);
 
   useEffect(() => {
+    filterStateRef.current = {
+      regimeFilter,
+      statusFilter,
+      sortMode,
+      searchTerm,
+    };
+  }, [regimeFilter, statusFilter, sortMode, searchTerm]);
+
+  const searchParamString = searchParams.toString();
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParamString);
+    const nextRegime = parseRegimeFilter(params.get("regime"));
+    const nextStatus = parseStatusFilter(params.get("status"));
+    const nextSort = parseSortMode(params.get("sort"));
+    const nextSearch = params.get("q") ?? "";
+    const currentFilters = filterStateRef.current;
+
+    const needsSync =
+      currentFilters.regimeFilter !== nextRegime ||
+      currentFilters.statusFilter !== nextStatus ||
+      currentFilters.sortMode !== nextSort ||
+      currentFilters.searchTerm !== nextSearch;
+
+    if (!needsSync) return;
+
+    skipNextUrlWriteRef.current = true;
+    const frame = window.requestAnimationFrame(() => {
+      setRegimeFilter(nextRegime);
+      setStatusFilter(nextStatus);
+      setSortMode(nextSort);
+      setSearchTerm(nextSearch);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [searchParamString]);
+
+  useEffect(() => {
+    if (skipNextUrlWriteRef.current) {
+      skipNextUrlWriteRef.current = false;
+      return;
+    }
+
     const params = new URLSearchParams(searchParams.toString());
 
     if (regimeFilter === "all") params.delete("regime");
