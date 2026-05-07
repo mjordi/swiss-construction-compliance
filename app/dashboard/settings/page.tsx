@@ -9,6 +9,10 @@ import { getSupabase } from "@/lib/supabase";
 import { hasSettingsProfileChanges, normalizeSettingsProfileSnapshot } from "@/lib/settings";
 import type { TranslationKey } from "@/locales";
 
+type PasswordFeedback =
+  | { kind: "translation"; key: TranslationKey }
+  | { kind: "message"; message: string };
+
 export default function Settings() {
   const { t } = useLanguage();
   const { user, logout } = useAuth();
@@ -24,7 +28,7 @@ export default function Settings() {
   const [newPassword, setNewPassword] = useState("");
   const [updatingPassword, setUpdatingPassword] = useState(false);
   const [passwordUpdated, setPasswordUpdated] = useState(false);
-  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const [passwordFeedback, setPasswordFeedback] = useState<PasswordFeedback | null>(null);
 
   useEffect(() => {
     if (!user) return;
@@ -68,6 +72,7 @@ export default function Settings() {
     () => hasSettingsProfileChanges({ fullName, company }, loadedProfile),
     [company, fullName, loadedProfile]
   );
+  const passwordErrorMessage = passwordFeedback?.kind === "translation" ? t(passwordFeedback.key) : passwordFeedback?.message ?? null;
 
   const handleSaveProfile = async () => {
     if (!user || !hasUnsavedProfileChanges) return;
@@ -103,20 +108,31 @@ export default function Settings() {
 
   const handleUpdatePassword = async () => {
     if (newPassword.length < 6) {
-      setPasswordError(t("settings-password-min"));
+      setPasswordFeedback({ kind: "translation", key: "settings-password-min" });
       return;
     }
+
     setUpdatingPassword(true);
-    setPasswordError(null);
+    setPasswordFeedback(null);
     setPasswordUpdated(false);
-    const { error } = await supabase.auth.updateUser({ password: newPassword });
-    setUpdatingPassword(false);
-    if (error) {
-      setPasswordError(error.message);
-    } else {
+
+    try {
+      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      if (error) {
+        setPasswordFeedback({ kind: "message", message: error.message });
+        return;
+      }
+
       setPasswordUpdated(true);
       setNewPassword("");
       setTimeout(() => setPasswordUpdated(false), 2000);
+    } catch (error) {
+      setPasswordFeedback({
+        kind: "message",
+        message: error instanceof Error && error.message ? error.message : "Unable to update password. Please try again.",
+      });
+    } finally {
+      setUpdatingPassword(false);
     }
   };
 
@@ -219,16 +235,20 @@ export default function Settings() {
               <input
                 type="password"
                 value={newPassword}
-                onChange={(e) => setNewPassword(e.target.value)}
+                onChange={(e) => {
+                  setNewPassword(e.target.value);
+                  setPasswordFeedback(null);
+                  setPasswordUpdated(false);
+                }}
                 placeholder="••••••••"
                 className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none transition-colors duration-200"
               />
               <p className="text-[11px] text-muted/60 mt-1">{t("settings-password-min")}</p>
             </div>
 
-            {passwordError && (
+            {passwordErrorMessage && (
               <div className="text-red-400 text-[13px] bg-red-400/[0.06] border border-red-400/15 rounded-lg px-4 py-2.5">
-                {passwordError}
+                {passwordErrorMessage}
               </div>
             )}
 
