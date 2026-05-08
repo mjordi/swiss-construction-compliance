@@ -81,6 +81,9 @@ export default function CasesPage() {
   const [sortMode, setSortMode] = useState<CaseSortMode>(() => parseSortMode(searchParams.get("sort")));
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get("q") ?? "");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const shareLinkResetTimerRef = useRef<number | null>(null);
+  const [copiedShareViewKey, setCopiedShareViewKey] = useState<string | null>(null);
+  const [shareLinkCopied, setShareLinkCopied] = useState(false);
   const [checklistsByCase, setChecklistsByCase] = useState<Record<string, FollowUpChecklistState>>({});
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
   const latestFetchIdRef = useRef(0);
@@ -204,6 +207,14 @@ export default function CasesPage() {
   }, [regimeFilter, statusFilter, sortMode, searchTerm, pathname, router, searchParams]);
 
   useEffect(() => {
+    return () => {
+      if (shareLinkResetTimerRef.current !== null) {
+        window.clearTimeout(shareLinkResetTimerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
     const onKeyDown = (event: KeyboardEvent) => {
       if (event.key !== "/") return;
       if (event.metaKey || event.ctrlKey || event.altKey) return;
@@ -303,10 +314,18 @@ export default function CasesPage() {
     [searchScopedCases]
   );
 
-  const hasActiveFilters = useMemo(
-    () => regimeFilter !== "all" || statusFilter !== "all" || searchTerm.trim().length > 0,
-    [regimeFilter, statusFilter, searchTerm]
-  );
+  const shareViewQuery = useMemo(() => {
+    const params = new URLSearchParams();
+
+    if (regimeFilter !== "all") params.set("regime", regimeFilter);
+    if (statusFilter !== "all") params.set("status", statusFilter);
+    if (sortMode !== "nearest-deadline") params.set("sort", sortMode);
+    if (searchTerm.trim()) params.set("q", searchTerm.trim());
+
+    return params.toString();
+  }, [regimeFilter, statusFilter, sortMode, searchTerm]);
+
+  const hasActiveFilters = shareViewQuery.length > 0;
 
   const caseDateValidationError = useMemo(() => {
     if (!formData.contractDate || !formData.discoveryDate) return null;
@@ -380,6 +399,30 @@ export default function CasesPage() {
       return next;
     });
     triggerCasesRefresh();
+  }
+
+  async function copyShareLink() {
+    const url = new URL(window.location.href);
+    url.search = shareViewQuery;
+
+    if (shareLinkResetTimerRef.current !== null) {
+      window.clearTimeout(shareLinkResetTimerRef.current);
+    }
+
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      setCopiedShareViewKey(shareViewQuery);
+      setShareLinkCopied(true);
+      shareLinkResetTimerRef.current = window.setTimeout(() => {
+        setShareLinkCopied(false);
+        setCopiedShareViewKey(null);
+        shareLinkResetTimerRef.current = null;
+      }, 2000);
+    } catch {
+      setShareLinkCopied(false);
+      setCopiedShareViewKey(null);
+      shareLinkResetTimerRef.current = null;
+    }
   }
 
   function clearFilters() {
@@ -534,7 +577,16 @@ export default function CasesPage() {
         </div>
 
         {hasActiveFilters && (
-          <div className="flex justify-end">
+          <div className="flex flex-wrap justify-end gap-2">
+            <button
+              type="button"
+              onClick={copyShareLink}
+              className="px-3 py-1.5 rounded-lg border border-white/[0.12] text-xs font-medium text-cream hover:bg-white/[0.06]"
+            >
+              {shareLinkCopied && copiedShareViewKey === shareViewQuery
+                ? t("cases-share-link-copied")
+                : t("cases-share-link")}
+            </button>
             <button
               type="button"
               onClick={clearFilters}
