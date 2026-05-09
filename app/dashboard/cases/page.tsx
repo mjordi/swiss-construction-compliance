@@ -7,6 +7,7 @@ import PageHeader from "@/components/dashboard/PageHeader";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
+import { normalizeFollowUpChecklistState, toggleFollowUpChecklistState } from "@/lib/cases-checklist";
 import type { Case } from "@/lib/database.types";
 import {
   applyComplianceCaseView,
@@ -23,6 +24,7 @@ import {
   type CaseStatusFilter,
 } from "@/lib/case-timeline";
 import { validateRuegefristInput } from "@/lib/legal-utils";
+import type { TranslationKey } from "@/locales";
 
 const SWISS_CANTONS = [
   "AG","AI","AR","BE","BL","BS","FR","GE","GL","GR",
@@ -84,7 +86,8 @@ export default function CasesPage() {
   const shareLinkResetTimerRef = useRef<number | null>(null);
   const [copiedShareViewKey, setCopiedShareViewKey] = useState<string | null>(null);
   const [shareLinkCopied, setShareLinkCopied] = useState(false);
-  const [checklistsByCase, setChecklistsByCase] = useState<Record<string, FollowUpChecklistState>>({});
+  const [checklistSaveErrorByCase, setChecklistSaveErrorByCase] = useState<Record<string, TranslationKey>>({});
+  const [checklistSavingByCase, setChecklistSavingByCase] = useState<Record<string, boolean>>({});
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
   const latestFetchIdRef = useRef(0);
   const filterStateRef = useRef({
@@ -267,14 +270,22 @@ export default function CasesPage() {
 
   const cases = useMemo(() => buildComplianceCaseTimeline(caseInputs), [caseInputs]);
 
-  // Derive effective checklists: user overrides take precedence over DB defaults
+  // Derive effective checklists by layering persisted checklist state over timeline defaults.
   const effectiveChecklists = useMemo(() => {
+    const persistedByCaseId = new Map(
+      dbCases.map((c) => [c.id, c.checklist as Partial<FollowUpChecklistState> | null | undefined])
+    );
     const result: Record<string, FollowUpChecklistState> = {};
-    for (const c of dbCases) {
-      result[c.id] = checklistsByCase[c.id] ?? (c.checklist as FollowUpChecklistState);
+
+    for (const item of cases) {
+      result[item.id] = normalizeFollowUpChecklistState({
+        ...item.checklistDefaults,
+        ...persistedByCaseId.get(item.id),
+      });
     }
+
     return result;
-  }, [dbCases, checklistsByCase]);
+  }, [cases, dbCases]);
 
   const searchScopedCases = useMemo(() => {
     const filtered = applyComplianceCaseView(cases, regimeFilter, "all", sortMode);
@@ -343,9 +354,62 @@ export default function CasesPage() {
   };
 
   async function toggleChecklistItem(caseId: string, key: FollowUpChecklistKey) {
-    const updated = { ...effectiveChecklists[caseId], [key]: !effectiveChecklists[caseId]?.[key] };
-    setChecklistsByCase((prev) => ({ ...prev, [caseId]: updated }));
-    await supabase.from("cases").update({ checklist: updated, updated_at: new Date().toISOString() }).eq("id", caseId);
+    if (checklistSavingByCase[caseId]) {
+      return;
+    }
+
+    const previous = normalizeFollowUpChecklistState(effectiveChecklists[caseId]);
+    const updated = toggleFollowUpChecklistState(previous, key);
+
+    setChecklistSaveErrorByCase((current) => {
+      if (!(caseId in current)) return current;
+      const next = { ...current };
+      delete next[caseId];
+      return next;
+    });
+    setChecklistSavingByCase((current) => ({ ...current, [caseId]: true }));
+    setDbCases((current) =>
+      current.map((item) =>
+        item.id === caseId
+          ? {
+              ...item,
+              checklist: updated,
+            }
+          : item
+      )
+    );
+
+    try {
+      const { error } = await supabase
+        .from("cases")
+        .update({ checklist: updated, updated_at: new Date().toISOString() })
+        .eq("id", caseId);
+
+      if (error) {
+        throw error;
+      }
+    } catch {
+      setDbCases((current) =>
+        current.map((item) =>
+          item.id === caseId
+            ? {
+                ...item,
+                checklist: previous,
+              }
+            : item
+        )
+      );
+      setChecklistSaveErrorByCase((prev) => ({
+        ...prev,
+        [caseId]: "cases-checklist-save-error",
+      }));
+    } finally {
+      setChecklistSavingByCase((current) => {
+        const next = { ...current };
+        delete next[caseId];
+        return next;
+      });
+    }
   }
 
   function downloadCaseReminder(item: ComplianceCaseViewModel) {
@@ -393,7 +457,14 @@ export default function CasesPage() {
     if (!confirmed) return;
 
     await supabase.from("cases").delete().eq("id", caseId);
-    setChecklistsByCase((prev) => {
+    setChecklistSaveErrorByCase((prev) => {
+      if (!(caseId in prev)) return prev;
+      const next = { ...prev };
+      delete next[caseId];
+      return next;
+    });
+    setChecklistSavingByCase((prev) => {
+      if (!(caseId in prev)) return prev;
       const next = { ...prev };
       delete next[caseId];
       return next;
@@ -669,17 +740,30 @@ export default function CasesPage() {
                     {Object.entries(checklistLabels).map(([key, label]) => {
                       const checklistKey = key as FollowUpChecklistKey;
                       return (
-                        <label key={key} className="flex items-center gap-2 text-sm text-cream">
-                          <input type="checkbox" checked={checklist[checklistKey]} onChange={() => toggleChecklistItem(item.id, checklistKey)} />
+                        <label key={key} className={`flex items-center gap-2 text-sm text-cream ${checklistSavingByCase[item.id] ? "opacity-70" : ""}`}>
+                          <input
+                            type="checkbox"
+                            checked={checklist[checklistKey]}
+                            disabled={Boolean(checklistSavingByCase[item.id])}
+                            onChange={() => toggleChecklistItem(item.id, checklistKey)}
+                          />
                           <span>{label}</span>
                         </label>
                       );
                     })}
+                    {checklistSaveErrorByCase[item.id] && (
+                      <p className="text-xs text-rose-300">{t(checklistSaveErrorByCase[item.id])}</p>
+                    )}
                   </div>
 
                   {isDeadlineReminderIcsExportEligible(item) && (
                     <div className="mt-4 flex justify-end">
-                      <button type="button" onClick={() => downloadCaseReminder(item)} className="rounded-lg border border-white/[0.14] px-3 py-2 text-sm text-cream hover:bg-white/[0.06]">
+                      <button
+                        type="button"
+                        onClick={() => downloadCaseReminder(item)}
+                        disabled={Boolean(checklistSavingByCase[item.id])}
+                        className="rounded-lg border border-white/[0.14] px-3 py-2 text-sm text-cream hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
                         {t("cases-export-ics")}
                       </button>
                     </div>
