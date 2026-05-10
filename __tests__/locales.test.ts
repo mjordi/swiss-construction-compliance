@@ -73,6 +73,7 @@ describe("locales", () => {
       "deadlines-reminder-days",
       "deadlines-share-link",
       "deadlines-share-link-copied",
+      "deadlines-share-link-error",
     ] as const;
 
     for (const [lang, translations] of Object.entries(locales)) {

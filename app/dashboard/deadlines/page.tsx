@@ -81,8 +81,9 @@ export default function DeadlinesPage() {
   const [deadlines, setDeadlines] = useState<Deadline[] | null>(null);
   const [calculatedAcceptanceDate, setCalculatedAcceptanceDate] = useState<string | null>(null);
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([14, 7, 1]);
-  const [shareLinkCopied, setShareLinkCopied] = useState(false);
+  const [shareLinkFeedback, setShareLinkFeedback] = useState<TranslationKey | null>(null);
   const shareLinkResetTimerRef = useRef<number | null>(null);
+  const shareLinkRequestIdRef = useRef(0);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -112,14 +113,24 @@ export default function DeadlinesPage() {
 
   useEffect(() => {
     return () => {
+      shareLinkRequestIdRef.current += 1;
       if (shareLinkResetTimerRef.current !== null) {
         window.clearTimeout(shareLinkResetTimerRef.current);
       }
     };
   }, []);
 
+  function clearShareLinkFeedback() {
+    shareLinkRequestIdRef.current += 1;
+    if (shareLinkResetTimerRef.current !== null) {
+      window.clearTimeout(shareLinkResetTimerRef.current);
+      shareLinkResetTimerRef.current = null;
+    }
+    setShareLinkFeedback(null);
+  }
+
   function calculate() {
-    setShareLinkCopied(false);
+    clearShareLinkFeedback();
     const parsedAcceptanceDate = parseDateInputAsUTC(acceptanceDate);
     if (!parsedAcceptanceDate) {
       setAcceptanceDate("");
@@ -144,7 +155,7 @@ export default function DeadlinesPage() {
   function reset() {
     setAcceptanceDate("");
     setCalculatedAcceptanceDate(null);
-    setShareLinkCopied(false);
+    clearShareLinkFeedback();
     setDeadlines(null);
     const params = new URLSearchParams(window.location.search);
     params.delete("acceptance");
@@ -159,18 +170,26 @@ export default function DeadlinesPage() {
 
     if (shareLinkResetTimerRef.current !== null) {
       window.clearTimeout(shareLinkResetTimerRef.current);
+      shareLinkResetTimerRef.current = null;
     }
+
+    const requestId = shareLinkRequestIdRef.current + 1;
+    shareLinkRequestIdRef.current = requestId;
 
     try {
       await navigator.clipboard.writeText(url.toString());
-      setShareLinkCopied(true);
-      shareLinkResetTimerRef.current = window.setTimeout(() => {
-        setShareLinkCopied(false);
-        shareLinkResetTimerRef.current = null;
-      }, 2000);
+      if (requestId !== shareLinkRequestIdRef.current) return;
+      setShareLinkFeedback("deadlines-share-link-copied");
     } catch {
-      setShareLinkCopied(false);
+      if (requestId !== shareLinkRequestIdRef.current) return;
+      setShareLinkFeedback("deadlines-share-link-error");
     }
+
+    shareLinkResetTimerRef.current = window.setTimeout(() => {
+      if (requestId !== shareLinkRequestIdRef.current) return;
+      setShareLinkFeedback(null);
+      shareLinkResetTimerRef.current = null;
+    }, 2000);
   }
 
   function downloadICS() {
@@ -257,7 +276,7 @@ export default function DeadlinesPage() {
             value={acceptanceDate}
             onChange={(e) => {
               setAcceptanceDate(e.target.value);
-              setShareLinkCopied(false);
+              clearShareLinkFeedback();
             }}
             max={getTodayLocalDateInputValue()}
             className="flex-1 bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-3 text-cream focus:outline-none focus:border-accent/40 transition-colors duration-300 [color-scheme:dark]"
@@ -313,7 +332,7 @@ export default function DeadlinesPage() {
                 onClick={copyShareLink}
                 className="flex items-center gap-2 px-4 py-2 bg-white/[0.03] border border-white/[0.06] hover:border-accent/30 text-muted hover:text-accent text-[13px] font-medium rounded-lg transition-all duration-300"
               >
-                {shareLinkCopied ? t("deadlines-share-link-copied") : t("deadlines-share-link")}
+                {shareLinkFeedback ? t(shareLinkFeedback) : t("deadlines-share-link")}
               </button>
               <button
                 onClick={downloadICS}
