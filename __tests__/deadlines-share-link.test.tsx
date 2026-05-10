@@ -1,8 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const legalUtilsMocks = vi.hoisted(() => ({
-  parseDateInput: vi.fn(),
+  parseDateInputAsUTC: vi.fn(),
   generateDeadlineCalendarICS: vi.fn(),
 }));
 
@@ -26,12 +26,12 @@ vi.mock("@/components/dashboard/PageHeader", () => ({
 vi.mock("@/lib/legal-utils", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/legal-utils")>();
 
-  legalUtilsMocks.parseDateInput.mockImplementation(actual.parseDateInput);
+  legalUtilsMocks.parseDateInputAsUTC.mockImplementation(actual.parseDateInputAsUTC);
   legalUtilsMocks.generateDeadlineCalendarICS.mockImplementation(actual.generateDeadlineCalendarICS);
 
   return {
     ...actual,
-    parseDateInput: legalUtilsMocks.parseDateInput,
+    parseDateInputAsUTC: legalUtilsMocks.parseDateInputAsUTC,
     generateDeadlineCalendarICS: legalUtilsMocks.generateDeadlineCalendarICS,
   };
 });
@@ -44,9 +44,10 @@ describe("deadlines share-link restoration", () => {
   const revokeObjectURL = vi.fn();
 
   beforeEach(() => {
+    vi.useRealTimers();
     writeText.mockReset();
     writeText.mockResolvedValue(undefined);
-    legalUtilsMocks.parseDateInput.mockClear();
+    legalUtilsMocks.parseDateInputAsUTC.mockClear();
     legalUtilsMocks.generateDeadlineCalendarICS.mockClear();
     createObjectURL.mockClear();
     revokeObjectURL.mockClear();
@@ -63,6 +64,10 @@ describe("deadlines share-link restoration", () => {
       value: revokeObjectURL,
     });
     window.history.replaceState(null, "", "/dashboard/deadlines");
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("hydrates shared acceptance links after the initial render", async () => {
@@ -104,6 +109,27 @@ describe("deadlines share-link restoration", () => {
     });
   });
 
+  it("shows localized feedback when copying the shared deadline link fails", async () => {
+    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+    writeText.mockRejectedValueOnce(new Error("clipboard denied"));
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("deadlines-result-title")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "deadlines-share-link" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "deadlines-share-link-error" })).toBeTruthy();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "deadlines-share-link" })).toBeTruthy();
+    }, { timeout: 3000 });
+  });
+
   it("copies the shared deadline link and shows localized feedback", async () => {
     window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
 
@@ -121,11 +147,76 @@ describe("deadlines share-link restoration", () => {
     });
 
     expect(screen.getByRole("button", { name: "deadlines-share-link-copied" })).toBeTruthy();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "deadlines-share-link" })).toBeTruthy();
+    }, { timeout: 3000 });
+  });
+
+  it("clears pending share-link feedback when the input changes", async () => {
+    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("deadlines-result-title")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "deadlines-share-link" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "deadlines-share-link-copied" })).toBeTruthy();
+    });
+
+    fireEvent.change(screen.getByLabelText("deadlines-input-label"), {
+      target: { value: "2026-05-01" },
+    });
+
+    expect(screen.getByRole("button", { name: "deadlines-share-link" })).toBeTruthy();
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "deadlines-share-link" })).toBeTruthy();
+    }, { timeout: 3000 });
+  });
+
+  it("ignores in-flight clipboard results after the input changes", async () => {
+    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+    let resolveWrite: (() => void) | undefined;
+    writeText.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveWrite = resolve;
+        })
+    );
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("deadlines-result-title")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "deadlines-share-link" }));
+
+    fireEvent.change(screen.getByLabelText("deadlines-input-label"), {
+      target: { value: "2026-05-01" },
+    });
+
+    if (resolveWrite) {
+      resolveWrite();
+    }
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30");
+    });
+
+    expect(screen.getByRole("button", { name: "deadlines-share-link" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "deadlines-share-link-copied" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "deadlines-share-link-error" })).toBeNull();
   });
 
   it("keeps the exported acceptance-date label on the selected calendar day", async () => {
     window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
-    legalUtilsMocks.parseDateInput.mockImplementationOnce((value: string) => {
+    legalUtilsMocks.parseDateInputAsUTC.mockImplementationOnce((value: string) => {
       if (value === "2026-04-30") {
         return new Date("2026-04-29T22:00:00.000Z");
       }
