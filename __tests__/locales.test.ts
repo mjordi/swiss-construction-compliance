@@ -83,6 +83,20 @@ describe("locales", () => {
     }
   });
 
+  it("includes cases share-link localization keys in every locale", () => {
+    const requiredCasesShareKeys = [
+      "cases-share-link",
+      "cases-share-link-copied",
+      "cases-share-link-error",
+    ] as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      for (const key of requiredCasesShareKeys) {
+        expect(translations[key], `Locale '${lang}' missing cases share-link key '${key}'`).toBeDefined();
+      }
+    }
+  });
+
   it("includes login localization and feedback keys in every locale", () => {
     const requiredLoginKeys = [
       "login-subtitle",

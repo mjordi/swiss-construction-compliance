@@ -103,6 +103,67 @@ describe("cases share-link action", () => {
     expect(screen.getByRole("button", { name: "cases-share-link" })).toBeTruthy();
   });
 
+  it("shows localized feedback when copying the shared view link fails", async () => {
+    currentSearch = "regime=new&status=warning&sort=most-urgent&q=alpha";
+    writeText.mockRejectedValueOnce(new Error("clipboard denied"));
+
+    render(<CasesPage />);
+
+    await waitFor(() => {
+      expect((screen.getByLabelText("cases-search-label") as HTMLInputElement).value).toBe("alpha");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "cases-share-link" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "cases-share-link-error" })).toBeTruthy();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "cases-share-link" })).toBeTruthy();
+    }, { timeout: 3000 });
+  });
+
+  it("ignores in-flight clipboard results after the shared view changes", async () => {
+    currentSearch = "regime=new&status=warning&sort=most-urgent&q=alpha";
+    let resolveWrite: (() => void) | undefined;
+    writeText.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveWrite = resolve;
+        })
+    );
+
+    const { rerender } = render(<CasesPage />);
+
+    await waitFor(() => {
+      expect((screen.getByLabelText("cases-search-label") as HTMLInputElement).value).toBe("alpha");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "cases-share-link" }));
+
+    currentSearch = "status=expired&q=beta";
+    rerender(<CasesPage />);
+
+    await waitFor(() => {
+      expect((screen.getByLabelText("cases-search-label") as HTMLInputElement).value).toBe("beta");
+    });
+
+    if (resolveWrite) {
+      resolveWrite();
+    }
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        "http://localhost:3000/dashboard/cases?regime=new&status=warning&sort=most-urgent&q=alpha"
+      );
+    });
+
+    expect(screen.getByRole("button", { name: "cases-share-link" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "cases-share-link-copied" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "cases-share-link-error" })).toBeNull();
+  });
+
   it("keeps sharing and reset controls available for sort-only views", async () => {
     currentSearch = "sort=most-urgent";
 
