@@ -83,9 +83,9 @@ export default function CasesPage() {
   const [sortMode, setSortMode] = useState<CaseSortMode>(() => parseSortMode(searchParams.get("sort")));
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get("q") ?? "");
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const [shareLinkFeedback, setShareLinkFeedback] = useState<TranslationKey | null>(null);
   const shareLinkResetTimerRef = useRef<number | null>(null);
-  const [copiedShareViewKey, setCopiedShareViewKey] = useState<string | null>(null);
-  const [shareLinkCopied, setShareLinkCopied] = useState(false);
+  const shareLinkRequestIdRef = useRef(0);
   const [checklistSaveErrorByCase, setChecklistSaveErrorByCase] = useState<Record<string, TranslationKey>>({});
   const [checklistSavingByCase, setChecklistSavingByCase] = useState<Record<string, boolean>>({});
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
@@ -211,6 +211,7 @@ export default function CasesPage() {
 
   useEffect(() => {
     return () => {
+      shareLinkRequestIdRef.current += 1;
       if (shareLinkResetTimerRef.current !== null) {
         window.clearTimeout(shareLinkResetTimerRef.current);
       }
@@ -337,6 +338,19 @@ export default function CasesPage() {
   }, [regimeFilter, statusFilter, sortMode, searchTerm]);
 
   const hasActiveFilters = shareViewQuery.length > 0;
+
+  function clearShareLinkFeedback() {
+    shareLinkRequestIdRef.current += 1;
+    if (shareLinkResetTimerRef.current !== null) {
+      window.clearTimeout(shareLinkResetTimerRef.current);
+      shareLinkResetTimerRef.current = null;
+    }
+    setShareLinkFeedback(null);
+  }
+
+  useEffect(() => {
+    clearShareLinkFeedback();
+  }, [shareViewQuery]);
 
   const caseDateValidationError = useMemo(() => {
     if (!formData.contractDate || !formData.discoveryDate) return null;
@@ -478,22 +492,26 @@ export default function CasesPage() {
 
     if (shareLinkResetTimerRef.current !== null) {
       window.clearTimeout(shareLinkResetTimerRef.current);
+      shareLinkResetTimerRef.current = null;
     }
+
+    const requestId = shareLinkRequestIdRef.current + 1;
+    shareLinkRequestIdRef.current = requestId;
 
     try {
       await navigator.clipboard.writeText(url.toString());
-      setCopiedShareViewKey(shareViewQuery);
-      setShareLinkCopied(true);
-      shareLinkResetTimerRef.current = window.setTimeout(() => {
-        setShareLinkCopied(false);
-        setCopiedShareViewKey(null);
-        shareLinkResetTimerRef.current = null;
-      }, 2000);
+      if (requestId !== shareLinkRequestIdRef.current) return;
+      setShareLinkFeedback("cases-share-link-copied");
     } catch {
-      setShareLinkCopied(false);
-      setCopiedShareViewKey(null);
-      shareLinkResetTimerRef.current = null;
+      if (requestId !== shareLinkRequestIdRef.current) return;
+      setShareLinkFeedback("cases-share-link-error");
     }
+
+    shareLinkResetTimerRef.current = window.setTimeout(() => {
+      if (requestId !== shareLinkRequestIdRef.current) return;
+      setShareLinkFeedback(null);
+      shareLinkResetTimerRef.current = null;
+    }, 2000);
   }
 
   function clearFilters() {
@@ -654,9 +672,7 @@ export default function CasesPage() {
               onClick={copyShareLink}
               className="px-3 py-1.5 rounded-lg border border-white/[0.12] text-xs font-medium text-cream hover:bg-white/[0.06]"
             >
-              {shareLinkCopied && copiedShareViewKey === shareViewQuery
-                ? t("cases-share-link-copied")
-                : t("cases-share-link")}
+              {shareLinkFeedback ? t(shareLinkFeedback) : t("cases-share-link")}
             </button>
             <button
               type="button"
