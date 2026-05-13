@@ -39,6 +39,7 @@ describe("locales", () => {
       "vault-empty-action-show-archived",
       "vault-new-project",
       "vault-create-project",
+      "vault-open-in-cases",
     ] as const;
 
     for (const [lang, translations] of Object.entries(locales)) {

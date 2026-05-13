@@ -8,7 +8,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { getSupabase } from "@/lib/supabase";
 import type { Case, Protocol } from "@/lib/database.types";
 import { buildComplianceCaseTimeline } from "@/lib/case-timeline";
-import { getVaultEmptyState, type VaultEmptyStateAction, type VaultTab } from "@/lib/vault";
+import { buildVaultProjectCasesHref, getVaultEmptyState, type VaultEmptyStateAction, type VaultTab } from "@/lib/vault";
 import type { TranslationKey } from "@/locales";
 
 interface VaultProjectCard {
@@ -20,12 +20,19 @@ interface VaultProjectCard {
   updated: string;
   updatedAt: number;
   archived: boolean;
+  prefillTriage: boolean;
 }
 
 const statusLabelKey: Record<VaultProjectCard["status"], TranslationKey> = {
   active: "vault-status-active",
   review: "vault-status-review",
   archived: "vault-status-archived",
+};
+
+const statusClass: Record<VaultProjectCard["status"], string> = {
+  active: "text-emerald-300 bg-emerald-400/10",
+  review: "text-yellow-300 bg-yellow-400/10",
+  archived: "text-slate-300 bg-white/10",
 };
 
 function interpolateTranslation(template: string, params?: Record<string, string>) {
@@ -118,12 +125,16 @@ export default function TechVault() {
       }))
     );
 
-    const statusByCase = new Map(
+    const timelineStateByCase = new Map<string, { status: "active" | "review"; prefillTriage: boolean }>(
       timeline.map((t) => [
         t.id,
-        t.status === "warning" || t.status === "urgent" || t.status === "expired" || t.status === "immediate-notice"
-          ? "review"
-          : "active",
+        {
+          status:
+            t.status === "warning" || t.status === "urgent" || t.status === "expired" || t.status === "immediate-notice"
+              ? "review"
+              : "active",
+          prefillTriage: t.status === "urgent" || t.status === "expired" || t.status === "immediate-notice",
+        },
       ])
     );
 
@@ -138,15 +149,17 @@ export default function TechVault() {
       const completed = checklistValues.filter(Boolean).length;
       const total = checklistValues.length || 1;
       const archived = c.status === "archived";
+      const timelineState = timelineStateByCase.get(c.id);
       return {
         id: c.id,
         name: c.project_name,
-        status: archived ? "archived" : ((statusByCase.get(c.id) as "active" | "review" | undefined) ?? "active"),
+        status: archived ? "archived" : (timelineState?.status ?? "active"),
         docs: docsByCase[c.id] ?? 0,
         compliance: Math.round((completed / total) * 100),
         updated: formatRelativeUpdate(c.updated_at, lang),
         updatedAt: new Date(c.updated_at).getTime(),
         archived,
+        prefillTriage: !archived && Boolean(timelineState?.prefillTriage),
       };
     });
 
@@ -313,7 +326,7 @@ export default function TechVault() {
                       <FileText className="w-4 h-4 text-slate-500" />
                       <span>{project.docs} {t("vault-docs-label")}</span>
                     </div>
-                    <span className={`text-xs px-2 py-1 rounded-md ${project.status === "review" ? "text-yellow-300 bg-yellow-400/10" : "text-emerald-300 bg-emerald-400/10"}`}>
+                    <span className={`text-xs px-2 py-1 rounded-md ${statusClass[project.status]}`}>
                       {t(statusLabelKey[project.status])}
                     </span>
                   </div>
@@ -322,6 +335,16 @@ export default function TechVault() {
                     <ShieldCheck className="w-3 h-3" />
                     <span className="font-bold">{project.compliance}%</span>
                   </div>
+
+                  <a
+                    href={buildVaultProjectCasesHref({
+                      projectName: project.name,
+                      prefillTriage: project.prefillTriage,
+                    })}
+                    className="mt-6 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white transition hover:border-accent/40 hover:bg-accent/10 hover:text-accent"
+                  >
+                    {t("vault-open-in-cases")}
+                  </a>
                 </motion.div>
               ))}
 

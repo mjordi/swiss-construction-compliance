@@ -417,6 +417,7 @@ export const de = {
   "vault-empty-action-show-archived": "Archivierte Projekte anzeigen",
   "vault-new-project": "Neues Projekt",
   "vault-create-project": "Neues Projekt erstellen",
+  "vault-open-in-cases": "In Fälle öffnen",
 };
 
 export const fr = {
@@ -836,6 +837,7 @@ export const fr = {
   "vault-empty-action-show-archived": "Voir les projets archivés",
   "vault-new-project": "Nouveau projet",
   "vault-create-project": "Créer un nouveau projet",
+  "vault-open-in-cases": "Ouvrir dans les dossiers",
 };
 
 export const it = {
@@ -1255,6 +1257,7 @@ export const it = {
   "vault-empty-action-show-archived": "Mostra progetti archiviati",
   "vault-new-project": "Nuovo progetto",
   "vault-create-project": "Crea nuovo progetto",
+  "vault-open-in-cases": "Apri nei casi",
 };
 
 export const en = {
@@ -1680,6 +1683,7 @@ export const en = {
   "vault-empty-action-show-archived": "View archived projects",
   "vault-new-project": "New Project",
   "vault-create-project": "Create New Project",
+  "vault-open-in-cases": "Open in Cases",
 };
 
 export type TranslationKey = keyof typeof de;
