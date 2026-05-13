@@ -18,6 +18,30 @@ export interface VaultEmptyStateInput {
   hasArchivedProjects?: boolean;
 }
 
+export interface VaultProjectCasesHrefInput {
+  projectName: string;
+  prefillTriage?: boolean;
+}
+
+export function buildVaultProjectCasesHref({
+  projectName,
+  prefillTriage = false,
+}: VaultProjectCasesHrefInput): string {
+  const params = new URLSearchParams();
+  const normalizedProjectName = projectName.trim();
+
+  if (normalizedProjectName) {
+    params.set("q", normalizedProjectName);
+  }
+
+  if (prefillTriage) {
+    params.set("status", "triage");
+  }
+
+  const query = params.toString();
+  return query ? `/dashboard/cases?${query}` : "/dashboard/cases";
+}
+
 export function getVaultEmptyState({
   activeTab,
   query,

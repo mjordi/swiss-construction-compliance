@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { getVaultEmptyState } from "../lib/vault";
+import { buildVaultProjectCasesHref, getVaultEmptyState } from "../lib/vault";
 
 describe("getVaultEmptyState", () => {
   it("prefers a clear-search action when the current query yields no results", () => {
@@ -63,5 +63,42 @@ describe("getVaultEmptyState", () => {
     expect(projectsState.bodyKey).toBe("vault-empty-projects-body-no-archived");
     expect(projectsState.action).toBeNull();
     expect(projectsState.actionLabelKey).toBeNull();
+  });
+});
+
+describe("buildVaultProjectCasesHref", () => {
+  it("links active projects into the cases search view by project name", () => {
+    expect(
+      buildVaultProjectCasesHref({
+        projectName: "Alpine Tower",
+      })
+    ).toBe("/dashboard/cases?q=Alpine+Tower");
+  });
+
+  it("adds the triage filter only when the project needs triage follow-up", () => {
+    expect(
+      buildVaultProjectCasesHref({
+        projectName: "Riverside Bridge",
+        prefillTriage: true,
+      })
+    ).toBe("/dashboard/cases?q=Riverside+Bridge&status=triage");
+  });
+
+  it("keeps warning-style review links scoped to the project without forcing triage", () => {
+    expect(
+      buildVaultProjectCasesHref({
+        projectName: "Harbor Retrofit",
+        prefillTriage: false,
+      })
+    ).toBe("/dashboard/cases?q=Harbor+Retrofit");
+  });
+
+  it("falls back to the base cases route when the project name is blank", () => {
+    expect(
+      buildVaultProjectCasesHref({
+        projectName: "   ",
+        prefillTriage: true,
+      })
+    ).toBe("/dashboard/cases?status=triage");
   });
 });
