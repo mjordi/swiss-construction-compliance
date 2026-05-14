@@ -84,12 +84,14 @@ export default function CasesPage() {
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get("q") ?? "");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [shareLinkFeedback, setShareLinkFeedback] = useState<TranslationKey | null>(null);
+  const [initialLoadError, setInitialLoadError] = useState<TranslationKey | null>(null);
   const shareLinkResetTimerRef = useRef<number | null>(null);
   const shareLinkRequestIdRef = useRef(0);
   const [checklistSaveErrorByCase, setChecklistSaveErrorByCase] = useState<Record<string, TranslationKey>>({});
   const [checklistSavingByCase, setChecklistSavingByCase] = useState<Record<string, boolean>>({});
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
   const latestFetchIdRef = useRef(0);
+  const hasLoadedInitialCasesRef = useRef(false);
   const filterStateRef = useRef({
     regimeFilter,
     statusFilter,
@@ -100,41 +102,68 @@ export default function CasesPage() {
 
   const runCasesRefresh = useCallback(async (fetchId: number) => {
     if (!user) {
+      hasLoadedInitialCasesRef.current = false;
       setDbCases([]);
       setProtocolCounts({});
+      setInitialLoadError(null);
       setLoading(false);
       return;
     }
 
-    const [casesResult, protocolsResult] = await Promise.all([
-      supabase
-        .from("cases")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("protocols")
-        .select("case_id")
-        .eq("user_id", user.id)
-        .not("case_id", "is", null),
-    ]);
+    try {
+      const [casesResult, protocolsResult] = await Promise.all([
+        supabase
+          .from("cases")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("protocols")
+          .select("case_id")
+          .eq("user_id", user.id)
+          .not("case_id", "is", null),
+      ]);
 
-    if (fetchId !== latestFetchIdRef.current) return;
+      if (fetchId !== latestFetchIdRef.current) return;
 
-    if (casesResult.data) setDbCases(casesResult.data as Case[]);
-    if (protocolsResult.data) {
-      const counts: Record<string, number> = {};
-      for (const p of protocolsResult.data) {
-        if (p.case_id) counts[p.case_id] = (counts[p.case_id] || 0) + 1;
+      if (casesResult.error || protocolsResult.error) {
+        if (!hasLoadedInitialCasesRef.current) {
+          setDbCases([]);
+          setProtocolCounts({});
+          setInitialLoadError("cases-load-error");
+        }
+        setLoading(false);
+        return;
       }
-      setProtocolCounts(counts);
+
+      hasLoadedInitialCasesRef.current = true;
+      setInitialLoadError(null);
+      setDbCases((casesResult.data as Case[]) ?? []);
+      if (protocolsResult.data) {
+        const counts: Record<string, number> = {};
+        for (const p of protocolsResult.data) {
+          if (p.case_id) counts[p.case_id] = (counts[p.case_id] || 0) + 1;
+        }
+        setProtocolCounts(counts);
+      } else {
+        setProtocolCounts({});
+      }
+      setLoading(false);
+    } catch {
+      if (fetchId !== latestFetchIdRef.current) return;
+      if (!hasLoadedInitialCasesRef.current) {
+        setDbCases([]);
+        setProtocolCounts({});
+        setInitialLoadError("cases-load-error");
+      }
+      setLoading(false);
     }
-    setLoading(false);
   }, [user, supabase]);
 
   const triggerCasesRefresh = useCallback(() => {
     const fetchId = ++latestFetchIdRef.current;
     setLoading(true);
+    setInitialLoadError(null);
     void runCasesRefresh(fetchId);
   }, [runCasesRefresh]);
 
@@ -521,7 +550,7 @@ export default function CasesPage() {
     setSearchTerm("");
   }
 
-  if (loading) {
+  if (loading && !hasLoadedInitialCasesRef.current) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-6 h-6 animate-spin text-accent" />
@@ -686,7 +715,23 @@ export default function CasesPage() {
       </section>
 
       {/* Cases list */}
-      {visibleCases.length === 0 ? (
+      {initialLoadError ? (
+        <div
+          role="alert"
+          className="rounded-2xl border border-red-500/30 bg-red-500/[0.08] px-5 py-4 text-sm text-red-100"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p>{t(initialLoadError)}</p>
+            <button
+              type="button"
+              onClick={triggerCasesRefresh}
+              className="rounded-lg border border-red-200/30 px-4 py-2 font-medium text-red-50 hover:bg-red-500/[0.12]"
+            >
+              {t("cases-load-retry")}
+            </button>
+          </div>
+        </div>
+      ) : visibleCases.length === 0 ? (
         hasActiveFilters ? (
           <div className="text-center py-16 text-muted space-y-4">
             <p>{t("cases-no-results")}</p>

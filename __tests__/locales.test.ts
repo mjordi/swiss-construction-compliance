@@ -84,11 +84,13 @@ describe("locales", () => {
     }
   });
 
-  it("includes cases share-link localization keys in every locale", () => {
+  it("includes cases share-link and load-error localization keys in every locale", () => {
     const requiredCasesShareKeys = [
       "cases-share-link",
       "cases-share-link-copied",
       "cases-share-link-error",
+      "cases-load-error",
+      "cases-load-retry",
     ] as const;
 
     for (const [lang, translations] of Object.entries(locales)) {
