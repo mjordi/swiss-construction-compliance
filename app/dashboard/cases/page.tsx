@@ -84,6 +84,7 @@ export default function CasesPage() {
   const [searchTerm, setSearchTerm] = useState(() => searchParams.get("q") ?? "");
   const searchInputRef = useRef<HTMLInputElement>(null);
   const [shareLinkFeedback, setShareLinkFeedback] = useState<TranslationKey | null>(null);
+  const [initialLoadError, setInitialLoadError] = useState<TranslationKey | null>(null);
   const shareLinkResetTimerRef = useRef<number | null>(null);
   const shareLinkRequestIdRef = useRef(0);
   const [checklistSaveErrorByCase, setChecklistSaveErrorByCase] = useState<Record<string, TranslationKey>>({});
@@ -102,6 +103,7 @@ export default function CasesPage() {
     if (!user) {
       setDbCases([]);
       setProtocolCounts({});
+      setInitialLoadError(null);
       setLoading(false);
       return;
     }
@@ -121,13 +123,24 @@ export default function CasesPage() {
 
     if (fetchId !== latestFetchIdRef.current) return;
 
-    if (casesResult.data) setDbCases(casesResult.data as Case[]);
+    if (casesResult.error || protocolsResult.error) {
+      setDbCases([]);
+      setProtocolCounts({});
+      setInitialLoadError("cases-load-error");
+      setLoading(false);
+      return;
+    }
+
+    setInitialLoadError(null);
+    setDbCases((casesResult.data as Case[]) ?? []);
     if (protocolsResult.data) {
       const counts: Record<string, number> = {};
       for (const p of protocolsResult.data) {
         if (p.case_id) counts[p.case_id] = (counts[p.case_id] || 0) + 1;
       }
       setProtocolCounts(counts);
+    } else {
+      setProtocolCounts({});
     }
     setLoading(false);
   }, [user, supabase]);
@@ -135,6 +148,7 @@ export default function CasesPage() {
   const triggerCasesRefresh = useCallback(() => {
     const fetchId = ++latestFetchIdRef.current;
     setLoading(true);
+    setInitialLoadError(null);
     void runCasesRefresh(fetchId);
   }, [runCasesRefresh]);
 
@@ -686,7 +700,23 @@ export default function CasesPage() {
       </section>
 
       {/* Cases list */}
-      {visibleCases.length === 0 ? (
+      {initialLoadError ? (
+        <div
+          role="alert"
+          className="rounded-2xl border border-red-500/30 bg-red-500/[0.08] px-5 py-4 text-sm text-red-100"
+        >
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <p>{t(initialLoadError)}</p>
+            <button
+              type="button"
+              onClick={triggerCasesRefresh}
+              className="rounded-lg border border-red-200/30 px-4 py-2 font-medium text-red-50 hover:bg-red-500/[0.12]"
+            >
+              {t("cases-load-retry")}
+            </button>
+          </div>
+        </div>
+      ) : visibleCases.length === 0 ? (
         hasActiveFilters ? (
           <div className="text-center py-16 text-muted space-y-4">
             <p>{t("cases-no-results")}</p>
