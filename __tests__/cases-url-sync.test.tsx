@@ -3,12 +3,16 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 let currentSearch = "";
 const replaceMock = vi.fn();
+const deleteCaseEqMock = vi.fn();
 
 type CasesResponse = { data: Array<Record<string, unknown>> | null; error: { message: string } | null };
 type ProtocolsResponse = { data: Array<{ case_id: string | null }> | null; error: { message: string } | null };
 
-let caseResponseFactory: () => CasesResponse;
-let protocolResponseFactory: () => ProtocolsResponse;
+type CasesFactoryResult = CasesResponse | Promise<CasesResponse> | never;
+type ProtocolsFactoryResult = ProtocolsResponse | Promise<ProtocolsResponse> | never;
+
+let caseResponseFactory: () => CasesFactoryResult;
+let protocolResponseFactory: () => ProtocolsFactoryResult;
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/cases",
@@ -90,8 +94,11 @@ vi.mock("@/lib/supabase", () => ({
         return {
           select: () => ({
             eq: () => ({
-              order: () => Promise.resolve(caseResponseFactory()),
+              order: () => Promise.resolve().then(() => caseResponseFactory()),
             }),
+          }),
+          delete: () => ({
+            eq: deleteCaseEqMock,
           }),
         };
       }
@@ -100,7 +107,7 @@ vi.mock("@/lib/supabase", () => ({
         return {
           select: () => ({
             eq: () => ({
-              not: () => Promise.resolve(protocolResponseFactory()),
+              not: () => Promise.resolve().then(() => protocolResponseFactory()),
             }),
           }),
         };
@@ -132,6 +139,8 @@ describe("cases filter URL synchronization", () => {
   beforeEach(() => {
     currentSearch = "";
     replaceMock.mockReset();
+    deleteCaseEqMock.mockReset();
+    deleteCaseEqMock.mockResolvedValue({ error: null });
     caseResponseFactory = () => ({ data: [], error: null });
     protocolResponseFactory = () => ({ data: [], error: null });
   });
@@ -182,6 +191,27 @@ describe("cases filter URL synchronization", () => {
     expect(screen.queryByText("cases-no-cases")).toBeNull();
   });
 
+  it("renders an initial load error with retry when the linked protocols query fails", async () => {
+    caseResponseFactory = () => ({ data: [successCase()], error: null });
+    protocolResponseFactory = () => ({ data: null, error: { message: "protocols boom" } });
+
+    render(<CasesPage />);
+
+    expect(await screen.findByText("cases-load-error")).toBeTruthy();
+    expect(screen.getByText("cases-load-retry")).toBeTruthy();
+    expect(screen.queryByText("Alpine Tower")).toBeNull();
+  });
+
+  it("renders an initial load error when a fetch rejects instead of returning an error payload", async () => {
+    caseResponseFactory = () => Promise.reject(new Error("network down"));
+    protocolResponseFactory = () => ({ data: [], error: null });
+
+    render(<CasesPage />);
+
+    expect(await screen.findByText("cases-load-error")).toBeTruthy();
+    expect(screen.getByText("cases-load-retry")).toBeTruthy();
+  });
+
   it("retries through the existing refresh path and renders normal content after recovery", async () => {
     let caseFetchCount = 0;
     caseResponseFactory = () => {
@@ -205,5 +235,42 @@ describe("cases filter URL synchronization", () => {
     });
     expect(screen.getByText("Alpine Tower")).toBeTruthy();
     expect(screen.getByText(/1 cases-protocols/)).toBeTruthy();
+  });
+
+  it("keeps the already-rendered list visible when a later refresh fails after a successful load", async () => {
+    let caseFetchCount = 0;
+    caseResponseFactory = () => {
+      caseFetchCount += 1;
+      if (caseFetchCount === 1) {
+        return { data: [successCase()], error: null };
+      }
+      return { data: null, error: { message: "refresh failed" } };
+    };
+
+    let protocolFetchCount = 0;
+    protocolResponseFactory = () => {
+      protocolFetchCount += 1;
+      if (protocolFetchCount === 1) {
+        return { data: [{ case_id: "case-1" }], error: null };
+      }
+      return { data: null, error: { message: "refresh failed" } };
+    };
+
+    const confirmMock = vi.spyOn(window, "confirm").mockReturnValue(true);
+
+    render(<CasesPage />);
+
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+
+    fireEvent.click(screen.getByTitle("cases-delete"));
+
+    await waitFor(() => {
+      expect(deleteCaseEqMock).toHaveBeenCalledWith("id", "case-1");
+    });
+
+    expect(screen.getByText("Alpine Tower")).toBeTruthy();
+    expect(screen.queryByText("cases-load-error")).toBeNull();
+
+    confirmMock.mockRestore();
   });
 });

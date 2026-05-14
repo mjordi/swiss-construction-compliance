@@ -91,6 +91,7 @@ export default function CasesPage() {
   const [checklistSavingByCase, setChecklistSavingByCase] = useState<Record<string, boolean>>({});
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
   const latestFetchIdRef = useRef(0);
+  const hasLoadedInitialCasesRef = useRef(false);
   const filterStateRef = useRef({
     regimeFilter,
     statusFilter,
@@ -101,6 +102,7 @@ export default function CasesPage() {
 
   const runCasesRefresh = useCallback(async (fetchId: number) => {
     if (!user) {
+      hasLoadedInitialCasesRef.current = false;
       setDbCases([]);
       setProtocolCounts({});
       setInitialLoadError(null);
@@ -108,41 +110,54 @@ export default function CasesPage() {
       return;
     }
 
-    const [casesResult, protocolsResult] = await Promise.all([
-      supabase
-        .from("cases")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("created_at", { ascending: false }),
-      supabase
-        .from("protocols")
-        .select("case_id")
-        .eq("user_id", user.id)
-        .not("case_id", "is", null),
-    ]);
+    try {
+      const [casesResult, protocolsResult] = await Promise.all([
+        supabase
+          .from("cases")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("created_at", { ascending: false }),
+        supabase
+          .from("protocols")
+          .select("case_id")
+          .eq("user_id", user.id)
+          .not("case_id", "is", null),
+      ]);
 
-    if (fetchId !== latestFetchIdRef.current) return;
+      if (fetchId !== latestFetchIdRef.current) return;
 
-    if (casesResult.error || protocolsResult.error) {
-      setDbCases([]);
-      setProtocolCounts({});
-      setInitialLoadError("cases-load-error");
-      setLoading(false);
-      return;
-    }
-
-    setInitialLoadError(null);
-    setDbCases((casesResult.data as Case[]) ?? []);
-    if (protocolsResult.data) {
-      const counts: Record<string, number> = {};
-      for (const p of protocolsResult.data) {
-        if (p.case_id) counts[p.case_id] = (counts[p.case_id] || 0) + 1;
+      if (casesResult.error || protocolsResult.error) {
+        if (!hasLoadedInitialCasesRef.current) {
+          setDbCases([]);
+          setProtocolCounts({});
+          setInitialLoadError("cases-load-error");
+        }
+        setLoading(false);
+        return;
       }
-      setProtocolCounts(counts);
-    } else {
-      setProtocolCounts({});
+
+      hasLoadedInitialCasesRef.current = true;
+      setInitialLoadError(null);
+      setDbCases((casesResult.data as Case[]) ?? []);
+      if (protocolsResult.data) {
+        const counts: Record<string, number> = {};
+        for (const p of protocolsResult.data) {
+          if (p.case_id) counts[p.case_id] = (counts[p.case_id] || 0) + 1;
+        }
+        setProtocolCounts(counts);
+      } else {
+        setProtocolCounts({});
+      }
+      setLoading(false);
+    } catch {
+      if (fetchId !== latestFetchIdRef.current) return;
+      if (!hasLoadedInitialCasesRef.current) {
+        setDbCases([]);
+        setProtocolCounts({});
+        setInitialLoadError("cases-load-error");
+      }
+      setLoading(false);
     }
-    setLoading(false);
   }, [user, supabase]);
 
   const triggerCasesRefresh = useCallback(() => {
@@ -535,7 +550,7 @@ export default function CasesPage() {
     setSearchTerm("");
   }
 
-  if (loading) {
+  if (loading && !hasLoadedInitialCasesRef.current) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="w-6 h-6 animate-spin text-accent" />
