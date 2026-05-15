@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { HTMLAttributes, ReactNode } from "react";
 
 let caseResponseFactory: () =>
@@ -8,26 +8,49 @@ let caseResponseFactory: () =>
 let caseResponsesQueue: Array<{ data: Array<Record<string, unknown>> | null; error: { message: string } | null }>;
 let allowRecovery = false;
 let lastComplianceRecordCaseId: string | null | undefined;
+let insertedProtocols: Array<Record<string, unknown>>;
+let signaturePadIsEmpty = true;
+let signaturePadEndStrokeHandler: (() => void) | null = null;
 const authState = { user: { id: "user-1" } };
 const supabaseMock = {
   from: (table: string) => {
-    if (table !== "cases") {
-      throw new Error(`Unexpected table ${table}`);
-    }
-
-    return {
-      select: () => ({
-        eq: () => ({
-          order: () => {
-            if (caseResponsesQueue.length > 0) {
-              return Promise.resolve(caseResponsesQueue.shift());
+    if (table === "cases") {
+      return {
+        select: (columns?: string) => ({
+          eq: () => {
+            if (columns === "checklist") {
+              return {
+                single: () => Promise.resolve({ data: { checklist: null }, error: null }),
+              };
             }
 
-            return Promise.resolve().then(() => caseResponseFactory());
+            return {
+              order: () => {
+                if (caseResponsesQueue.length > 0) {
+                  return Promise.resolve(caseResponsesQueue.shift());
+                }
+
+                return Promise.resolve().then(() => caseResponseFactory());
+              },
+            };
           },
         }),
-      }),
-    };
+        update: () => ({
+          eq: () => Promise.resolve({ error: null }),
+        }),
+      };
+    }
+
+    if (table === "protocols") {
+      return {
+        insert: (payload: Record<string, unknown>) => {
+          insertedProtocols.push(payload);
+          return Promise.resolve({ error: null });
+        },
+      };
+    }
+
+    throw new Error(`Unexpected table ${table}`);
   },
 };
 
@@ -51,12 +74,22 @@ vi.mock("framer-motion", () => ({
 vi.mock("signature_pad", () => ({
   default: class SignaturePadMock {
     isEmpty() {
-      return true;
+      return signaturePadIsEmpty;
     }
-    addEventListener() {}
-    removeEventListener() {}
+    addEventListener(eventName: string, callback: () => void) {
+      if (eventName === "endStroke") {
+        signaturePadEndStrokeHandler = callback;
+      }
+    }
+    removeEventListener(eventName: string) {
+      if (eventName === "endStroke") {
+        signaturePadEndStrokeHandler = null;
+      }
+    }
     off() {}
-    clear() {}
+    clear() {
+      signaturePadIsEmpty = true;
+    }
     toDataURL() {
       return "data:image/png;base64,mock";
     }
@@ -124,6 +157,9 @@ describe("dashboard linked-case loading retry", () => {
     caseResponsesQueue = [];
     allowRecovery = false;
     lastComplianceRecordCaseId = undefined;
+    insertedProtocols = [];
+    signaturePadIsEmpty = true;
+    signaturePadEndStrokeHandler = null;
     authState.user = { id: "user-1" };
     caseResponseFactory = () => ({ data: [], error: null });
   });
@@ -196,6 +232,65 @@ describe("dashboard linked-case loading retry", () => {
 
     resolveRetryLoad?.({ data: [buildCase()], error: null });
     expect(await screen.findByRole("option", { name: "Alpine Tower (ZH)" })).toBeTruthy();
+  });
+
+  it("preserves the selected linked case when finalizing during an in-flight same-user refresh after a prior success", async () => {
+    let resolveRefreshLoad: ((value: { data: Array<Record<string, unknown>> | null; error: { message: string } | null }) => void) | null = null;
+
+    window.localStorage.setItem(
+      "baucompliance:wizard-project-draft",
+      JSON.stringify({
+        selectedCaseId: "case-1",
+        name: "Alpine Tower",
+        contractor: "Builder AG",
+        client: "Owner GmbH",
+        updatedAt: "2026-05-15T09:00:00.000Z",
+      })
+    );
+    caseResponsesQueue = [{ data: [buildCase()], error: null }];
+    caseResponseFactory = () =>
+      new Promise((resolve) => {
+        resolveRefreshLoad = resolve;
+      });
+
+    const { rerender } = render(<DashboardPage />);
+
+    expect(await screen.findByRole("option", { name: "Alpine Tower (ZH)" })).toBeTruthy();
+    await waitFor(() => {
+      expect(lastComplianceRecordCaseId).toBe("case-1");
+    });
+
+    authState.user = { id: "user-1" };
+    rerender(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(lastComplianceRecordCaseId).toBe("case-1");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "btn-next" }));
+    fireEvent.click(screen.getByRole("checkbox"));
+    signaturePadIsEmpty = false;
+    await act(async () => {
+      signaturePadEndStrokeHandler?.();
+    });
+
+    const finalizeButton = await screen.findByRole("button", { name: "btn-finalize" });
+    await waitFor(() => {
+      expect(finalizeButton.getAttribute("disabled")).toBeNull();
+    });
+    fireEvent.click(finalizeButton);
+
+    await waitFor(() => {
+      expect(insertedProtocols).toHaveLength(1);
+      expect(insertedProtocols[0]?.case_id).toBe("case-1");
+    });
+
+    resolveRefreshLoad?.({ data: [buildCase()], error: null });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(lastComplianceRecordCaseId).toBe("case-1");
+    });
   });
 
   it("retries linked-case loading and restores the case selector after recovery", async () => {

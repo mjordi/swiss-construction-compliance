@@ -47,6 +47,7 @@ export default function Dashboard() {
   const [draftHydrated, setDraftHydrated] = useState(false);
   const latestUserCasesRequestIdRef = useRef(0);
   const hasResolvedUserCasesRequestRef = useRef(false);
+  const lastSuccessfulUserCasesUserIdRef = useRef<string | null>(null);
   const [projectData, setProjectData] = useState({
     name: "",
     contractor: "",
@@ -61,6 +62,10 @@ export default function Dashboard() {
     userCases,
     userCasesLoadedSuccessfully
   );
+  const shouldPreserveCachedSelectedCaseDuringRefresh =
+    linkedCaseLoading &&
+    user?.id != null &&
+    lastSuccessfulUserCasesUserIdRef.current === user.id;
   const effectiveSelectedCaseId =
     !hasResolvedUserCasesRequestRef.current && !linkedCaseLoadError
       ? getEffectiveSelectedCaseId(
@@ -72,7 +77,9 @@ export default function Dashboard() {
         ? null
         : userCasesLoadedSuccessfully
           ? getEffectiveSelectedCaseId(selectedCaseId, userCases, true)
-          : null;
+          : shouldPreserveCachedSelectedCaseDuringRefresh
+            ? getEffectiveSelectedCaseId(selectedCaseId, userCases, true)
+            : null;
   const canProceedStep1 =
     projectData.name.trim().length > 0 &&
     projectData.contractor.trim().length > 0 &&
@@ -148,6 +155,7 @@ export default function Dashboard() {
     const requestId = ++latestUserCasesRequestIdRef.current;
 
     if (!user) {
+      lastSuccessfulUserCasesUserIdRef.current = null;
       setUserCases([]);
       setUserCasesLoadedSuccessfully(false);
       setLinkedCaseLoading(false);
@@ -179,6 +187,7 @@ export default function Dashboard() {
         }
 
         hasResolvedUserCasesRequestRef.current = true;
+        lastSuccessfulUserCasesUserIdRef.current = user.id;
         setUserCases((data ?? []) as Case[]);
         setUserCasesLoadedSuccessfully(true);
         setLinkedCaseLoading(false);
