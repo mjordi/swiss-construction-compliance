@@ -46,6 +46,7 @@ export default function Dashboard() {
   const [linkedCaseLoadError, setLinkedCaseLoadError] = useState<TranslationKey | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
   const latestUserCasesRequestIdRef = useRef(0);
+  const hasResolvedUserCasesRequestRef = useRef(false);
   const [projectData, setProjectData] = useState({
     name: "",
     contractor: "",
@@ -61,9 +62,17 @@ export default function Dashboard() {
     userCasesLoadedSuccessfully
   );
   const effectiveSelectedCaseId =
-    userCasesLoadedSuccessfully && !linkedCaseLoadError
-      ? getEffectiveSelectedCaseId(selectedCaseId, userCases, true)
-      : null;
+    !hasResolvedUserCasesRequestRef.current && !linkedCaseLoadError
+      ? getEffectiveSelectedCaseId(
+          selectedCaseId,
+          userCases,
+          userCasesLoadedSuccessfully
+        )
+      : linkedCaseLoadError
+        ? null
+        : userCasesLoadedSuccessfully
+          ? getEffectiveSelectedCaseId(selectedCaseId, userCases, true)
+          : null;
   const canProceedStep1 =
     projectData.name.trim().length > 0 &&
     projectData.contractor.trim().length > 0 &&
@@ -162,18 +171,21 @@ export default function Dashboard() {
         if (cancelled || requestId !== latestUserCasesRequestIdRef.current) return;
         if (error) {
           console.warn("Unable to load linked cases for dashboard wizard", error);
+          hasResolvedUserCasesRequestRef.current = true;
           setUserCases([]);
           setLinkedCaseLoading(false);
           setLinkedCaseLoadError("dashboard-linked-case-load-error");
           return;
         }
 
+        hasResolvedUserCasesRequestRef.current = true;
         setUserCases((data ?? []) as Case[]);
         setUserCasesLoadedSuccessfully(true);
         setLinkedCaseLoading(false);
       } catch (error) {
         if (cancelled || requestId !== latestUserCasesRequestIdRef.current) return;
         console.warn("Unable to load linked cases for dashboard wizard", error);
+        hasResolvedUserCasesRequestRef.current = true;
         setUserCases([]);
         setLinkedCaseLoading(false);
         setLinkedCaseLoadError("dashboard-linked-case-load-error");

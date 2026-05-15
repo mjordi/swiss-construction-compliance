@@ -128,6 +128,28 @@ describe("dashboard linked-case loading retry", () => {
     caseResponseFactory = () => ({ data: [], error: null });
   });
 
+  it("preserves a restored linked case while the initial case fetch is still in flight", async () => {
+    let resolveCaseLoad: ((value: { data: Array<Record<string, unknown>> | null; error: { message: string } | null }) => void) | null = null;
+
+    window.localStorage.setItem(
+      "baucompliance:wizard-project-draft",
+      JSON.stringify({ selectedCaseId: "case-1", updatedAt: "2026-05-15T09:00:00.000Z" })
+    );
+    caseResponseFactory = () =>
+      new Promise((resolve) => {
+        resolveCaseLoad = resolve;
+      });
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(lastComplianceRecordCaseId).toBe("case-1");
+    });
+
+    resolveCaseLoad?.({ data: null, error: { message: "boom" } });
+    expect((await screen.findByRole("alert")).textContent).toContain("dashboard-linked-case-load-error");
+  });
+
   it("surfaces linked-case loading failures with a retry action while preserving standalone creation", async () => {
     window.localStorage.setItem(
       "baucompliance:wizard-project-draft",
@@ -144,6 +166,36 @@ describe("dashboard linked-case loading retry", () => {
     await waitFor(() => {
       expect(lastComplianceRecordCaseId).toBeNull();
     });
+  });
+
+  it("keeps linked-case finalization disabled while a retry is still in flight after a load failure", async () => {
+    let resolveRetryLoad: ((value: { data: Array<Record<string, unknown>> | null; error: { message: string } | null }) => void) | null = null;
+
+    window.localStorage.setItem(
+      "baucompliance:wizard-project-draft",
+      JSON.stringify({ selectedCaseId: "case-1", updatedAt: "2026-05-15T09:00:00.000Z" })
+    );
+    caseResponsesQueue = [{ data: null, error: { message: "initial failure" } }];
+    caseResponseFactory = () =>
+      new Promise((resolve) => {
+        resolveRetryLoad = resolve;
+      });
+
+    render(<DashboardPage />);
+
+    const retryButton = await screen.findByRole("button", { name: "dashboard-linked-case-retry" });
+    await waitFor(() => {
+      expect(lastComplianceRecordCaseId).toBeNull();
+    });
+
+    fireEvent.click(retryButton);
+
+    await waitFor(() => {
+      expect(lastComplianceRecordCaseId).toBeNull();
+    });
+
+    resolveRetryLoad?.({ data: [buildCase()], error: null });
+    expect(await screen.findByRole("option", { name: "Alpine Tower (ZH)" })).toBeTruthy();
   });
 
   it("retries linked-case loading and restores the case selector after recovery", async () => {
