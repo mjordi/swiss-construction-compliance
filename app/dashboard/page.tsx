@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { CheckCircle, AlertTriangle, FileText, Loader2, Download, Camera, Calendar } from "lucide-react";
 import { motion } from "framer-motion";
 import { pdf } from '@react-pdf/renderer';
@@ -42,7 +42,12 @@ export default function Dashboard() {
   const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);
   const [userCases, setUserCases] = useState<Case[]>([]);
   const [userCasesLoadedSuccessfully, setUserCasesLoadedSuccessfully] = useState(false);
+  const [linkedCaseLoading, setLinkedCaseLoading] = useState(false);
+  const [linkedCaseLoadError, setLinkedCaseLoadError] = useState<TranslationKey | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
+  const latestUserCasesRequestIdRef = useRef(0);
+  const hasResolvedUserCasesRequestRef = useRef(false);
+  const lastSuccessfulUserCasesUserIdRef = useRef<string | null>(null);
   const [projectData, setProjectData] = useState({
     name: "",
     contractor: "",
@@ -57,11 +62,24 @@ export default function Dashboard() {
     userCases,
     userCasesLoadedSuccessfully
   );
-  const effectiveSelectedCaseId = getEffectiveSelectedCaseId(
-    selectedCaseId,
-    userCases,
-    userCasesLoadedSuccessfully
-  );
+  const shouldPreserveCachedSelectedCaseDuringRefresh =
+    linkedCaseLoading &&
+    user?.id != null &&
+    lastSuccessfulUserCasesUserIdRef.current === user.id;
+  const effectiveSelectedCaseId =
+    !hasResolvedUserCasesRequestRef.current && !linkedCaseLoadError
+      ? getEffectiveSelectedCaseId(
+          selectedCaseId,
+          userCases,
+          userCasesLoadedSuccessfully
+        )
+      : linkedCaseLoadError
+        ? null
+        : userCasesLoadedSuccessfully
+          ? getEffectiveSelectedCaseId(selectedCaseId, userCases, true)
+          : shouldPreserveCachedSelectedCaseDuringRefresh
+            ? getEffectiveSelectedCaseId(selectedCaseId, userCases, true)
+            : null;
   const canProceedStep1 =
     projectData.name.trim().length > 0 &&
     projectData.contractor.trim().length > 0 &&
@@ -133,36 +151,61 @@ export default function Dashboard() {
     clearPersistedWizardDraft();
   };
 
-  // Fetch user's cases for the case selector
-  useEffect(() => {
+  const refreshUserCases = useCallback(() => {
+    const requestId = ++latestUserCasesRequestIdRef.current;
+
     if (!user) {
+      lastSuccessfulUserCasesUserIdRef.current = null;
       setUserCases([]);
       setUserCasesLoadedSuccessfully(false);
-      return;
+      setLinkedCaseLoading(false);
+      setLinkedCaseLoadError(null);
+      return () => undefined;
     }
 
     let cancelled = false;
     setUserCasesLoadedSuccessfully(false);
+    setLinkedCaseLoading(true);
+    setLinkedCaseLoadError(null);
 
     (async () => {
-      const { data, error } = await supabase
-        .from("cases")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("project_name", { ascending: true });
+      try {
+        const { data, error } = await supabase
+          .from("cases")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("project_name", { ascending: true });
 
-      if (cancelled) return;
-      if (error) {
+        if (cancelled || requestId !== latestUserCasesRequestIdRef.current) return;
+        if (error) {
+          console.warn("Unable to load linked cases for dashboard wizard", error);
+          hasResolvedUserCasesRequestRef.current = true;
+          setUserCases([]);
+          setLinkedCaseLoading(false);
+          setLinkedCaseLoadError("dashboard-linked-case-load-error");
+          return;
+        }
+
+        hasResolvedUserCasesRequestRef.current = true;
+        lastSuccessfulUserCasesUserIdRef.current = user.id;
+        setUserCases((data ?? []) as Case[]);
+        setUserCasesLoadedSuccessfully(true);
+        setLinkedCaseLoading(false);
+      } catch (error) {
+        if (cancelled || requestId !== latestUserCasesRequestIdRef.current) return;
         console.warn("Unable to load linked cases for dashboard wizard", error);
-        return;
+        hasResolvedUserCasesRequestRef.current = true;
+        setUserCases([]);
+        setLinkedCaseLoading(false);
+        setLinkedCaseLoadError("dashboard-linked-case-load-error");
       }
-
-      setUserCases((data ?? []) as Case[]);
-      setUserCasesLoadedSuccessfully(true);
     })();
 
     return () => { cancelled = true; };
   }, [user, supabase]);
+
+  // Fetch user's cases for the case selector
+  useEffect(() => refreshUserCases(), [refreshUserCases]);
 
   const complianceRecord = useMemo(
     () =>
@@ -417,10 +460,28 @@ export default function Dashboard() {
                   </div>
                 )}
 
+                {linkedCaseLoadError && (
+                  <div
+                    role="alert"
+                    className="rounded-lg border border-red-400/30 bg-red-500/[0.08] px-3 py-2.5 flex items-center justify-between gap-3"
+                  >
+                    <div className="text-[11px] text-red-100/90">{t(linkedCaseLoadError)}</div>
+                    <button
+                      type="button"
+                      onClick={refreshUserCases}
+                      disabled={linkedCaseLoading}
+                      className="text-[11px] text-red-100 hover:text-cream transition-colors duration-200"
+                    >
+                      {t("dashboard-linked-case-retry")}
+                    </button>
+                  </div>
+                )}
+
                 {userCases.length > 0 && (
                   <div>
-                    <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("wizard-case-selector")}</label>
+                    <label htmlFor="linked-case-selector" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("wizard-case-selector")}</label>
                     <select
+                      id="linked-case-selector"
                       value={selectedCaseId ?? ""}
                       onChange={(e) => {
                         const caseId = e.target.value || null;
