@@ -14,6 +14,7 @@ describe("locales", () => {
       "vault-search-placeholder",
       "vault-loading",
       "vault-error-load",
+      "vault-load-retry",
       "vault-status-active",
       "vault-status-review",
       "vault-status-archived",
