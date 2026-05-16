@@ -17,7 +17,6 @@ interface VaultProjectCard {
   status: "active" | "review" | "archived";
   docs: number;
   compliance: number;
-  updated: string;
   updatedAt: number;
   archived: boolean;
   prefillTriage: boolean;
@@ -44,10 +43,9 @@ function interpolateTranslation(template: string, params?: Record<string, string
   );
 }
 
-function formatRelativeUpdate(timestamp: string, lang: string): string {
+function formatRelativeUpdate(timestamp: number, lang: string): string {
   const now = Date.now();
-  const then = new Date(timestamp).getTime();
-  const diffMs = Math.max(0, now - then);
+  const diffMs = Math.max(0, now - timestamp);
 
   const minuteMs = 1000 * 60;
   const hourMs = minuteMs * 60;
@@ -77,102 +75,123 @@ export default function TechVault() {
   const [activeTab, setActiveTab] = useState<VaultTab>("projects");
   const [query, setQuery] = useState("");
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<TranslationKey | null>(null);
   const [projects, setProjects] = useState<VaultProjectCard[]>([]);
   const latestFetchIdRef = useRef(0);
+  const hasLoadedProjectsRef = useRef(false);
+  const lastSuccessfulUserIdRef = useRef<string | null>(null);
 
   const runRefresh = useCallback(async (fetchId: number) => {
-    setLoading(true);
     if (!user) {
+      hasLoadedProjectsRef.current = false;
+      lastSuccessfulUserIdRef.current = null;
+      setError(null);
       setProjects([]);
       setLoading(false);
       return;
     }
 
     setError(null);
+    try {
+      const [casesResult, protocolsResult] = await Promise.all([
+        supabase
+          .from("cases")
+          .select("*")
+          .eq("user_id", user.id)
+          .order("updated_at", { ascending: false }),
+        supabase
+          .from("protocols")
+          .select("id, case_id, project_name")
+          .eq("user_id", user.id),
+      ]);
 
-    const [casesResult, protocolsResult] = await Promise.all([
-      supabase
-        .from("cases")
-        .select("*")
-        .eq("user_id", user.id)
-        .order("updated_at", { ascending: false }),
-      supabase
-        .from("protocols")
-        .select("id, case_id, project_name")
-        .eq("user_id", user.id),
-    ]);
+      if (fetchId !== latestFetchIdRef.current) return;
 
-    if (fetchId !== latestFetchIdRef.current) return;
+      if (casesResult.error || protocolsResult.error) {
+        if (!hasLoadedProjectsRef.current || lastSuccessfulUserIdRef.current !== user.id) {
+          setError("vault-error-load");
+          setProjects([]);
+        }
+        setLoading(false);
+        return;
+      }
 
-    if (casesResult.error || protocolsResult.error) {
-      setError(t("vault-error-load"));
-      setProjects([]);
+      const dbCases = (casesResult.data ?? []) as Case[];
+      const protocols = (protocolsResult.data ?? []) as Pick<Protocol, "id" | "case_id" | "project_name">[];
+
+      const timeline = buildComplianceCaseTimeline(
+        dbCases.map((c) => ({
+          id: c.id,
+          projectName: c.project_name,
+          canton: c.canton,
+          contractDate: new Date(c.contract_date),
+          discoveryDate: new Date(c.discovery_date),
+        }))
+      );
+
+      const timelineStateByCase = new Map<string, { status: "active" | "review"; prefillTriage: boolean }>(
+        timeline.map((t) => [
+          t.id,
+          {
+            status:
+              t.status === "warning" || t.status === "urgent" || t.status === "expired" || t.status === "immediate-notice"
+                ? "review"
+                : "active",
+            prefillTriage: t.status === "urgent" || t.status === "expired" || t.status === "immediate-notice",
+          },
+        ])
+      );
+
+      const docsByCase = protocols.reduce<Record<string, number>>((acc, p) => {
+        if (!p.case_id) return acc;
+        acc[p.case_id] = (acc[p.case_id] ?? 0) + 1;
+        return acc;
+      }, {});
+
+      const nextProjects: VaultProjectCard[] = dbCases.map((c) => {
+        const checklistValues = Object.values(c.checklist ?? {});
+        const completed = checklistValues.filter(Boolean).length;
+        const total = checklistValues.length || 1;
+        const archived = c.status === "archived";
+        const timelineState = timelineStateByCase.get(c.id);
+        return {
+          id: c.id,
+          name: c.project_name,
+          status: archived ? "archived" : (timelineState?.status ?? "active"),
+          docs: docsByCase[c.id] ?? 0,
+          compliance: Math.round((completed / total) * 100),
+          updatedAt: new Date(c.updated_at).getTime(),
+          archived,
+          prefillTriage: !archived && Boolean(timelineState?.prefillTriage),
+        };
+      });
+
+      hasLoadedProjectsRef.current = true;
+      lastSuccessfulUserIdRef.current = user.id;
+      setProjects(nextProjects);
       setLoading(false);
-      return;
+    } catch {
+      if (fetchId !== latestFetchIdRef.current) return;
+      if (!hasLoadedProjectsRef.current || lastSuccessfulUserIdRef.current !== user.id) {
+        setError("vault-error-load");
+        setProjects([]);
+      }
+      setLoading(false);
     }
+  }, [user, supabase]);
 
-    const dbCases = (casesResult.data ?? []) as Case[];
-    const protocols = (protocolsResult.data ?? []) as Pick<Protocol, "id" | "case_id" | "project_name">[];
-
-    const timeline = buildComplianceCaseTimeline(
-      dbCases.map((c) => ({
-        id: c.id,
-        projectName: c.project_name,
-        canton: c.canton,
-        contractDate: new Date(c.contract_date),
-        discoveryDate: new Date(c.discovery_date),
-      }))
-    );
-
-    const timelineStateByCase = new Map<string, { status: "active" | "review"; prefillTriage: boolean }>(
-      timeline.map((t) => [
-        t.id,
-        {
-          status:
-            t.status === "warning" || t.status === "urgent" || t.status === "expired" || t.status === "immediate-notice"
-              ? "review"
-              : "active",
-          prefillTriage: t.status === "urgent" || t.status === "expired" || t.status === "immediate-notice",
-        },
-      ])
-    );
-
-    const docsByCase = protocols.reduce<Record<string, number>>((acc, p) => {
-      if (!p.case_id) return acc;
-      acc[p.case_id] = (acc[p.case_id] ?? 0) + 1;
-      return acc;
-    }, {});
-
-    const nextProjects: VaultProjectCard[] = dbCases.map((c) => {
-      const checklistValues = Object.values(c.checklist ?? {});
-      const completed = checklistValues.filter(Boolean).length;
-      const total = checklistValues.length || 1;
-      const archived = c.status === "archived";
-      const timelineState = timelineStateByCase.get(c.id);
-      return {
-        id: c.id,
-        name: c.project_name,
-        status: archived ? "archived" : (timelineState?.status ?? "active"),
-        docs: docsByCase[c.id] ?? 0,
-        compliance: Math.round((completed / total) * 100),
-        updated: formatRelativeUpdate(c.updated_at, lang),
-        updatedAt: new Date(c.updated_at).getTime(),
-        archived,
-        prefillTriage: !archived && Boolean(timelineState?.prefillTriage),
-      };
-    });
-
-    setProjects(nextProjects);
-    setLoading(false);
-  }, [user, supabase, lang, t]);
+  const triggerRefresh = useCallback(() => {
+    const fetchId = ++latestFetchIdRef.current;
+    setLoading(true);
+    setError(null);
+    void runRefresh(fetchId);
+  }, [runRefresh]);
 
   useEffect(() => {
-    const fetchId = ++latestFetchIdRef.current;
     queueMicrotask(() => {
-      void runRefresh(fetchId);
+      triggerRefresh();
     });
-  }, [runRefresh]);
+  }, [triggerRefresh]);
 
   const filteredProjects = useMemo(
     () =>
@@ -273,8 +292,23 @@ export default function TechVault() {
               <Loader2 className="w-5 h-5 animate-spin mr-2" /> {t("vault-loading")}
             </div>
           ) : error ? (
-            <div className="h-full border border-red-500/30 bg-red-500/[0.06] rounded-2xl flex items-center justify-center text-red-300 gap-2">
-              <AlertCircle className="w-5 h-5" /> {error}
+            <div
+              role="alert"
+              className="h-full rounded-2xl border border-red-500/30 bg-red-500/[0.06] px-5 py-4 text-red-100"
+            >
+              <div className="flex h-full flex-col items-center justify-center gap-4 text-center">
+                <div className="flex items-center justify-center gap-2 text-red-300">
+                  <AlertCircle className="w-5 h-5" />
+                  <span>{t(error)}</span>
+                </div>
+                <button
+                  type="button"
+                  onClick={triggerRefresh}
+                  className="rounded-lg border border-red-200/30 px-4 py-2 text-sm font-medium text-red-50 transition hover:bg-red-500/[0.12]"
+                >
+                  {t("vault-load-retry")}
+                </button>
+              </div>
             </div>
           ) : filteredProjects.length === 0 ? (
             <div className="h-full flex items-center justify-center">
@@ -318,7 +352,7 @@ export default function TechVault() {
 
                   <h3 className="text-lg font-bold mb-1 group-hover:text-accent transition-colors">{project.name}</h3>
                   <p className="text-xs text-slate-500 mb-6">
-                    {interpolateTranslation(t("vault-last-updated"), { relative: project.updated })}
+                    {interpolateTranslation(t("vault-last-updated"), { relative: formatRelativeUpdate(project.updatedAt, lang) })}
                   </p>
 
                   <div className="flex items-center justify-between text-sm mb-3">
