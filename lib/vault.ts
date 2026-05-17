@@ -23,6 +23,10 @@ export interface VaultProjectCasesHrefInput {
   prefillTriage?: boolean;
 }
 
+export function buildVaultCreateProjectHref(): string {
+  return "/dashboard";
+}
+
 export function buildVaultProjectCasesHref({
   projectName,
   prefillTriage = false,
