@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { CheckCircle, AlertTriangle, FileText, Loader2, Download, Camera, Calendar } from "lucide-react";
 import { motion } from "framer-motion";
 import { pdf } from '@react-pdf/renderer';
@@ -36,6 +37,7 @@ export default function Dashboard() {
   const { t } = useLanguage();
   const { user } = useAuth();
   const supabase = getSupabase();
+  const searchParams = useSearchParams();
   const [sigPad, setSigPad] = useState<SignaturePad | null>(null);
   const [hasSignature, setHasSignature] = useState(false);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
@@ -53,6 +55,8 @@ export default function Dashboard() {
     contractor: "",
     client: ""
   });
+  const requestedCaseId = searchParams.get("case")?.trim() || null;
+  const [pendingRequestedCaseId, setPendingRequestedCaseId] = useState<string | null>(requestedCaseId);
   const selectedCase = useMemo(
     () => userCases.find((candidate) => candidate.id === selectedCaseId) ?? null,
     [userCases, selectedCaseId]
@@ -114,7 +118,31 @@ export default function Dashboard() {
     } finally {
       setDraftHydrated(true);
     }
-  }, []);
+  }, [requestedCaseId]);
+
+  useEffect(() => {
+    setPendingRequestedCaseId(requestedCaseId);
+    if (requestedCaseId) {
+      setSelectedCaseId(null);
+    }
+  }, [requestedCaseId]);
+
+  useEffect(() => {
+    if (!pendingRequestedCaseId || !userCasesLoadedSuccessfully) {
+      return;
+    }
+
+    const requestedCase = userCases.find((candidate) => candidate.id === pendingRequestedCaseId);
+    if (requestedCase) {
+      setSelectedCaseId(requestedCase.id);
+      setProjectData((current) => ({
+        ...current,
+        name: requestedCase.project_name,
+      }));
+    }
+
+    setPendingRequestedCaseId(null);
+  }, [pendingRequestedCaseId, userCases, userCasesLoadedSuccessfully]);
 
   useEffect(() => {
     if (!draftHydrated) return;

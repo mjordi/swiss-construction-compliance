@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, Trash2, Loader2 } from "lucide-react";
@@ -23,6 +24,7 @@ import {
   type CaseSortMode,
   type CaseStatusFilter,
 } from "@/lib/case-timeline";
+import { buildDashboardProtocolHref } from "@/lib/dashboard-linked-case";
 import { validateRuegefristInput } from "@/lib/legal-utils";
 import type { TranslationKey } from "@/locales";
 
@@ -768,6 +770,12 @@ export default function CasesPage() {
                         {protocolCounts[item.id]} {t("cases-protocols")}
                       </span>
                     )}
+                    <Link
+                      href={buildDashboardProtocolHref(item.id)}
+                      className="px-2.5 py-1 rounded-md border border-blue-500/30 text-blue-200 bg-blue-500/[0.08] hover:bg-blue-500/[0.14] transition-colors"
+                    >
+                      {t("cases-create-protocol")}
+                    </Link>
                     <button onClick={() => handleDeleteCase(item.id, item.projectName)} className="ml-2 p-1.5 rounded-md text-muted/40 hover:text-red-400 hover:bg-red-400/[0.06] transition-colors" title={t("cases-delete")}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
