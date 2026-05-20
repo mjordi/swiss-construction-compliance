@@ -325,6 +325,49 @@ describe("dashboard linked-case loading retry", () => {
     expect(screen.getByRole("option", { name: "Alpine Tower (ZH)" })).toBeTruthy();
   });
 
+  it("does not finalize protocols against an unvalidated URL case before cases finish loading", async () => {
+    let resolveCaseLoad: ((value: { data: Array<Record<string, unknown>> | null; error: { message: string } | null }) => void) | null = null;
+
+    currentSearch = "case=case-missing";
+    caseResponseFactory = () =>
+      new Promise((resolve) => {
+        resolveCaseLoad = resolve;
+      });
+
+    render(<DashboardPage />);
+
+    fireEvent.change(screen.getByPlaceholderText("dashboard-project-placeholder"), {
+      target: { value: "Alpine Tower" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("dashboard-contractor-placeholder"), {
+      target: { value: "Builder AG" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("dashboard-client-placeholder"), {
+      target: { value: "Owner GmbH" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "btn-next" }));
+    fireEvent.click(screen.getByRole("checkbox"));
+    signaturePadIsEmpty = false;
+    await act(async () => {
+      signaturePadEndStrokeHandler?.();
+    });
+
+    const finalizeButton = await screen.findByRole("button", { name: "btn-finalize" });
+    await waitFor(() => {
+      expect(finalizeButton.getAttribute("disabled")).toBeNull();
+    });
+    fireEvent.click(finalizeButton);
+
+    await waitFor(() => {
+      expect(insertedProtocols).toHaveLength(1);
+      expect(insertedProtocols[0]?.case_id).toBeNull();
+    });
+
+    await act(async () => {
+      resolveCaseLoad?.({ data: [buildCase()], error: null });
+    });
+  });
+
   it("hydrates a requested linked case from the dashboard URL handoff", async () => {
     currentSearch = "case=case-1";
     caseResponseFactory = () => ({ data: [buildCase()], error: null });

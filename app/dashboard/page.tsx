@@ -56,6 +56,7 @@ export default function Dashboard() {
     client: ""
   });
   const requestedCaseId = searchParams.get("case")?.trim() || null;
+  const [pendingRequestedCaseId, setPendingRequestedCaseId] = useState<string | null>(requestedCaseId);
   const selectedCase = useMemo(
     () => userCases.find((candidate) => candidate.id === selectedCaseId) ?? null,
     [userCases, selectedCaseId]
@@ -110,7 +111,7 @@ export default function Dashboard() {
       }));
       setDefectDescription(parsedDraft.defectDescription ?? "");
       setNoDefectsConfirmed(Boolean(parsedDraft.noDefectsConfirmed));
-      setSelectedCaseId(requestedCaseId ?? parsedDraft.selectedCaseId ?? null);
+      setSelectedCaseId(parsedDraft.selectedCaseId ?? null);
       setDraftUpdatedAt(parsedDraft.updatedAt ?? null);
     } catch (error) {
       console.warn("Unable to restore project draft", error);
@@ -120,12 +121,21 @@ export default function Dashboard() {
   }, [requestedCaseId]);
 
   useEffect(() => {
-    if (!requestedCaseId) {
+    setPendingRequestedCaseId(requestedCaseId);
+  }, [requestedCaseId]);
+
+  useEffect(() => {
+    if (!pendingRequestedCaseId || !userCasesLoadedSuccessfully) {
       return;
     }
 
-    setSelectedCaseId(requestedCaseId);
-  }, [requestedCaseId]);
+    const requestedCase = userCases.find((candidate) => candidate.id === pendingRequestedCaseId);
+    if (requestedCase) {
+      setSelectedCaseId(requestedCase.id);
+    }
+
+    setPendingRequestedCaseId(null);
+  }, [pendingRequestedCaseId, userCases, userCasesLoadedSuccessfully]);
 
   useEffect(() => {
     if (!draftHydrated) return;
