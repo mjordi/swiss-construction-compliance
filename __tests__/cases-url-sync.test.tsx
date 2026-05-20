@@ -237,6 +237,18 @@ describe("cases filter URL synchronization", () => {
     expect(screen.getByText(/1 cases-protocols/)).toBeTruthy();
   });
 
+  it("renders a direct create-protocol handoff for each visible case", async () => {
+    caseResponseFactory = () => ({ data: [successCase()], error: null });
+    protocolResponseFactory = () => ({ data: [], error: null });
+
+    render(<CasesPage />);
+
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "cases-create-protocol" }).getAttribute("href")).toBe(
+      "/dashboard?case=case-1"
+    );
+  });
+
   it("keeps the already-rendered list visible when a later refresh fails after a successful load", async () => {
     let caseFetchCount = 0;
     caseResponseFactory = () => {

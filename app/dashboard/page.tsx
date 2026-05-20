@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { CheckCircle, AlertTriangle, FileText, Loader2, Download, Camera, Calendar } from "lucide-react";
 import { motion } from "framer-motion";
 import { pdf } from '@react-pdf/renderer';
@@ -36,6 +37,7 @@ export default function Dashboard() {
   const { t } = useLanguage();
   const { user } = useAuth();
   const supabase = getSupabase();
+  const searchParams = useSearchParams();
   const [sigPad, setSigPad] = useState<SignaturePad | null>(null);
   const [hasSignature, setHasSignature] = useState(false);
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
@@ -53,6 +55,7 @@ export default function Dashboard() {
     contractor: "",
     client: ""
   });
+  const requestedCaseId = searchParams.get("case")?.trim() || null;
   const selectedCase = useMemo(
     () => userCases.find((candidate) => candidate.id === selectedCaseId) ?? null,
     [userCases, selectedCaseId]
@@ -107,14 +110,22 @@ export default function Dashboard() {
       }));
       setDefectDescription(parsedDraft.defectDescription ?? "");
       setNoDefectsConfirmed(Boolean(parsedDraft.noDefectsConfirmed));
-      setSelectedCaseId(parsedDraft.selectedCaseId ?? null);
+      setSelectedCaseId(requestedCaseId ?? parsedDraft.selectedCaseId ?? null);
       setDraftUpdatedAt(parsedDraft.updatedAt ?? null);
     } catch (error) {
       console.warn("Unable to restore project draft", error);
     } finally {
       setDraftHydrated(true);
     }
-  }, []);
+  }, [requestedCaseId]);
+
+  useEffect(() => {
+    if (!requestedCaseId) {
+      return;
+    }
+
+    setSelectedCaseId(requestedCaseId);
+  }, [requestedCaseId]);
 
   useEffect(() => {
     if (!draftHydrated) return;

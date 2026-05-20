@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { HTMLAttributes, ReactNode } from "react";
 
+let currentSearch = "";
 let caseResponseFactory: () =>
   | { data: Array<Record<string, unknown>> | null; error: { message: string } | null }
   | Promise<{ data: Array<Record<string, unknown>> | null; error: { message: string } | null }>;
@@ -53,6 +54,16 @@ const supabaseMock = {
     throw new Error(`Unexpected table ${table}`);
   },
 };
+
+vi.mock("next/navigation", () => ({
+  useSearchParams: () => {
+    const params = new URLSearchParams(currentSearch);
+    return {
+      get: (key: string) => params.get(key),
+      toString: () => params.toString(),
+    };
+  },
+}));
 
 vi.mock("@/context/LanguageContext", () => ({
   useLanguage: () => ({
@@ -153,6 +164,7 @@ function buildCase(id = "case-1", projectName = "Alpine Tower") {
 
 describe("dashboard linked-case loading retry", () => {
   beforeEach(() => {
+    currentSearch = "";
     window.localStorage.clear();
     caseResponsesQueue = [];
     allowRecovery = false;
@@ -311,6 +323,19 @@ describe("dashboard linked-case loading retry", () => {
 
     expect(screen.getByLabelText("wizard-case-selector")).toBeTruthy();
     expect(screen.getByRole("option", { name: "Alpine Tower (ZH)" })).toBeTruthy();
+  });
+
+  it("hydrates a requested linked case from the dashboard URL handoff", async () => {
+    currentSearch = "case=case-1";
+    caseResponseFactory = () => ({ data: [buildCase()], error: null });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole("option", { name: "Alpine Tower (ZH)" })).toBeTruthy();
+    await waitFor(() => {
+      expect(lastComplianceRecordCaseId).toBe("case-1");
+    });
+    expect((screen.getByLabelText("wizard-case-selector") as HTMLSelectElement).value).toBe("case-1");
   });
 
   it("clears stale linked-case options when a later refresh fails after a previous success", async () => {
