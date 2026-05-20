@@ -328,7 +328,17 @@ describe("dashboard linked-case loading retry", () => {
   it("does not finalize protocols against an unvalidated URL case before cases finish loading", async () => {
     let resolveCaseLoad: ((value: { data: Array<Record<string, unknown>> | null; error: { message: string } | null }) => void) | null = null;
 
-    currentSearch = "case=case-missing";
+    currentSearch = "case=case-2";
+    window.localStorage.setItem(
+      "baucompliance:wizard-project-draft",
+      JSON.stringify({
+        selectedCaseId: "case-1",
+        name: "Stale Draft Name",
+        contractor: "Builder AG",
+        client: "Owner GmbH",
+        updatedAt: "2026-05-15T09:00:00.000Z",
+      })
+    );
     caseResponseFactory = () =>
       new Promise((resolve) => {
         resolveCaseLoad = resolve;

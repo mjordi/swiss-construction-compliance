@@ -122,6 +122,9 @@ export default function Dashboard() {
 
   useEffect(() => {
     setPendingRequestedCaseId(requestedCaseId);
+    if (requestedCaseId) {
+      setSelectedCaseId(null);
+    }
   }, [requestedCaseId]);
 
   useEffect(() => {
