@@ -132,6 +132,10 @@ export default function Dashboard() {
     const requestedCase = userCases.find((candidate) => candidate.id === pendingRequestedCaseId);
     if (requestedCase) {
       setSelectedCaseId(requestedCase.id);
+      setProjectData((current) => ({
+        ...current,
+        name: requestedCase.project_name,
+      }));
     }
 
     setPendingRequestedCaseId(null);
