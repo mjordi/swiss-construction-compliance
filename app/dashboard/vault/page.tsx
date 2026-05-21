@@ -14,6 +14,7 @@ import {
   buildVaultCreateProjectHref,
   buildVaultProjectCasesHref,
   getVaultEmptyState,
+  parseVaultTab,
   type VaultEmptyStateAction,
   type VaultTab,
 } from "@/lib/vault";
@@ -83,7 +84,7 @@ export default function TechVault() {
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const [activeTab, setActiveTab] = useState<VaultTab>("projects");
+  const [activeTab, setActiveTab] = useState<VaultTab>(() => parseVaultTab(searchParams.get("tab")));
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<TranslationKey | null>(null);
@@ -91,6 +92,7 @@ export default function TechVault() {
   const latestFetchIdRef = useRef(0);
   const hasLoadedProjectsRef = useRef(false);
   const lastSuccessfulUserIdRef = useRef<string | null>(null);
+  const activeTabRef = useRef(activeTab);
   const queryRef = useRef(query);
   const skipNextUrlWriteRef = useRef(false);
 
@@ -207,6 +209,10 @@ export default function TechVault() {
   }, [triggerRefresh]);
 
   useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
+  useEffect(() => {
     queryRef.current = query;
   }, [query]);
 
@@ -214,14 +220,16 @@ export default function TechVault() {
 
   useEffect(() => {
     const params = new URLSearchParams(searchParamString);
+    const nextActiveTab = parseVaultTab(params.get("tab"));
     const nextQuery = params.get("q") ?? "";
 
-    if (nextQuery === queryRef.current) {
+    if (nextActiveTab === activeTabRef.current && nextQuery === queryRef.current) {
       return;
     }
 
     skipNextUrlWriteRef.current = true;
     const frame = window.requestAnimationFrame(() => {
+      setActiveTab(nextActiveTab);
       setQuery(nextQuery);
     });
 
@@ -237,6 +245,9 @@ export default function TechVault() {
     const params = new URLSearchParams(searchParams.toString());
     const normalizedQuery = query.trim();
 
+    if (activeTab === "projects") params.delete("tab");
+    else params.set("tab", activeTab);
+
     if (normalizedQuery) params.set("q", normalizedQuery);
     else params.delete("q");
 
@@ -246,7 +257,7 @@ export default function TechVault() {
     if (next !== current) {
       router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
     }
-  }, [pathname, query, router, searchParams]);
+  }, [activeTab, pathname, query, router, searchParams]);
 
   const filteredProjects = useMemo(
     () =>

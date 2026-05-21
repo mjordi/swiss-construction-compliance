@@ -88,7 +88,7 @@ vi.mock("@/lib/supabase", () => ({
 
 import TechVault from "@/app/dashboard/vault/page";
 
-describe("vault search URL synchronization", () => {
+describe("vault URL synchronization", () => {
   beforeEach(() => {
     currentSearch = "";
     replaceMock.mockReset();
@@ -104,6 +104,18 @@ describe("vault search URL synchronization", () => {
     });
   });
 
+  it("hydrates the archived tab from the current tab query param", async () => {
+    currentSearch = "tab=archived&q=Alpine+Tower";
+
+    render(<TechVault />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "vault-tab-archived" }).className).toContain("bg-accent");
+    });
+
+    expect((screen.getByPlaceholderText("vault-search-placeholder") as HTMLInputElement).value).toBe("Alpine Tower");
+  });
+
   it("writes q back into the URL when the search changes", async () => {
     render(<TechVault />);
 
@@ -112,6 +124,18 @@ describe("vault search URL synchronization", () => {
 
     await waitFor(() => {
       expect(replaceMock).toHaveBeenCalledWith("/dashboard/vault?q=Zurich", { scroll: false });
+    });
+  });
+
+  it("writes tab back into the URL while preserving q", async () => {
+    currentSearch = "q=Zurich";
+
+    render(<TechVault />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "vault-tab-archived" }));
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith("/dashboard/vault?q=Zurich&tab=archived", { scroll: false });
     });
   });
 
@@ -142,6 +166,23 @@ describe("vault search URL synchronization", () => {
 
     await waitFor(() => {
       expect((screen.getByPlaceholderText("vault-search-placeholder") as HTMLInputElement).value).toBe("Beta");
+    });
+  });
+
+  it("re-hydrates tab state when external params change on rerender", async () => {
+    currentSearch = "tab=projects&q=Alpha";
+
+    const { rerender } = render(<TechVault />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "vault-tab-projects" }).className).toContain("bg-accent");
+    });
+
+    currentSearch = "tab=archived&q=Alpha";
+    rerender(<TechVault />);
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "vault-tab-archived" }).className).toContain("bg-accent");
     });
   });
 });

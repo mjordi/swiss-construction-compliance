@@ -3,6 +3,10 @@ import type { TranslationKey } from "@/locales";
 export type VaultTab = "projects" | "archived";
 export type VaultEmptyStateAction = "clear-search" | "show-projects" | "show-archived" | null;
 
+export function parseVaultTab(value: string | null): VaultTab {
+  return value === "archived" ? "archived" : "projects";
+}
+
 export interface VaultEmptyState {
   titleKey: TranslationKey;
   titleParams?: Record<string, string>;

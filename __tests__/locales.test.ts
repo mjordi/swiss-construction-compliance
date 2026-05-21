@@ -93,6 +93,7 @@ describe("locales", () => {
       "cases-load-error",
       "cases-load-retry",
       "cases-open-in-vault",
+      "cases-status-triage",
     ] as const;
 
     for (const [lang, translations] of Object.entries(locales)) {
