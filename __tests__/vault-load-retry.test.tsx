@@ -2,6 +2,17 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { HTMLAttributes, ReactNode } from "react";
 
+const replaceMock = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/dashboard/vault",
+  useRouter: () => ({ replace: replaceMock }),
+  useSearchParams: () => ({
+    get: () => null,
+    toString: () => "",
+  }),
+}));
+
 let caseResponseFactory: () =>
   | { data: Array<Record<string, unknown>> | null; error: { message: string } | null }
   | Promise<{ data: Array<Record<string, unknown>> | null; error: { message: string } | null }>;
@@ -101,6 +112,7 @@ function buildCase(id = "case-1", projectName = "Alpine Tower") {
 
 describe("vault aggregate load retry", () => {
   beforeEach(() => {
+    replaceMock.mockReset();
     caseResponsesQueue = [];
     protocolResponsesQueue = [];
     caseFetchCount = 0;

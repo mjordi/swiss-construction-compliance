@@ -2,6 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import type { HTMLAttributes, ReactNode } from "react";
 
+const replaceMock = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/dashboard/vault",
+  useRouter: () => ({ replace: replaceMock }),
+  useSearchParams: () => ({
+    get: () => null,
+    toString: () => "",
+  }),
+}));
+
 vi.mock("@/context/LanguageContext", () => ({
   useLanguage: () => ({
     lang: "en",

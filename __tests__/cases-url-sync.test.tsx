@@ -249,6 +249,18 @@ describe("cases filter URL synchronization", () => {
     );
   });
 
+  it("renders a per-case vault handoff scoped to the case project name", async () => {
+    caseResponseFactory = () => ({ data: [successCase()], error: null });
+    protocolResponseFactory = () => ({ data: [], error: null });
+
+    render(<CasesPage />);
+
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "cases-open-in-vault" }).getAttribute("href")).toBe(
+      "/dashboard/vault?q=Alpine+Tower"
+    );
+  });
+
   it("keeps the already-rendered list visible when a later refresh fails after a successful load", async () => {
     let caseFetchCount = 0;
     caseResponseFactory = () => {

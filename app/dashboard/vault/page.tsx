@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Folder, FileText, MoreVertical, Plus, Search, ShieldCheck, Loader2, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
@@ -79,14 +80,19 @@ export default function TechVault() {
   const { user } = useAuth();
   const { lang, t } = useLanguage();
   const supabase = useMemo(() => getSupabase(), []);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<VaultTab>("projects");
-  const [query, setQuery] = useState("");
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<TranslationKey | null>(null);
   const [projects, setProjects] = useState<VaultProjectCard[]>([]);
   const latestFetchIdRef = useRef(0);
   const hasLoadedProjectsRef = useRef(false);
   const lastSuccessfulUserIdRef = useRef<string | null>(null);
+  const queryRef = useRef(query);
+  const skipNextUrlWriteRef = useRef(false);
 
   const runRefresh = useCallback(async (fetchId: number) => {
     if (!user) {
@@ -199,6 +205,48 @@ export default function TechVault() {
       triggerRefresh();
     });
   }, [triggerRefresh]);
+
+  useEffect(() => {
+    queryRef.current = query;
+  }, [query]);
+
+  const searchParamString = searchParams.toString();
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParamString);
+    const nextQuery = params.get("q") ?? "";
+
+    if (nextQuery === queryRef.current) {
+      return;
+    }
+
+    skipNextUrlWriteRef.current = true;
+    const frame = window.requestAnimationFrame(() => {
+      setQuery(nextQuery);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [searchParamString]);
+
+  useEffect(() => {
+    if (skipNextUrlWriteRef.current) {
+      skipNextUrlWriteRef.current = false;
+      return;
+    }
+
+    const params = new URLSearchParams(searchParams.toString());
+    const normalizedQuery = query.trim();
+
+    if (normalizedQuery) params.set("q", normalizedQuery);
+    else params.delete("q");
+
+    const next = params.toString();
+    const current = searchParams.toString();
+
+    if (next !== current) {
+      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+    }
+  }, [pathname, query, router, searchParams]);
 
   const filteredProjects = useMemo(
     () =>

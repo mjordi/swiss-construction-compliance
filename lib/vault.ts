@@ -27,6 +27,18 @@ export function buildVaultCreateProjectHref(): string {
   return "/dashboard";
 }
 
+export function buildCaseVaultHref(projectName: string): string {
+  const normalizedProjectName = projectName.trim();
+
+  if (!normalizedProjectName) {
+    return "/dashboard/vault";
+  }
+
+  const params = new URLSearchParams();
+  params.set("q", normalizedProjectName);
+  return `/dashboard/vault?${params.toString()}`;
+}
+
 export function buildVaultProjectCasesHref({
   projectName,
   prefillTriage = false,
