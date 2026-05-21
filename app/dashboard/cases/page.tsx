@@ -628,7 +628,7 @@ export default function CasesPage() {
             }`}
             aria-pressed={statusFilter === "triage"}
           >
-            <div className="text-[11px] uppercase tracking-[0.08em] text-orange-200/70">{t("cases-status-urgent")}</div>
+            <div className="text-[11px] uppercase tracking-[0.08em] text-orange-200/70">{t("cases-status-triage")}</div>
             <div className="text-lg font-semibold text-orange-200">{statusCounters.triage}</div>
           </button>
           <label className="text-sm text-muted">

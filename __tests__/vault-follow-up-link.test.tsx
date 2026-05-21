@@ -44,7 +44,18 @@ vi.mock("@/lib/case-timeline", () => ({
             : input.id === "case-warning"
               ? "warning"
               : "ok",
+      checklistDefaults: {
+        defectDocumented: true,
+        evidenceAttached: false,
+        noticeDrafted: false,
+        calendarReminderExported: false,
+      },
     })),
+  deriveChecklistProgress: (checklist: Record<string, boolean>) => ({
+    completed: Object.values(checklist).filter(Boolean).length,
+    total: Object.keys(checklist).length,
+    label: "progress",
+  }),
 }));
 
 vi.mock("@/lib/supabase", () => ({
@@ -140,5 +151,15 @@ describe("vault follow-up links", () => {
     expect(hrefs).toContain("/dashboard/cases?q=Harbor+Retrofit");
     expect(hrefs).toContain("/dashboard/cases?q=Riverside+Bridge&status=triage");
     expect(hrefs).toContain("/dashboard/cases?q=Lakeside+Annex&status=triage");
+  });
+
+  it("derives compliance percentages from timeline defaults when persisted checklist data is sparse", async () => {
+    render(<TechVault />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Alpine Tower")).toBeTruthy();
+    });
+
+    expect(screen.getAllByText("25%").length).toBeGreaterThan(0);
   });
 });

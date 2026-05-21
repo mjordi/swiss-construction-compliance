@@ -7,9 +7,10 @@ import { Folder, FileText, MoreVertical, Plus, Search, ShieldCheck, Loader2, Ale
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { getSupabase } from "@/lib/supabase";
 import type { Case, Protocol } from "@/lib/database.types";
-import { buildComplianceCaseTimeline } from "@/lib/case-timeline";
+import { buildComplianceCaseTimeline, deriveChecklistProgress } from "@/lib/case-timeline";
 import {
   buildVaultCreateProjectHref,
   buildVaultProjectCasesHref,
@@ -163,18 +164,24 @@ export default function TechVault() {
         return acc;
       }, {});
 
+      const timelineByCaseId = new Map(timeline.map((item) => [item.id, item]));
+
       const nextProjects: VaultProjectCard[] = dbCases.map((c) => {
-        const checklistValues = Object.values(c.checklist ?? {});
-        const completed = checklistValues.filter(Boolean).length;
-        const total = checklistValues.length || 1;
         const archived = c.status === "archived";
         const timelineState = timelineStateByCase.get(c.id);
+        const timelineItem = timelineByCaseId.get(c.id);
+        const progress = deriveChecklistProgress(
+          normalizeFollowUpChecklistState({
+            ...timelineItem?.checklistDefaults,
+            ...(c.checklist ?? {}),
+          })
+        );
         return {
           id: c.id,
           name: c.project_name,
           status: archived ? "archived" : (timelineState?.status ?? "active"),
           docs: docsByCase[c.id] ?? 0,
-          compliance: Math.round((completed / total) * 100),
+          compliance: Math.round((progress.completed / progress.total) * 100),
           updatedAt: new Date(c.updated_at).getTime(),
           archived,
           prefillTriage: !archived && Boolean(timelineState?.prefillTriage),
@@ -441,7 +448,7 @@ export default function TechVault() {
                     <span className="font-bold">{project.compliance}%</span>
                   </div>
 
-                  <a
+                  <Link
                     href={buildVaultProjectCasesHref({
                       projectName: project.name,
                       prefillTriage: project.prefillTriage,
@@ -449,7 +456,7 @@ export default function TechVault() {
                     className="mt-6 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white transition hover:border-accent/40 hover:bg-accent/10 hover:text-accent"
                   >
                     {t("vault-open-in-cases")}
-                  </a>
+                  </Link>
                 </motion.div>
               ))}
 
