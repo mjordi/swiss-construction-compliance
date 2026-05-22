@@ -49,6 +49,11 @@ vi.mock("framer-motion", () => ({
 
 vi.mock("@/lib/case-timeline", () => ({
   buildComplianceCaseTimeline: vi.fn(() => []),
+  deriveChecklistProgress: (checklist: Record<string, boolean>) => ({
+    completed: Object.values(checklist).filter(Boolean).length,
+    total: Object.keys(checklist).length,
+    label: `${Object.values(checklist).filter(Boolean).length}/${Object.keys(checklist).length}`,
+  }),
 }));
 
 const supabaseMock = {
