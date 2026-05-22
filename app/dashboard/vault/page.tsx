@@ -2,17 +2,20 @@
 
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Folder, FileText, MoreVertical, Plus, Search, ShieldCheck, Loader2, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { getSupabase } from "@/lib/supabase";
 import type { Case, Protocol } from "@/lib/database.types";
-import { buildComplianceCaseTimeline } from "@/lib/case-timeline";
+import { buildComplianceCaseTimeline, deriveChecklistProgress } from "@/lib/case-timeline";
 import {
   buildVaultCreateProjectHref,
   buildVaultProjectCasesHref,
   getVaultEmptyState,
+  parseVaultTab,
   type VaultEmptyStateAction,
   type VaultTab,
 } from "@/lib/vault";
@@ -79,14 +82,20 @@ export default function TechVault() {
   const { user } = useAuth();
   const { lang, t } = useLanguage();
   const supabase = useMemo(() => getSupabase(), []);
-  const [activeTab, setActiveTab] = useState<VaultTab>("projects");
-  const [query, setQuery] = useState("");
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const [activeTab, setActiveTab] = useState<VaultTab>(() => parseVaultTab(searchParams.get("tab")));
+  const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<TranslationKey | null>(null);
   const [projects, setProjects] = useState<VaultProjectCard[]>([]);
   const latestFetchIdRef = useRef(0);
   const hasLoadedProjectsRef = useRef(false);
   const lastSuccessfulUserIdRef = useRef<string | null>(null);
+  const activeTabRef = useRef(activeTab);
+  const queryRef = useRef(query);
+  const skipNextUrlWriteRef = useRef(false);
 
   const runRefresh = useCallback(async (fetchId: number) => {
     if (!user) {
@@ -155,18 +164,24 @@ export default function TechVault() {
         return acc;
       }, {});
 
+      const timelineByCaseId = new Map(timeline.map((item) => [item.id, item]));
+
       const nextProjects: VaultProjectCard[] = dbCases.map((c) => {
-        const checklistValues = Object.values(c.checklist ?? {});
-        const completed = checklistValues.filter(Boolean).length;
-        const total = checklistValues.length || 1;
         const archived = c.status === "archived";
         const timelineState = timelineStateByCase.get(c.id);
+        const timelineItem = timelineByCaseId.get(c.id);
+        const progress = deriveChecklistProgress(
+          normalizeFollowUpChecklistState({
+            ...timelineItem?.checklistDefaults,
+            ...(c.checklist ?? {}),
+          })
+        );
         return {
           id: c.id,
           name: c.project_name,
           status: archived ? "archived" : (timelineState?.status ?? "active"),
           docs: docsByCase[c.id] ?? 0,
-          compliance: Math.round((completed / total) * 100),
+          compliance: Math.round((progress.completed / progress.total) * 100),
           updatedAt: new Date(c.updated_at).getTime(),
           archived,
           prefillTriage: !archived && Boolean(timelineState?.prefillTriage),
@@ -199,6 +214,57 @@ export default function TechVault() {
       triggerRefresh();
     });
   }, [triggerRefresh]);
+
+  useEffect(() => {
+    activeTabRef.current = activeTab;
+  }, [activeTab]);
+
+  useEffect(() => {
+    queryRef.current = query;
+  }, [query]);
+
+  const searchParamString = searchParams.toString();
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParamString);
+    const nextActiveTab = parseVaultTab(params.get("tab"));
+    const nextQuery = params.get("q") ?? "";
+
+    if (nextActiveTab === activeTabRef.current && nextQuery === queryRef.current) {
+      return;
+    }
+
+    skipNextUrlWriteRef.current = true;
+    const frame = window.requestAnimationFrame(() => {
+      setActiveTab(nextActiveTab);
+      setQuery(nextQuery);
+    });
+
+    return () => window.cancelAnimationFrame(frame);
+  }, [searchParamString]);
+
+  useEffect(() => {
+    if (skipNextUrlWriteRef.current) {
+      skipNextUrlWriteRef.current = false;
+      return;
+    }
+
+    const params = new URLSearchParams(searchParams.toString());
+    const normalizedQuery = query.trim();
+
+    if (activeTab === "projects") params.delete("tab");
+    else params.set("tab", activeTab);
+
+    if (normalizedQuery) params.set("q", normalizedQuery);
+    else params.delete("q");
+
+    const next = params.toString();
+    const current = searchParams.toString();
+
+    if (next !== current) {
+      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+    }
+  }, [activeTab, pathname, query, router, searchParams]);
 
   const filteredProjects = useMemo(
     () =>
@@ -382,7 +448,7 @@ export default function TechVault() {
                     <span className="font-bold">{project.compliance}%</span>
                   </div>
 
-                  <a
+                  <Link
                     href={buildVaultProjectCasesHref({
                       projectName: project.name,
                       prefillTriage: project.prefillTriage,
@@ -390,7 +456,7 @@ export default function TechVault() {
                     className="mt-6 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white transition hover:border-accent/40 hover:bg-accent/10 hover:text-accent"
                   >
                     {t("vault-open-in-cases")}
-                  </a>
+                  </Link>
                 </motion.div>
               ))}
 

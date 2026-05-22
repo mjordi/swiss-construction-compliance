@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildVaultProjectCasesHref, getVaultEmptyState } from "../lib/vault";
+import { buildCaseVaultHref, buildVaultProjectCasesHref, getVaultEmptyState } from "../lib/vault";
 
 describe("getVaultEmptyState", () => {
   it("prefers a clear-search action when the current query yields no results", () => {
@@ -100,5 +100,15 @@ describe("buildVaultProjectCasesHref", () => {
         prefillTriage: true,
       })
     ).toBe("/dashboard/cases?status=triage");
+  });
+});
+
+describe("buildCaseVaultHref", () => {
+  it("links cases into the vault search view by trimmed project name", () => {
+    expect(buildCaseVaultHref("  Alpine Tower  ")).toBe("/dashboard/vault?q=Alpine+Tower");
+  });
+
+  it("falls back to the base vault route when the project name is blank", () => {
+    expect(buildCaseVaultHref("   ")).toBe("/dashboard/vault");
   });
 });

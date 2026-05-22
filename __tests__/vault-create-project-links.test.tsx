@@ -2,6 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import { render, screen, waitFor } from "@testing-library/react";
 import type { HTMLAttributes, ReactNode } from "react";
 
+const replaceMock = vi.fn();
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/dashboard/vault",
+  useRouter: () => ({ replace: replaceMock }),
+  useSearchParams: () => ({
+    get: () => null,
+    toString: () => "",
+  }),
+}));
+
 vi.mock("@/context/LanguageContext", () => ({
   useLanguage: () => ({
     lang: "en",
@@ -23,6 +34,11 @@ vi.mock("framer-motion", () => ({
 
 vi.mock("@/lib/case-timeline", () => ({
   buildComplianceCaseTimeline: vi.fn(() => []),
+  deriveChecklistProgress: (checklist: Record<string, boolean>) => ({
+    completed: Object.values(checklist).filter(Boolean).length,
+    total: Object.keys(checklist).length,
+    label: `${Object.values(checklist).filter(Boolean).length}/${Object.keys(checklist).length}`,
+  }),
 }));
 
 vi.mock("@/lib/supabase", () => ({

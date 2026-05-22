@@ -145,8 +145,8 @@ describe("cases filter URL synchronization", () => {
     protocolResponseFactory = () => ({ data: [], error: null });
   });
 
-  it("hydrates the current query params into the visible filter controls", async () => {
-    currentSearch = "regime=new&status=warning&sort=most-urgent&q=alpha";
+  it("hydrates the current query params into the visible filter controls, including triage", async () => {
+    currentSearch = "regime=new&status=triage&sort=most-urgent&q=alpha";
 
     render(<CasesPage />);
 
@@ -154,9 +154,21 @@ describe("cases filter URL synchronization", () => {
       expect((screen.getByLabelText("cases-filter-regime") as HTMLSelectElement).value).toBe("new");
     });
 
-    expect((screen.getByLabelText("cases-filter-status") as HTMLSelectElement).value).toBe("warning");
+    expect((screen.getByLabelText("cases-filter-status") as HTMLSelectElement).value).toBe("triage");
     expect((screen.getByLabelText("cases-filter-sort") as HTMLSelectElement).value).toBe("most-urgent");
     expect((screen.getByLabelText("cases-search-label") as HTMLInputElement).value).toBe("alpha");
+  });
+
+  it("renders the vault triage handoff in the visible status control", async () => {
+    currentSearch = "q=Riverside+Bridge&status=triage";
+
+    render(<CasesPage />);
+
+    await waitFor(() => {
+      expect((screen.getByLabelText("cases-filter-status") as HTMLSelectElement).value).toBe("triage");
+    });
+
+    expect((screen.getByLabelText("cases-search-label") as HTMLInputElement).value).toBe("Riverside Bridge");
   });
 
   it("re-hydrates filter state when the query params change externally", async () => {
@@ -246,6 +258,18 @@ describe("cases filter URL synchronization", () => {
     expect(await screen.findByText("Alpine Tower")).toBeTruthy();
     expect(screen.getByRole("link", { name: "cases-create-protocol" }).getAttribute("href")).toBe(
       "/dashboard?case=case-1"
+    );
+  });
+
+  it("renders a per-case vault handoff scoped to the case project name", async () => {
+    caseResponseFactory = () => ({ data: [successCase()], error: null });
+    protocolResponseFactory = () => ({ data: [], error: null });
+
+    render(<CasesPage />);
+
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "cases-open-in-vault" }).getAttribute("href")).toBe(
+      "/dashboard/vault?q=Alpine+Tower"
     );
   });
 

@@ -3,6 +3,10 @@ import type { TranslationKey } from "@/locales";
 export type VaultTab = "projects" | "archived";
 export type VaultEmptyStateAction = "clear-search" | "show-projects" | "show-archived" | null;
 
+export function parseVaultTab(value: string | null): VaultTab {
+  return value === "archived" ? "archived" : "projects";
+}
+
 export interface VaultEmptyState {
   titleKey: TranslationKey;
   titleParams?: Record<string, string>;
@@ -25,6 +29,18 @@ export interface VaultProjectCasesHrefInput {
 
 export function buildVaultCreateProjectHref(): string {
   return "/dashboard";
+}
+
+export function buildCaseVaultHref(projectName: string): string {
+  const normalizedProjectName = projectName.trim();
+
+  if (!normalizedProjectName) {
+    return "/dashboard/vault";
+  }
+
+  const params = new URLSearchParams();
+  params.set("q", normalizedProjectName);
+  return `/dashboard/vault?${params.toString()}`;
 }
 
 export function buildVaultProjectCasesHref({

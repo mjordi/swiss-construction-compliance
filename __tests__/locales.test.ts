@@ -92,6 +92,8 @@ describe("locales", () => {
       "cases-share-link-error",
       "cases-load-error",
       "cases-load-retry",
+      "cases-open-in-vault",
+      "cases-status-triage",
       "cases-create-error",
       "cases-delete-error",
     ] as const;
