@@ -79,6 +79,9 @@ export default function CasesPage() {
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState({ projectName: "", canton: "ZH", contractDate: "", discoveryDate: "" });
+  const [createError, setCreateError] = useState<TranslationKey | null>(null);
+  const [deleteError, setDeleteError] = useState<TranslationKey | null>(null);
+  const [deletingCaseIds, setDeletingCaseIds] = useState<Record<string, boolean>>({});
 
   const [regimeFilter, setRegimeFilter] = useState<CaseRegimeFilter>(() => parseRegimeFilter(searchParams.get("regime")));
   const [statusFilter, setStatusFilter] = useState<CaseStatusFilter>(() => parseStatusFilter(searchParams.get("status")));
@@ -370,6 +373,21 @@ export default function CasesPage() {
 
   const hasActiveFilters = shareViewQuery.length > 0;
 
+  function updateFormData(next: typeof formData) {
+    setCreateError(null);
+    setFormData(next);
+  }
+
+  function resetCaseForm() {
+    setFormData({ projectName: "", canton: "ZH", contractDate: "", discoveryDate: "" });
+  }
+
+  function closeCreateForm() {
+    setCreateError(null);
+    resetCaseForm();
+    setShowForm(false);
+  }
+
   function clearShareLinkFeedback() {
     shareLinkRequestIdRef.current += 1;
     if (shareLinkResetTimerRef.current !== null) {
@@ -483,17 +501,29 @@ export default function CasesPage() {
       return;
     }
     setSaving(true);
-    await supabase.from("cases").insert({
-      user_id: user.id,
-      project_name: formData.projectName,
-      canton: formData.canton,
-      contract_date: formData.contractDate,
-      discovery_date: formData.discoveryDate,
-    });
-    setFormData({ projectName: "", canton: "ZH", contractDate: "", discoveryDate: "" });
-    setShowForm(false);
-    setSaving(false);
-    triggerCasesRefresh();
+
+    try {
+      const { error } = await supabase.from("cases").insert({
+        user_id: user.id,
+        project_name: formData.projectName,
+        canton: formData.canton,
+        contract_date: formData.contractDate,
+        discovery_date: formData.discoveryDate,
+      });
+
+      if (error) {
+        throw error;
+      }
+
+      setCreateError(null);
+      resetCaseForm();
+      setShowForm(false);
+      triggerCasesRefresh();
+    } catch {
+      setCreateError("cases-create-error");
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function handleDeleteCase(caseId: string, projectName: string) {
@@ -501,20 +531,38 @@ export default function CasesPage() {
     const confirmed = window.confirm(confirmText);
     if (!confirmed) return;
 
-    await supabase.from("cases").delete().eq("id", caseId);
-    setChecklistSaveErrorByCase((prev) => {
-      if (!(caseId in prev)) return prev;
-      const next = { ...prev };
-      delete next[caseId];
-      return next;
-    });
-    setChecklistSavingByCase((prev) => {
-      if (!(caseId in prev)) return prev;
-      const next = { ...prev };
-      delete next[caseId];
-      return next;
-    });
-    triggerCasesRefresh();
+    setDeletingCaseIds((current) => ({ ...current, [caseId]: true }));
+
+    try {
+      const { error } = await supabase.from("cases").delete().eq("id", caseId);
+      if (error) {
+        throw error;
+      }
+
+      setDeleteError(null);
+      setChecklistSaveErrorByCase((prev) => {
+        if (!(caseId in prev)) return prev;
+        const next = { ...prev };
+        delete next[caseId];
+        return next;
+      });
+      setChecklistSavingByCase((prev) => {
+        if (!(caseId in prev)) return prev;
+        const next = { ...prev };
+        delete next[caseId];
+        return next;
+      });
+      triggerCasesRefresh();
+    } catch {
+      setDeleteError("cases-delete-error");
+    } finally {
+      setDeletingCaseIds((current) => {
+        if (!(caseId in current)) return current;
+        const next = { ...current };
+        delete next[caseId];
+        return next;
+      });
+    }
   }
 
   async function copyShareLink() {
@@ -565,7 +613,15 @@ export default function CasesPage() {
       <div className="mb-8 flex items-end justify-between">
         <PageHeader marker={t("cases-marker")} title={t("cases-title")} subtitle={t("cases-subtitle")} />
         <button
-          onClick={() => setShowForm(!showForm)}
+          onClick={() => {
+            setCreateError(null);
+            setShowForm((current) => {
+              if (current) {
+                resetCaseForm();
+              }
+              return !current;
+            });
+          }}
           className="bg-accent hover:bg-accent/90 text-white px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors duration-300 text-[13px] font-semibold shrink-0"
         >
           <Plus className="w-4 h-4" /> {t("cases-add-case")}
@@ -576,24 +632,29 @@ export default function CasesPage() {
       {showForm && (
         <form onSubmit={handleAddCase} className="mb-8 p-6 rounded-2xl bg-white/[0.02] border border-accent/20">
           <h3 className="text-[15px] font-semibold text-cream mb-4">{t("cases-add-title")}</h3>
+          {createError && (
+            <p role="alert" className="mb-4 rounded-lg border border-red-500/30 bg-red-500/[0.08] px-4 py-3 text-sm text-red-100">
+              {t(createError)}
+            </p>
+          )}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-project-name")}</label>
-              <input type="text" value={formData.projectName} onChange={(e) => setFormData({ ...formData, projectName: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none transition-colors duration-200" required />
+              <label htmlFor="cases-project-name" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-project-name")}</label>
+              <input id="cases-project-name" type="text" value={formData.projectName} onChange={(e) => updateFormData({ ...formData, projectName: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none transition-colors duration-200" required />
             </div>
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-canton-label")}</label>
-              <select value={formData.canton} onChange={(e) => setFormData({ ...formData, canton: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none">
+              <label htmlFor="cases-canton" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-canton-label")}</label>
+              <select id="cases-canton" value={formData.canton} onChange={(e) => updateFormData({ ...formData, canton: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none">
                 {SWISS_CANTONS.map((c) => <option key={c} value={c} className="bg-black text-cream">{c}</option>)}
               </select>
             </div>
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-contract-date-input")}</label>
-              <input type="date" value={formData.contractDate} onChange={(e) => setFormData({ ...formData, contractDate: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none [color-scheme:dark]" required />
+              <label htmlFor="cases-contract-date" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-contract-date-input")}</label>
+              <input id="cases-contract-date" type="date" value={formData.contractDate} onChange={(e) => updateFormData({ ...formData, contractDate: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none [color-scheme:dark]" required />
             </div>
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-discovery-date-input")}</label>
-              <input type="date" value={formData.discoveryDate} onChange={(e) => setFormData({ ...formData, discoveryDate: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none [color-scheme:dark]" required />
+              <label htmlFor="cases-discovery-date" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-discovery-date-input")}</label>
+              <input id="cases-discovery-date" type="date" value={formData.discoveryDate} onChange={(e) => updateFormData({ ...formData, discoveryDate: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none [color-scheme:dark]" required />
               {caseDateValidationError === "discovery-before-contract" && (
                 <p className="mt-2 text-xs text-red-400">{t("calc-discovery-before-contract")}</p>
               )}
@@ -603,7 +664,7 @@ export default function CasesPage() {
             <button type="submit" disabled={saving || !!caseDateValidationError} className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white font-semibold rounded-lg text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />} {t("cases-save")}
             </button>
-            <button type="button" onClick={() => setShowForm(false)} className="px-5 py-2.5 bg-white/[0.03] border border-white/[0.06] text-muted hover:text-cream font-medium rounded-lg text-sm">
+            <button type="button" onClick={closeCreateForm} className="px-5 py-2.5 bg-white/[0.03] border border-white/[0.06] text-muted hover:text-cream font-medium rounded-lg text-sm">
               {t("cases-cancel")}
             </button>
           </div>
@@ -717,6 +778,11 @@ export default function CasesPage() {
       </section>
 
       {/* Cases list */}
+      {deleteError && (
+        <div role="alert" className="mb-4 rounded-2xl border border-red-500/30 bg-red-500/[0.08] px-5 py-4 text-sm text-red-100">
+          <p>{t(deleteError)}</p>
+        </div>
+      )}
       {initialLoadError ? (
         <div
           role="alert"
@@ -776,7 +842,13 @@ export default function CasesPage() {
                     >
                       {t("cases-create-protocol")}
                     </Link>
-                    <button onClick={() => handleDeleteCase(item.id, item.projectName)} className="ml-2 p-1.5 rounded-md text-muted/40 hover:text-red-400 hover:bg-red-400/[0.06] transition-colors" title={t("cases-delete")}>
+                    <button
+                      onClick={() => handleDeleteCase(item.id, item.projectName)}
+                      aria-label={t("cases-delete")}
+                      className="ml-2 p-1.5 rounded-md text-muted/40 hover:text-red-400 hover:bg-red-400/[0.06] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                      title={t("cases-delete")}
+                      disabled={!!deletingCaseIds[item.id]}
+                    >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
