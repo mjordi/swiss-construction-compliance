@@ -92,6 +92,8 @@ describe("locales", () => {
       "cases-share-link-error",
       "cases-load-error",
       "cases-load-retry",
+      "cases-create-error",
+      "cases-delete-error",
     ] as const;
 
     for (const [lang, translations] of Object.entries(locales)) {
