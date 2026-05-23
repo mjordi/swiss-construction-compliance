@@ -98,6 +98,8 @@ export default function CasesPage() {
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
   const latestFetchIdRef = useRef(0);
   const hasLoadedInitialCasesRef = useRef(false);
+  const lastSuccessfulCasesRef = useRef<Case[]>([]);
+  const lastSuccessfulProtocolCountsRef = useRef<Record<string, number>>({});
   const filterStateRef = useRef({
     regimeFilter,
     statusFilter,
@@ -109,6 +111,8 @@ export default function CasesPage() {
   const runCasesRefresh = useCallback(async (fetchId: number) => {
     if (!user) {
       hasLoadedInitialCasesRef.current = false;
+      lastSuccessfulCasesRef.current = [];
+      lastSuccessfulProtocolCountsRef.current = {};
       setDbCases([]);
       setProtocolCounts({});
       setInitialLoadError(null);
@@ -137,6 +141,9 @@ export default function CasesPage() {
           setDbCases([]);
           setProtocolCounts({});
           setInitialLoadError("cases-load-error");
+        } else {
+          setDbCases(lastSuccessfulCasesRef.current);
+          setProtocolCounts(lastSuccessfulProtocolCountsRef.current);
         }
         setLoading(false);
         return;
@@ -150,10 +157,13 @@ export default function CasesPage() {
         for (const p of protocolsResult.data) {
           if (p.case_id) counts[p.case_id] = (counts[p.case_id] || 0) + 1;
         }
+        lastSuccessfulProtocolCountsRef.current = counts;
         setProtocolCounts(counts);
       } else {
+        lastSuccessfulProtocolCountsRef.current = {};
         setProtocolCounts({});
       }
+      lastSuccessfulCasesRef.current = (casesResult.data as Case[]) ?? [];
       setLoading(false);
     } catch {
       if (fetchId !== latestFetchIdRef.current) return;
@@ -161,6 +171,9 @@ export default function CasesPage() {
         setDbCases([]);
         setProtocolCounts({});
         setInitialLoadError("cases-load-error");
+      } else {
+        setDbCases(lastSuccessfulCasesRef.current);
+        setProtocolCounts(lastSuccessfulProtocolCountsRef.current);
       }
       setLoading(false);
     }
