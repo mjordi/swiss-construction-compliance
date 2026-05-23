@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 
 const replaceMock = vi.fn();
 const updateEqMock = vi.fn();
+const deleteEqMock = vi.fn();
 
 type CaseRecord = {
   id: string;
@@ -106,7 +107,7 @@ vi.mock("@/lib/supabase", () => ({
             eq: (field: string, caseId: string) => updateEqMock(payload, field, caseId),
           }),
           delete: () => ({
-            eq: vi.fn(),
+            eq: (field: string, caseId: string) => deleteEqMock(field, caseId),
           }),
           insert: vi.fn(),
         };
@@ -144,11 +145,22 @@ function buildCase(id: string, projectName: string): CaseRecord {
   };
 }
 
+function createDeferred<T>() {
+  let resolve!: (value: T) => void;
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+  return { promise, resolve, reject };
+}
+
 describe("cases inline edit", () => {
   beforeEach(() => {
     replaceMock.mockReset();
     updateEqMock.mockReset();
-    casesData = [buildCase("case-1", "Alpine Tower")];
+    deleteEqMock.mockReset();
+    casesData = [buildCase("case-1", "Alpine Tower"), buildCase("case-2", "Riverside Hall")];
   });
 
   it("keeps inline edit values on failure, clears stale feedback on input change, and shows updated values after a successful retry", async () => {
@@ -228,5 +240,111 @@ describe("cases inline edit", () => {
     await waitFor(() => {
       expect(within(caseCard).queryByText("cases-update-success")).toBeNull();
     });
+  });
+
+  it("locks the inline edit session while a save is pending so values survive a failed request", async () => {
+    const deferred = createDeferred<{ error: { message: string } | null }>();
+    updateEqMock.mockReturnValueOnce(deferred.promise);
+
+    render(<CasesPage />);
+
+    const firstCard = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    const secondCard = (await screen.findByText("Riverside Hall")).closest("article") as HTMLElement;
+
+    fireEvent.click(within(firstCard).getByRole("button", { name: "cases-edit" }));
+    fireEvent.change(within(firstCard).getByLabelText("cases-project-name"), {
+      target: { value: "Alpine Tower Revised" },
+    });
+
+    fireEvent.click(within(firstCard).getByRole("button", { name: "cases-save" }));
+
+    await waitFor(() => {
+      expect(updateEqMock).toHaveBeenCalledTimes(1);
+    });
+
+    const projectNameInput = within(firstCard).getByLabelText("cases-project-name") as HTMLInputElement;
+    const cancelButton = within(firstCard).getByRole("button", { name: "cases-cancel" }) as HTMLButtonElement;
+    const deleteButton = within(firstCard).getByRole("button", { name: "cases-delete" }) as HTMLButtonElement;
+    const secondEditButton = within(secondCard).getByRole("button", { name: "cases-edit" }) as HTMLButtonElement;
+
+    expect(projectNameInput.disabled).toBe(true);
+    expect(cancelButton.disabled).toBe(true);
+    expect(deleteButton.disabled).toBe(true);
+    expect(secondEditButton.disabled).toBe(true);
+
+    fireEvent.click(cancelButton);
+    fireEvent.click(deleteButton);
+    fireEvent.click(secondEditButton);
+
+    expect((within(firstCard).getByLabelText("cases-project-name") as HTMLInputElement).value).toBe("Alpine Tower Revised");
+    expect(within(secondCard).queryByLabelText("cases-project-name")).toBeNull();
+
+    deferred.resolve({ error: { message: "still failed" } });
+
+    expect(await within(firstCard).findByText("cases-update-error")).toBeTruthy();
+    expect((within(firstCard).getByLabelText("cases-project-name") as HTMLInputElement).value).toBe("Alpine Tower Revised");
+    expect(within(secondCard).queryByLabelText("cases-project-name")).toBeNull();
+  });
+
+  it("prevents submitting an inline save while a delete for the same case is pending", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const deferred = createDeferred<{ error: { message: string } | null }>();
+    deleteEqMock.mockReturnValueOnce(deferred.promise);
+
+    render(<CasesPage />);
+
+    const firstCard = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+
+    fireEvent.click(within(firstCard).getByRole("button", { name: "cases-edit" }));
+    fireEvent.click(within(firstCard).getByRole("button", { name: "cases-delete" }));
+
+    await waitFor(() => {
+      expect(deleteEqMock).toHaveBeenCalledWith("id", "case-1");
+    });
+
+    const saveButton = within(firstCard).getByRole("button", { name: "cases-save" }) as HTMLButtonElement;
+    const cancelButton = within(firstCard).getByRole("button", { name: "cases-cancel" }) as HTMLButtonElement;
+    const secondEditButton = within(screen.getByText("Riverside Hall").closest("article") as HTMLElement).getByRole("button", {
+      name: "cases-edit",
+    }) as HTMLButtonElement;
+
+    expect(saveButton.disabled).toBe(true);
+    expect(cancelButton.disabled).toBe(true);
+    expect(secondEditButton.disabled).toBe(true);
+
+    fireEvent.click(saveButton);
+    fireEvent.click(secondEditButton);
+    expect(updateEqMock).not.toHaveBeenCalled();
+    expect(screen.queryByDisplayValue("Riverside Hall")).toBeNull();
+
+    deferred.resolve({ error: { message: "delete failed" } });
+
+    await waitFor(() => {
+      expect(saveButton.disabled).toBe(false);
+    });
+
+    confirmSpy.mockRestore();
+  });
+
+  it("removes a case from the local list immediately after a successful delete", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    deleteEqMock.mockImplementationOnce(async (field: string, caseId: string) => {
+      expect(field).toBe("id");
+      expect(caseId).toBe("case-1");
+      casesData = casesData.filter((item) => item.id !== caseId);
+      return { error: null };
+    });
+
+    render(<CasesPage />);
+
+    const firstCard = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    fireEvent.click(within(firstCard).getByRole("button", { name: "cases-delete" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Alpine Tower")).toBeNull();
+    });
+    expect(screen.getByText("Riverside Hall")).toBeTruthy();
+
+    confirmSpy.mockRestore();
   });
 });

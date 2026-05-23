@@ -420,12 +420,14 @@ export default function CasesPage() {
   }
 
   function openEditForm(item: Case) {
+    if (updatingCaseId || Object.keys(deletingCaseIds).length > 0) return;
     setCaseUpdateFeedback(null);
     setEditingCaseId(item.id);
     setEditFormData(buildCaseFormState(item));
   }
 
   function closeEditForm() {
+    if (updatingCaseId) return;
     setEditingCaseId(null);
     resetEditForm();
   }
@@ -583,6 +585,7 @@ export default function CasesPage() {
   }
 
   async function handleDeleteCase(caseId: string, projectName: string) {
+    if (updatingCaseId) return;
     const confirmText = t("cases-delete-confirm").replace("{projectName}", projectName);
     const confirmed = window.confirm(confirmText);
     if (!confirmed) return;
@@ -596,6 +599,7 @@ export default function CasesPage() {
       }
 
       setDeleteError(null);
+      setDbCases((current) => current.filter((item) => item.id !== caseId));
       if (editingCaseId === caseId) {
         closeEditForm();
       }
@@ -634,7 +638,8 @@ export default function CasesPage() {
       !editFormData.contractDate ||
       !editFormData.discoveryDate ||
       editCaseDateValidationError ||
-      updatingCaseId
+      updatingCaseId ||
+      deletingCaseIds[caseId]
     ) {
       return;
     }
@@ -965,7 +970,8 @@ export default function CasesPage() {
                         if (!dbCase) return;
                         openEditForm(dbCase);
                       }}
-                      className="px-2.5 py-1 rounded-md border border-white/[0.14] text-cream hover:bg-white/[0.06] transition-colors"
+                      disabled={Boolean(updatingCaseId) || Object.keys(deletingCaseIds).length > 0}
+                      className="px-2.5 py-1 rounded-md border border-white/[0.14] text-cream hover:bg-white/[0.06] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {t("cases-edit")}
                     </button>
@@ -974,7 +980,7 @@ export default function CasesPage() {
                       aria-label={t("cases-delete")}
                       className="ml-2 p-1.5 rounded-md text-muted/40 hover:text-red-400 hover:bg-red-400/[0.06] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                       title={t("cases-delete")}
-                      disabled={!!deletingCaseIds[item.id]}
+                      disabled={!!deletingCaseIds[item.id] || Boolean(updatingCaseId)}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -1013,6 +1019,7 @@ export default function CasesPage() {
                           value={editFormData.projectName}
                           onChange={(event) => updateEditForm({ ...editFormData, projectName: event.target.value })}
                           className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm text-cream outline-none transition-colors duration-200 focus:border-accent/40"
+                          disabled={updatingCaseId === item.id || Boolean(deletingCaseIds[item.id])}
                           required
                         />
                       </div>
@@ -1025,6 +1032,7 @@ export default function CasesPage() {
                           value={editFormData.canton}
                           onChange={(event) => updateEditForm({ ...editFormData, canton: event.target.value })}
                           className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm text-cream outline-none focus:border-accent/40"
+                          disabled={updatingCaseId === item.id || Boolean(deletingCaseIds[item.id])}
                         >
                           {SWISS_CANTONS.map((canton) => (
                             <option key={canton} value={canton} className="bg-black text-cream">
@@ -1043,6 +1051,7 @@ export default function CasesPage() {
                           value={editFormData.contractDate}
                           onChange={(event) => updateEditForm({ ...editFormData, contractDate: event.target.value })}
                           className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm text-cream outline-none [color-scheme:dark] focus:border-accent/40"
+                          disabled={updatingCaseId === item.id || Boolean(deletingCaseIds[item.id])}
                           required
                         />
                       </div>
@@ -1056,6 +1065,7 @@ export default function CasesPage() {
                           value={editFormData.discoveryDate}
                           onChange={(event) => updateEditForm({ ...editFormData, discoveryDate: event.target.value })}
                           className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm text-cream outline-none [color-scheme:dark] focus:border-accent/40"
+                          disabled={updatingCaseId === item.id || Boolean(deletingCaseIds[item.id])}
                           required
                         />
                         {editCaseDateValidationError === "discovery-before-contract" && (
@@ -1066,7 +1076,7 @@ export default function CasesPage() {
                     <div className="mt-4 flex gap-3">
                       <button
                         type="submit"
-                        disabled={updatingCaseId === item.id || !!editCaseDateValidationError}
+                        disabled={updatingCaseId === item.id || Boolean(deletingCaseIds[item.id]) || !!editCaseDateValidationError}
                         className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {updatingCaseId === item.id && <Loader2 className="h-4 w-4 animate-spin" />} {t("cases-save")}
@@ -1074,7 +1084,8 @@ export default function CasesPage() {
                       <button
                         type="button"
                         onClick={closeEditForm}
-                        className="rounded-lg border border-white/[0.06] bg-white/[0.03] px-5 py-2.5 text-sm font-medium text-muted hover:text-cream"
+                        disabled={updatingCaseId === item.id || Boolean(deletingCaseIds[item.id])}
+                        className="rounded-lg border border-white/[0.06] bg-white/[0.03] px-5 py-2.5 text-sm font-medium text-muted hover:text-cream disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {t("cases-cancel")}
                       </button>
