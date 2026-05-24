@@ -67,6 +67,29 @@ function parseSortMode(value: string | null): CaseSortMode {
   return "nearest-deadline";
 }
 
+type CaseFormState = {
+  projectName: string;
+  canton: string;
+  contractDate: string;
+  discoveryDate: string;
+};
+
+const EMPTY_CASE_FORM: CaseFormState = {
+  projectName: "",
+  canton: "ZH",
+  contractDate: "",
+  discoveryDate: "",
+};
+
+function buildCaseFormState(item: Pick<Case, "project_name" | "canton" | "contract_date" | "discovery_date">): CaseFormState {
+  return {
+    projectName: item.project_name,
+    canton: item.canton,
+    contractDate: item.contract_date.slice(0, 10),
+    discoveryDate: item.discovery_date.slice(0, 10),
+  };
+}
+
 export default function CasesPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
@@ -79,10 +102,14 @@ export default function CasesPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
-  const [formData, setFormData] = useState({ projectName: "", canton: "ZH", contractDate: "", discoveryDate: "" });
+  const [formData, setFormData] = useState<CaseFormState>(EMPTY_CASE_FORM);
   const [createError, setCreateError] = useState<TranslationKey | null>(null);
   const [deleteError, setDeleteError] = useState<TranslationKey | null>(null);
   const [deletingCaseIds, setDeletingCaseIds] = useState<Record<string, boolean>>({});
+  const [editingCaseId, setEditingCaseId] = useState<string | null>(null);
+  const [editFormData, setEditFormData] = useState<CaseFormState>(EMPTY_CASE_FORM);
+  const [updatingCaseId, setUpdatingCaseId] = useState<string | null>(null);
+  const [caseUpdateFeedback, setCaseUpdateFeedback] = useState<{ caseId: string; key: TranslationKey; tone: "success" | "error" } | null>(null);
 
   const [regimeFilter, setRegimeFilter] = useState<CaseRegimeFilter>(() => parseRegimeFilter(searchParams.get("regime")));
   const [statusFilter, setStatusFilter] = useState<CaseStatusFilter>(() => parseStatusFilter(searchParams.get("status")));
@@ -387,13 +414,35 @@ export default function CasesPage() {
 
   const hasActiveFilters = shareViewQuery.length > 0;
 
-  function updateFormData(next: typeof formData) {
+  function updateFormData(next: CaseFormState) {
     setCreateError(null);
     setFormData(next);
   }
 
   function resetCaseForm() {
-    setFormData({ projectName: "", canton: "ZH", contractDate: "", discoveryDate: "" });
+    setFormData(EMPTY_CASE_FORM);
+  }
+
+  function updateEditForm(next: CaseFormState) {
+    setCaseUpdateFeedback(null);
+    setEditFormData(next);
+  }
+
+  function resetEditForm() {
+    setEditFormData(EMPTY_CASE_FORM);
+  }
+
+  function openEditForm(item: Case) {
+    if (updatingCaseId || hasDeletingCases) return;
+    setCaseUpdateFeedback(null);
+    setEditingCaseId(item.id);
+    setEditFormData(buildCaseFormState(item));
+  }
+
+  function closeEditForm() {
+    if (updatingCaseId) return;
+    setEditingCaseId(null);
+    resetEditForm();
   }
 
   function closeCreateForm() {
@@ -422,6 +471,16 @@ export default function CasesPage() {
       new Date(formData.discoveryDate)
     );
   }, [formData.contractDate, formData.discoveryDate]);
+
+  const editCaseDateValidationError = useMemo(() => {
+    if (!editFormData.contractDate || !editFormData.discoveryDate) return null;
+    return validateRuegefristInput(
+      new Date(editFormData.contractDate),
+      new Date(editFormData.discoveryDate)
+    );
+  }, [editFormData.contractDate, editFormData.discoveryDate]);
+
+  const hasDeletingCases = Object.keys(deletingCaseIds).length > 0;
 
   const checklistLabels: Record<FollowUpChecklistKey, string> = {
     defectDocumented: t("cases-checklist-defect-documented"),
@@ -541,6 +600,7 @@ export default function CasesPage() {
   }
 
   async function handleDeleteCase(caseId: string, projectName: string) {
+    if (updatingCaseId) return;
     const confirmText = t("cases-delete-confirm").replace("{projectName}", projectName);
     const confirmed = window.confirm(confirmText);
     if (!confirmed) return;
@@ -554,6 +614,28 @@ export default function CasesPage() {
       }
 
       setDeleteError(null);
+      setDbCases((current) => {
+        const next = current.filter((item) => item.id !== caseId);
+        lastSuccessfulCasesRef.current = next;
+        return next;
+      });
+      setProtocolCounts((current) => {
+        if (!(caseId in current)) {
+          lastSuccessfulProtocolCountsRef.current = current;
+          return current;
+        }
+        const next = { ...current };
+        delete next[caseId];
+        lastSuccessfulProtocolCountsRef.current = next;
+        return next;
+      });
+      if (editingCaseId === caseId) {
+        closeEditForm();
+      }
+      setCaseUpdateFeedback((current) => {
+        if (!current || current.caseId !== caseId) return current;
+        return null;
+      });
       setChecklistSaveErrorByCase((prev) => {
         if (!(caseId in prev)) return prev;
         const next = { ...prev };
@@ -576,6 +658,54 @@ export default function CasesPage() {
         delete next[caseId];
         return next;
       });
+    }
+  }
+
+  async function handleUpdateCase(caseId: string) {
+    if (
+      !editFormData.projectName ||
+      !editFormData.contractDate ||
+      !editFormData.discoveryDate ||
+      editCaseDateValidationError ||
+      updatingCaseId ||
+      hasDeletingCases
+    ) {
+      return;
+    }
+
+    setUpdatingCaseId(caseId);
+
+    try {
+      const payload = {
+        project_name: editFormData.projectName,
+        canton: editFormData.canton,
+        contract_date: editFormData.contractDate,
+        discovery_date: editFormData.discoveryDate,
+        updated_at: new Date().toISOString(),
+      };
+
+      const { error } = await supabase.from("cases").update(payload).eq("id", caseId);
+
+      if (error) {
+        throw error;
+      }
+
+      setDbCases((current) =>
+        current.map((item) =>
+          item.id === caseId
+            ? {
+                ...item,
+                ...payload,
+              }
+            : item
+        )
+      );
+      closeEditForm();
+      setCaseUpdateFeedback({ caseId, key: "cases-update-success", tone: "success" });
+    } catch {
+      setCaseUpdateFeedback({ caseId, key: "cases-update-error", tone: "error" });
+    } finally {
+      setUpdatingCaseId(null);
     }
   }
 
@@ -863,23 +993,141 @@ export default function CasesPage() {
                       {t("cases-create-protocol")}
                     </Link>
                     <button
+                      type="button"
+                      onClick={() => {
+                        const dbCase = dbCases.find((dbItem) => dbItem.id === item.id);
+                        if (!dbCase) return;
+                        openEditForm(dbCase);
+                      }}
+                      disabled={Boolean(updatingCaseId) || hasDeletingCases}
+                      className="px-2.5 py-1 rounded-md border border-white/[0.14] text-cream hover:bg-white/[0.06] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {t("cases-edit")}
+                    </button>
+                    <button
                       onClick={() => handleDeleteCase(item.id, item.projectName)}
                       aria-label={t("cases-delete")}
                       className="ml-2 p-1.5 rounded-md text-muted/40 hover:text-red-400 hover:bg-red-400/[0.06] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                       title={t("cases-delete")}
-                      disabled={!!deletingCaseIds[item.id]}
+                      disabled={!!deletingCaseIds[item.id] || Boolean(updatingCaseId)}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
 
-                <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm mb-5">
-                  <InfoCell label={t("cases-contract-date")} value={item.contractDateLabel} />
-                  <InfoCell label={t("cases-defect-discovered")} value={item.discoveryDateLabel} />
-                  <InfoCell label={t("cases-60day-notice")} value={item.noticeApplies ? t("cases-applies") : t("cases-not-fixed")} />
-                  <InfoCell label={t("cases-notice-deadline")} value={item.noticeDeadlineLabel} />
-                </div>
+                {caseUpdateFeedback?.caseId === item.id && (
+                  <div
+                    role="alert"
+                    className={`mb-4 rounded-xl border px-4 py-3 text-sm ${
+                      caseUpdateFeedback.tone === "success"
+                        ? "border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-100"
+                        : "border-red-500/30 bg-red-500/[0.08] text-red-100"
+                    }`}
+                  >
+                    {t(caseUpdateFeedback.key)}
+                  </div>
+                )}
+
+                {editingCaseId === item.id ? (
+                  <form
+                    className="mb-5 rounded-xl border border-accent/20 bg-white/[0.02] p-4"
+                    onSubmit={(event) => {
+                      event.preventDefault();
+                      void handleUpdateCase(item.id);
+                    }}
+                  >
+                    <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                      <div>
+                        <label htmlFor={`cases-edit-project-name-${item.id}`} className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+                          {t("cases-project-name")}
+                        </label>
+                        <input
+                          id={`cases-edit-project-name-${item.id}`}
+                          type="text"
+                          value={editFormData.projectName}
+                          onChange={(event) => updateEditForm({ ...editFormData, projectName: event.target.value })}
+                          className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm text-cream outline-none transition-colors duration-200 focus:border-accent/40"
+                          disabled={updatingCaseId === item.id || hasDeletingCases}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor={`cases-edit-canton-${item.id}`} className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+                          {t("cases-canton-label")}
+                        </label>
+                        <select
+                          id={`cases-edit-canton-${item.id}`}
+                          value={editFormData.canton}
+                          onChange={(event) => updateEditForm({ ...editFormData, canton: event.target.value })}
+                          className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm text-cream outline-none focus:border-accent/40"
+                          disabled={updatingCaseId === item.id || hasDeletingCases}
+                        >
+                          {SWISS_CANTONS.map((canton) => (
+                            <option key={canton} value={canton} className="bg-black text-cream">
+                              {canton}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <div>
+                        <label htmlFor={`cases-edit-contract-date-${item.id}`} className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+                          {t("cases-contract-date-input")}
+                        </label>
+                        <input
+                          id={`cases-edit-contract-date-${item.id}`}
+                          type="date"
+                          value={editFormData.contractDate}
+                          onChange={(event) => updateEditForm({ ...editFormData, contractDate: event.target.value })}
+                          className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm text-cream outline-none [color-scheme:dark] focus:border-accent/40"
+                          disabled={updatingCaseId === item.id || hasDeletingCases}
+                          required
+                        />
+                      </div>
+                      <div>
+                        <label htmlFor={`cases-edit-discovery-date-${item.id}`} className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+                          {t("cases-discovery-date-input")}
+                        </label>
+                        <input
+                          id={`cases-edit-discovery-date-${item.id}`}
+                          type="date"
+                          value={editFormData.discoveryDate}
+                          onChange={(event) => updateEditForm({ ...editFormData, discoveryDate: event.target.value })}
+                          className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm text-cream outline-none [color-scheme:dark] focus:border-accent/40"
+                          disabled={updatingCaseId === item.id || hasDeletingCases}
+                          required
+                        />
+                        {editCaseDateValidationError === "discovery-before-contract" && (
+                          <p className="mt-2 text-xs text-red-400">{t("calc-discovery-before-contract")}</p>
+                        )}
+                      </div>
+                    </div>
+                    <div className="mt-4 flex gap-3">
+                      <button
+                        type="submit"
+                        disabled={updatingCaseId === item.id || hasDeletingCases || !!editCaseDateValidationError}
+                        className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {updatingCaseId === item.id && <Loader2 className="h-4 w-4 animate-spin" />} {t("cases-save")}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={closeEditForm}
+                        disabled={updatingCaseId === item.id || hasDeletingCases}
+                        className="rounded-lg border border-white/[0.06] bg-white/[0.03] px-5 py-2.5 text-sm font-medium text-muted hover:text-cream disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {t("cases-cancel")}
+                      </button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3 text-sm mb-5">
+                    <InfoCell label={t("cases-contract-date")} value={item.contractDateLabel} />
+                    <InfoCell label={t("cases-defect-discovered")} value={item.discoveryDateLabel} />
+                    <InfoCell label={t("cases-60day-notice")} value={item.noticeApplies ? t("cases-applies") : t("cases-not-fixed")} />
+                    <InfoCell label={t("cases-notice-deadline")} value={item.noticeDeadlineLabel} />
+                  </div>
+                )}
 
                 <details className="rounded-xl border border-white/[0.07] p-4 bg-white/[0.01]">
                   <summary className="cursor-pointer text-sm font-semibold text-cream">{t("cases-detail-summary")}</summary>
