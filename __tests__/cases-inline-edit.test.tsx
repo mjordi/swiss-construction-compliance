@@ -326,6 +326,49 @@ describe("cases inline edit", () => {
     confirmSpy.mockRestore();
   });
 
+  it("prevents submitting an inline save while another case delete is pending", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const deferred = createDeferred<{ error: { message: string } | null }>();
+    deleteEqMock.mockReturnValueOnce(deferred.promise);
+
+    render(<CasesPage />);
+
+    const firstCard = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    const secondCard = (await screen.findByText("Riverside Hall")).closest("article") as HTMLElement;
+
+    fireEvent.click(within(secondCard).getByRole("button", { name: "cases-edit" }));
+
+    const secondSaveButton = within(secondCard).getByRole("button", { name: "cases-save" }) as HTMLButtonElement;
+    const secondCancelButton = within(secondCard).getByRole("button", { name: "cases-cancel" }) as HTMLButtonElement;
+    const secondProjectNameInput = within(secondCard).getByLabelText("cases-project-name") as HTMLInputElement;
+
+    fireEvent.change(secondProjectNameInput, {
+      target: { value: "Riverside Hall Revised" },
+    });
+
+    fireEvent.click(within(firstCard).getByRole("button", { name: "cases-delete" }));
+
+    await waitFor(() => {
+      expect(deleteEqMock).toHaveBeenCalledWith("id", "case-1");
+    });
+
+    expect(secondSaveButton.disabled).toBe(true);
+    expect(secondCancelButton.disabled).toBe(true);
+    expect(secondProjectNameInput.disabled).toBe(true);
+
+    fireEvent.click(secondSaveButton);
+    expect(updateEqMock).not.toHaveBeenCalled();
+
+    deferred.resolve({ error: { message: "delete failed" } });
+
+    await waitFor(() => {
+      expect(secondSaveButton.disabled).toBe(false);
+    });
+    expect(secondProjectNameInput.value).toBe("Riverside Hall Revised");
+
+    confirmSpy.mockRestore();
+  });
+
   it("removes a case from the local list immediately after a successful delete", async () => {
     const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
     deleteEqMock.mockImplementationOnce(async (field: string, caseId: string) => {
