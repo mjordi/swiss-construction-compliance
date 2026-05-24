@@ -614,7 +614,21 @@ export default function CasesPage() {
       }
 
       setDeleteError(null);
-      setDbCases((current) => current.filter((item) => item.id !== caseId));
+      setDbCases((current) => {
+        const next = current.filter((item) => item.id !== caseId);
+        lastSuccessfulCasesRef.current = next;
+        return next;
+      });
+      setProtocolCounts((current) => {
+        if (!(caseId in current)) {
+          lastSuccessfulProtocolCountsRef.current = current;
+          return current;
+        }
+        const next = { ...current };
+        delete next[caseId];
+        lastSuccessfulProtocolCountsRef.current = next;
+        return next;
+      });
       if (editingCaseId === caseId) {
         closeEditForm();
       }

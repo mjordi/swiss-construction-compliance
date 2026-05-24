@@ -4,6 +4,14 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 const replaceMock = vi.fn();
 const updateEqMock = vi.fn();
 const deleteEqMock = vi.fn();
+let casesSelectResponses: Array<
+  | { data: CaseRecord[] | null; error: { message: string } | null }
+  | Promise<{ data: CaseRecord[] | null; error: { message: string } | null }>
+> = [];
+let protocolsSelectResponses: Array<
+  | { data: Array<{ case_id: string | null }> | null; error: { message: string } | null }
+  | Promise<{ data: Array<{ case_id: string | null }> | null; error: { message: string } | null }>
+> = [];
 
 type CaseRecord = {
   id: string;
@@ -100,7 +108,10 @@ vi.mock("@/lib/supabase", () => ({
         return {
           select: () => ({
             eq: () => ({
-              order: () => Promise.resolve({ data: casesData, error: null }),
+              order: () => {
+                const nextResponse = casesSelectResponses.shift();
+                return Promise.resolve(nextResponse ?? { data: casesData, error: null });
+              },
             }),
           }),
           update: (payload: Record<string, unknown>) => ({
@@ -117,7 +128,10 @@ vi.mock("@/lib/supabase", () => ({
         return {
           select: () => ({
             eq: () => ({
-              not: () => Promise.resolve({ data: [], error: null }),
+              not: () => {
+                const nextResponse = protocolsSelectResponses.shift();
+                return Promise.resolve(nextResponse ?? { data: [], error: null });
+              },
             }),
           }),
         };
@@ -160,6 +174,8 @@ describe("cases inline edit", () => {
     replaceMock.mockReset();
     updateEqMock.mockReset();
     deleteEqMock.mockReset();
+    casesSelectResponses = [];
+    protocolsSelectResponses = [];
     casesData = [buildCase("case-1", "Alpine Tower"), buildCase("case-2", "Riverside Hall")];
   });
 
@@ -387,6 +403,42 @@ describe("cases inline edit", () => {
       expect(screen.queryByText("Alpine Tower")).toBeNull();
     });
     expect(screen.getByText("Riverside Hall")).toBeTruthy();
+
+    confirmSpy.mockRestore();
+  });
+
+  it("keeps a successfully deleted case hidden when the follow-up refresh fails", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const refreshCasesDeferred = createDeferred<{ data: CaseRecord[] | null; error: { message: string } | null }>();
+    deleteEqMock.mockImplementationOnce(async (field: string, caseId: string) => {
+      expect(field).toBe("id");
+      expect(caseId).toBe("case-1");
+      casesData = casesData.filter((item) => item.id !== caseId);
+      casesSelectResponses.push(refreshCasesDeferred.promise);
+      protocolsSelectResponses.push(Promise.resolve({ data: [], error: null }));
+      return { error: null };
+    });
+
+    render(<CasesPage />);
+
+    const firstCard = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    fireEvent.click(within(firstCard).getByRole("button", { name: "cases-delete" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("Alpine Tower")).toBeNull();
+    });
+
+    refreshCasesDeferred.resolve({ data: null, error: { message: "refresh failed" } });
+
+    await waitFor(() => {
+      expect(casesSelectResponses).toHaveLength(0);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Alpine Tower")).toBeNull();
+    });
+    expect(screen.getByText("Riverside Hall")).toBeTruthy();
+    expect(screen.queryByText("cases-load-error")).toBeNull();
 
     confirmSpy.mockRestore();
   });
