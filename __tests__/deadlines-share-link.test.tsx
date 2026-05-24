@@ -89,6 +89,79 @@ describe("deadlines share-link restoration", () => {
     expect(screen.getByText("deadlines-5year-title")).toBeTruthy();
   });
 
+  it("restores custom reminder presets from shared links", async () => {
+    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30&reminders=30,3");
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("deadlines-result-title")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "deadlines-share-link" }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30&reminders=30%2C3");
+    });
+  });
+
+  it("round-trips empty reminder presets with the none sentinel", async () => {
+    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30&reminders=none");
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("deadlines-result-title")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "deadlines-share-link" }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30&reminders=none");
+    });
+  });
+
+  it("cleans invalid reminder presets from the shared URL", async () => {
+    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30&reminders=foo,99,7,7");
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("deadlines-result-title")).toBeTruthy();
+    });
+
+    await waitFor(() => {
+      expect(window.location.search).toBe("?acceptance=2026-04-30&reminders=7");
+    });
+  });
+
+  it("preserves valid reminder presets when the shared acceptance date is invalid", async () => {
+    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=bad-date&reminders=30,3");
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(window.location.search).toBe("?reminders=30%2C3");
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "30 deadlines-reminder-days" }).className).toContain("bg-accent/20");
+      expect(screen.getByRole("button", { name: "3 deadlines-reminder-days" }).className).toContain("bg-accent/20");
+    });
+
+    expect(screen.queryByText("deadlines-result-title")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("deadlines-input-label"), {
+      target: { value: "2026-04-30" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "deadlines-calculate" }));
+    fireEvent.click(screen.getByRole("button", { name: "deadlines-share-link" }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?reminders=30%2C3&acceptance=2026-04-30");
+    });
+  });
+
   it("copies the last calculated acceptance date even after the input is edited", async () => {
     window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
 
@@ -105,7 +178,7 @@ describe("deadlines share-link restoration", () => {
     fireEvent.click(screen.getByRole("button", { name: "deadlines-share-link" }));
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30");
+      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30&reminders=14%2C7%2C1");
     });
   });
 
@@ -143,7 +216,7 @@ describe("deadlines share-link restoration", () => {
     fireEvent.click(shareButton);
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30");
+      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30&reminders=14%2C7%2C1");
     });
 
     expect(screen.getByRole("button", { name: "deadlines-share-link-copied" })).toBeTruthy();
@@ -151,6 +224,70 @@ describe("deadlines share-link restoration", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "deadlines-share-link" })).toBeTruthy();
     }, { timeout: 3000 });
+  });
+
+  it("copies updated reminder presets after the user changes them", async () => {
+    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("deadlines-result-title")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "14 deadlines-reminder-days" }));
+    fireEvent.click(screen.getByRole("button", { name: "30 deadlines-reminder-days" }));
+
+    fireEvent.click(screen.getByRole("button", { name: "deadlines-share-link" }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30&reminders=30%2C7%2C1");
+    });
+  });
+
+  it("reset restores default reminder presets and clears reminder query state", async () => {
+    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30&reminders=30,3");
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("deadlines-result-title")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "deadlines-reset" }));
+
+    expect(window.location.search).toBe("");
+    expect(screen.queryByText("deadlines-result-title")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("deadlines-input-label"), {
+      target: { value: "2026-04-30" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "deadlines-calculate" }));
+    fireEvent.click(screen.getByRole("button", { name: "deadlines-share-link" }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30&reminders=14%2C7%2C1");
+    });
+  });
+
+  it("clears pending share-link feedback when reminder presets change", async () => {
+    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("deadlines-result-title")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "deadlines-share-link" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "deadlines-share-link-copied" })).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "30 deadlines-reminder-days" }));
+
+    expect(screen.getByRole("button", { name: "deadlines-share-link" })).toBeTruthy();
   });
 
   it("clears pending share-link feedback when the input changes", async () => {
@@ -206,7 +343,7 @@ describe("deadlines share-link restoration", () => {
     }
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30");
+      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30&reminders=14%2C7%2C1");
     });
 
     expect(screen.getByRole("button", { name: "deadlines-share-link" })).toBeTruthy();

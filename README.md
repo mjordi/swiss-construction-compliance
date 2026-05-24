@@ -70,6 +70,28 @@ npx vercel --prod
 
 ---
 
+## Daily Product Improvement Pipeline
+
+A Hermes-driven daily pipeline is documented in:
+
+- `scripts/baucompliance-pipeline/README.md`
+- `scripts/baucompliance-pipeline/daily-product-improvement-prompt.md`
+
+It performs:
+
+- daily product research (S / M / L ideas)
+- PM calibration and approval decisions
+- implementation of one focused approved change
+- artifact generation under `scripts/baucompliance-pipeline/{proposals,decisions}/`
+
+Manual trigger:
+
+```bash
+bash scripts/baucompliance-pipeline/run-pipeline.sh
+```
+
+---
+
 ## Project Structure
 
 ```

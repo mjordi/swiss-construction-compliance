@@ -11,6 +11,9 @@ export const OR_REVISION_DATE = new Date("2026-01-01");
 
 export type LegalRegime = "old" | "new";
 
+export const DEFAULT_DEADLINE_REMINDER_OFFSETS = [14, 7, 1] as const;
+export const DEADLINE_REMINDER_OFFSET_OPTIONS = [30, 14, 7, 3, 1] as const;
+
 export interface DeadlineResult {
   /** Deadline date */
   date: Date;
@@ -76,6 +79,48 @@ export function parseDateInputAsUTC(value: string): Date | null {
 export function sanitizeDateQueryParam(value: string | null): string {
   if (!value) return "";
   return parseDateInput(value) ? value : "";
+}
+
+export function normalizeDeadlineReminderOffsets(offsets: readonly number[]): number[] {
+  const uniqueOffsets = Array.from(new Set(offsets));
+
+  return DEADLINE_REMINDER_OFFSET_OPTIONS.filter((offset) =>
+    uniqueOffsets.includes(offset)
+  );
+}
+
+export function sanitizeDeadlineReminderQueryParam(value: string | null): number[] {
+  if (!value) {
+    return [...DEFAULT_DEADLINE_REMINDER_OFFSETS];
+  }
+
+  if (value === "none") {
+    return [];
+  }
+
+  const parsedOffsets = value
+    .split(",")
+    .map((part) => part.trim())
+    .filter((part) => /^\d+$/.test(part))
+    .map((part) => Number.parseInt(part, 10));
+
+  const normalizedOffsets = normalizeDeadlineReminderOffsets(parsedOffsets);
+
+  if (normalizedOffsets.length === 0) {
+    return [...DEFAULT_DEADLINE_REMINDER_OFFSETS];
+  }
+
+  return normalizedOffsets;
+}
+
+export function serializeDeadlineReminderQueryParam(offsets: readonly number[]): string {
+  const normalizedOffsets = normalizeDeadlineReminderOffsets(offsets);
+
+  if (normalizedOffsets.length === 0) {
+    return "none";
+  }
+
+  return normalizedOffsets.join(",");
 }
 
 /**
@@ -264,7 +309,7 @@ export function generateDeadlineCalendarICS(
 ): string {
   const now = new Date();
   const stamp = now.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
-  const sortedOffsets = [...new Set(reminderOffsets)]
+  const sortedOffsets = Array.from(new Set(reminderOffsets))
     .filter((offset) => Number.isFinite(offset) && offset >= 1)
     .sort((a, b) => b - a);
 
