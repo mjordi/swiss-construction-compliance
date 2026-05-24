@@ -9,6 +9,9 @@ import {
   parseDateInput,
   parseDateInputAsUTC,
   sanitizeDateQueryParam,
+  sanitizeDeadlineReminderQueryParam,
+  serializeDeadlineReminderQueryParam,
+  normalizeDeadlineReminderOffsets,
   OR_REVISION_DATE,
 } from "../lib/legal-utils";
 
@@ -50,6 +53,28 @@ describe("sanitizeDateQueryParam", () => {
     expect(sanitizeDateQueryParam("foo")).toBe("");
     expect(sanitizeDateQueryParam("2026-02-30")).toBe("");
     expect(sanitizeDateQueryParam(null)).toBe("");
+  });
+});
+
+describe("deadline reminder query helpers", () => {
+  it("normalizes reminder offsets to the supported canonical order", () => {
+    expect(normalizeDeadlineReminderOffsets([7, 30, 7, 1, 99])).toEqual([30, 7, 1]);
+  });
+
+  it("preserves valid reminder query values and supports the none sentinel", () => {
+    expect(sanitizeDeadlineReminderQueryParam("30,3")).toEqual([30, 3]);
+    expect(sanitizeDeadlineReminderQueryParam("none")).toEqual([]);
+  });
+
+  it("falls back to defaults for malformed or unsupported reminder query values", () => {
+    expect(sanitizeDeadlineReminderQueryParam("foo,99")).toEqual([14, 7, 1]);
+    expect(sanitizeDeadlineReminderQueryParam("3foo,1e2,07x")).toEqual([14, 7, 1]);
+    expect(sanitizeDeadlineReminderQueryParam(null)).toEqual([14, 7, 1]);
+  });
+
+  it("serializes reminders using canonical order and the none sentinel", () => {
+    expect(serializeDeadlineReminderQueryParam([7, 30, 1])).toBe("30,7,1");
+    expect(serializeDeadlineReminderQueryParam([])).toBe("none");
   });
 });
 

@@ -3,7 +3,18 @@
 import { useEffect, useRef, useState } from "react";
 import { Clock, Download, RotateCcw, AlertTriangle, CheckCircle, XCircle } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
-import { addDays, addYears, getDaysRemaining, generateDeadlineCalendarICS, parseDateInputAsUTC, sanitizeDateQueryParam } from "@/lib/legal-utils";
+import {
+  addDays,
+  addYears,
+  DEADLINE_REMINDER_OFFSET_OPTIONS,
+  DEFAULT_DEADLINE_REMINDER_OFFSETS,
+  getDaysRemaining,
+  generateDeadlineCalendarICS,
+  parseDateInputAsUTC,
+  sanitizeDateQueryParam,
+  sanitizeDeadlineReminderQueryParam,
+  serializeDeadlineReminderQueryParam,
+} from "@/lib/legal-utils";
 import PageHeader from "@/components/dashboard/PageHeader";
 import type { TranslationKey } from "@/locales";
 
@@ -80,7 +91,7 @@ export default function DeadlinesPage() {
   const [acceptanceDate, setAcceptanceDate] = useState<string>("");
   const [deadlines, setDeadlines] = useState<Deadline[] | null>(null);
   const [calculatedAcceptanceDate, setCalculatedAcceptanceDate] = useState<string | null>(null);
-  const [reminderOffsets, setReminderOffsets] = useState<number[]>([14, 7, 1]);
+  const [reminderOffsets, setReminderOffsets] = useState<number[]>([...DEFAULT_DEADLINE_REMINDER_OFFSETS]);
   const [shareLinkFeedback, setShareLinkFeedback] = useState<TranslationKey | null>(null);
   const shareLinkResetTimerRef = useRef<number | null>(null);
   const shareLinkRequestIdRef = useRef(0);
@@ -88,21 +99,36 @@ export default function DeadlinesPage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const acceptance = params.get("acceptance");
+    const reminders = params.get("reminders");
     const sanitizedAcceptance = sanitizeDateQueryParam(acceptance);
+    const sanitizedReminderOffsets = sanitizeDeadlineReminderQueryParam(reminders);
+    const serializedReminderOffsets = serializeDeadlineReminderQueryParam(sanitizedReminderOffsets);
 
-    if (!acceptance) return;
+    if (reminders && reminders !== serializedReminderOffsets) {
+      params.set("reminders", serializedReminderOffsets);
+      const query = params.toString();
+      window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
+    }
 
-    if (!sanitizedAcceptance) {
+    if (acceptance && !sanitizedAcceptance) {
       params.delete("acceptance");
       const query = params.toString();
       window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
-      return;
     }
 
-    const parsedAcceptanceDate = parseDateInputAsUTC(sanitizedAcceptance);
-    if (!parsedAcceptanceDate) return;
+    const parsedAcceptanceDate = sanitizedAcceptance
+      ? parseDateInputAsUTC(sanitizedAcceptance)
+      : null;
+
+    if (!sanitizedAcceptance && !reminders) return;
 
     const frame = window.requestAnimationFrame(() => {
+      setReminderOffsets(sanitizedReminderOffsets);
+
+      if (!sanitizedAcceptance || !parsedAcceptanceDate) {
+        return;
+      }
+
       setAcceptanceDate(sanitizedAcceptance);
       setCalculatedAcceptanceDate(sanitizedAcceptance);
       setDeadlines(buildDeadlines(parsedAcceptanceDate));
@@ -149,16 +175,19 @@ export default function DeadlinesPage() {
 
     const params = new URLSearchParams(window.location.search);
     params.set("acceptance", acceptanceDate);
+    params.set("reminders", serializeDeadlineReminderQueryParam(reminderOffsets));
     window.history.replaceState(null, "", `?${params.toString()}`);
   }
 
   function reset() {
     setAcceptanceDate("");
     setCalculatedAcceptanceDate(null);
+    setReminderOffsets([...DEFAULT_DEADLINE_REMINDER_OFFSETS]);
     clearShareLinkFeedback();
     setDeadlines(null);
     const params = new URLSearchParams(window.location.search);
     params.delete("acceptance");
+    params.delete("reminders");
     const query = params.toString();
     window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
   }
@@ -167,6 +196,7 @@ export default function DeadlinesPage() {
     if (!calculatedAcceptanceDate || !deadlines) return;
     const url = new URL(window.location.href);
     url.searchParams.set("acceptance", calculatedAcceptanceDate);
+    url.searchParams.set("reminders", serializeDeadlineReminderQueryParam(reminderOffsets));
 
     if (shareLinkResetTimerRef.current !== null) {
       window.clearTimeout(shareLinkResetTimerRef.current);
@@ -243,9 +273,25 @@ export default function DeadlinesPage() {
   };
 
   const maxDays = 1825;
-  const reminderOptions = [30, 14, 7, 3, 1] as const;
+  const reminderOptions = DEADLINE_REMINDER_OFFSET_OPTIONS;
+
+  useEffect(() => {
+    if (!calculatedAcceptanceDate) return;
+
+    const params = new URLSearchParams(window.location.search);
+    params.set("acceptance", calculatedAcceptanceDate);
+    params.set("reminders", serializeDeadlineReminderQueryParam(reminderOffsets));
+    const query = params.toString();
+    const nextUrl = query ? `?${query}` : window.location.pathname;
+    const currentUrl = `${window.location.pathname}${window.location.search}`;
+
+    if (nextUrl !== currentUrl) {
+      window.history.replaceState(null, "", nextUrl);
+    }
+  }, [calculatedAcceptanceDate, reminderOffsets]);
 
   function toggleReminder(offset: number) {
+    clearShareLinkFeedback();
     setReminderOffsets((current) =>
       current.includes(offset)
         ? current.filter((value) => value !== offset)
