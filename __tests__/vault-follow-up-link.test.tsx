@@ -178,14 +178,21 @@ describe("vault follow-up links", () => {
     expect(pushMock).toHaveBeenCalledWith("/dashboard/cases?q=Riverside+Bridge&status=triage");
   });
 
-  it("navigates to the cases handoff when a project card is activated from the keyboard", async () => {
+  it("does not hijack modified Enter activation while still handling plain Enter keyboard activation", async () => {
     render(<TechVault />);
 
     const projectCard = await screen.findByTestId("vault-project-card-case-active");
     projectCard.focus();
+
+    fireEvent.keyDown(projectCard, { key: "Enter", ctrlKey: true });
+    fireEvent.keyDown(projectCard, { key: "Enter", metaKey: true });
+
+    expect(pushMock).not.toHaveBeenCalled();
+
     fireEvent.keyDown(projectCard, { key: "Enter" });
 
     expect(pushMock).toHaveBeenCalledWith("/dashboard/cases?q=Alpine+Tower");
+    expect(pushMock).toHaveBeenCalledTimes(1);
   });
 
   it("supports space-key activation on the project card link surface", async () => {

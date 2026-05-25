@@ -440,10 +440,16 @@ export default function TechVault() {
                         navigateToProjectCases(projectCasesHref);
                       }}
                       onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          navigateToProjectCases(projectCasesHref);
+                        if (event.key !== "Enter" && event.key !== " ") {
+                          return;
                         }
+
+                        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                          return;
+                        }
+
+                        event.preventDefault();
+                        navigateToProjectCases(projectCasesHref);
                       }}
                       className="absolute inset-0 rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent/60 focus:ring-inset"
                     >
