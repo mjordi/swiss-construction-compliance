@@ -1,12 +1,13 @@
-import { describe, expect, it, vi } from "vitest";
-import { render, screen, waitFor } from "@testing-library/react";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import type { HTMLAttributes, ReactNode } from "react";
 
 const replaceMock = vi.fn();
+const pushMock = vi.fn();
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/vault",
-  useRouter: () => ({ replace: replaceMock }),
+  useRouter: () => ({ replace: replaceMock, push: pushMock }),
   useSearchParams: () => ({
     get: () => null,
     toString: () => "",
@@ -136,6 +137,11 @@ vi.mock("@/lib/supabase", () => ({
 import TechVault from "@/app/dashboard/vault/page";
 
 describe("vault follow-up links", () => {
+  beforeEach(() => {
+    replaceMock.mockReset();
+    pushMock.mockReset();
+  });
+
   it("routes only triage-eligible review projects into triage while keeping warning review cards scoped to project search", async () => {
     render(<TechVault />);
 
@@ -161,5 +167,41 @@ describe("vault follow-up links", () => {
     });
 
     expect(screen.getAllByText("25%").length).toBeGreaterThan(0);
+  });
+
+  it("navigates to the cases handoff when a project card is clicked", async () => {
+    render(<TechVault />);
+
+    const projectCard = await screen.findByTestId("vault-project-card-case-review");
+    fireEvent.click(projectCard);
+
+    expect(pushMock).toHaveBeenCalledWith("/dashboard/cases?q=Riverside+Bridge&status=triage");
+  });
+
+  it("does not hijack modified Enter activation while still handling plain Enter keyboard activation", async () => {
+    render(<TechVault />);
+
+    const projectCard = await screen.findByTestId("vault-project-card-case-active");
+    projectCard.focus();
+
+    fireEvent.keyDown(projectCard, { key: "Enter", ctrlKey: true });
+    fireEvent.keyDown(projectCard, { key: "Enter", metaKey: true });
+
+    expect(pushMock).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(projectCard, { key: "Enter" });
+
+    expect(pushMock).toHaveBeenCalledWith("/dashboard/cases?q=Alpine+Tower");
+    expect(pushMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("supports space-key activation on the project card link surface", async () => {
+    render(<TechVault />);
+
+    const projectCard = await screen.findByRole("link", { name: "Harbor Retrofit vault-open-in-cases" });
+    projectCard.focus();
+    fireEvent.keyDown(projectCard, { key: " " });
+
+    expect(pushMock).toHaveBeenCalledWith("/dashboard/cases?q=Harbor+Retrofit");
   });
 });

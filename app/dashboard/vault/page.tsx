@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Folder, FileText, MoreVertical, Plus, Search, ShieldCheck, Loader2, AlertCircle } from "lucide-react";
+import { Folder, FileText, Plus, Search, ShieldCheck, Loader2, AlertCircle } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -321,6 +321,10 @@ export default function TechVault() {
     }
   }, []);
 
+  const navigateToProjectCases = useCallback((href: string) => {
+    router.push(href);
+  }, [router]);
+
   return (
     <div className="max-w-6xl mx-auto h-[calc(100vh-100px)] flex flex-col">
       <header className="mb-8 flex justify-between items-end">
@@ -409,56 +413,91 @@ export default function TechVault() {
             </div>
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-              {filteredProjects.map((project, i) => (
-                <motion.div
-                  key={project.id}
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.06 }}
-                  className="bg-white/5 hover:bg-white/10 border border-white/5 hover:border-accent/30 p-6 rounded-2xl cursor-pointer transition group relative overflow-hidden"
-                >
-                  <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-accent to-transparent opacity-0 group-hover:opacity-100 transition duration-500" />
+              {filteredProjects.map((project, i) => {
+                const projectCasesHref = buildVaultProjectCasesHref({
+                  projectName: project.name,
+                  prefillTriage: project.prefillTriage,
+                });
 
-                  <div className="flex justify-between items-start mb-6">
-                    <div className="p-3 bg-blue-500/10 rounded-xl text-blue-400 group-hover:bg-accent/10 group-hover:text-accent transition-colors">
-                      <Folder className="w-6 h-6" />
-                    </div>
-                    <button className="text-slate-500 hover:text-white transition">
-                      <MoreVertical className="w-5 h-5" />
-                    </button>
-                  </div>
-
-                  <h3 className="text-lg font-bold mb-1 group-hover:text-accent transition-colors">{project.name}</h3>
-                  <p className="text-xs text-slate-500 mb-6">
-                    {interpolateTranslation(t("vault-last-updated"), { relative: formatRelativeUpdate(project.updatedAt, lang) })}
-                  </p>
-
-                  <div className="flex items-center justify-between text-sm mb-3">
-                    <div className="flex items-center gap-2 text-slate-300">
-                      <FileText className="w-4 h-4 text-slate-500" />
-                      <span>{project.docs} {t("vault-docs-label")}</span>
-                    </div>
-                    <span className={`text-xs px-2 py-1 rounded-md ${statusClass[project.status]}`}>
-                      {t(statusLabelKey[project.status])}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2 text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-md w-fit">
-                    <ShieldCheck className="w-3 h-3" />
-                    <span className="font-bold">{project.compliance}%</span>
-                  </div>
-
-                  <Link
-                    href={buildVaultProjectCasesHref({
-                      projectName: project.name,
-                      prefillTriage: project.prefillTriage,
-                    })}
-                    className="mt-6 inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white transition hover:border-accent/40 hover:bg-accent/10 hover:text-accent"
+                return (
+                  <motion.div
+                    key={project.id}
+                    initial={{ opacity: 0, y: 20 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.06 }}
+                    className="bg-white/5 hover:bg-white/10 border border-white/5 hover:border-accent/30 rounded-2xl transition group relative overflow-hidden"
                   >
-                    {t("vault-open-in-cases")}
-                  </Link>
-                </motion.div>
-              ))}
+                    <Link
+                      href={projectCasesHref}
+                      data-testid={`vault-project-card-${project.id}`}
+                      aria-label={`${project.name} ${t("vault-open-in-cases")}`}
+                      onClick={(event) => {
+                        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                          return;
+                        }
+
+                        event.preventDefault();
+                        navigateToProjectCases(projectCasesHref);
+                      }}
+                      onKeyDown={(event) => {
+                        if (event.key !== "Enter" && event.key !== " ") {
+                          return;
+                        }
+
+                        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                          return;
+                        }
+
+                        event.preventDefault();
+                        navigateToProjectCases(projectCasesHref);
+                      }}
+                      className="absolute inset-0 rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent/60 focus:ring-inset"
+                    >
+                      <span className="sr-only">{project.name} {t("vault-open-in-cases")}</span>
+                    </Link>
+
+                    <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-accent to-transparent opacity-0 group-hover:opacity-100 transition duration-500" />
+
+                    <article className="relative z-10 p-6 pointer-events-none">
+                      <div className="flex justify-between items-start mb-6">
+                        <div className="p-3 bg-blue-500/10 rounded-xl text-blue-400 group-hover:bg-accent/10 group-hover:text-accent transition-colors">
+                          <Folder className="w-6 h-6" />
+                        </div>
+                      </div>
+
+                      <h3 className="text-lg font-bold mb-1 group-hover:text-accent transition-colors">{project.name}</h3>
+                      <p className="text-xs text-slate-500 mb-6">
+                        {interpolateTranslation(t("vault-last-updated"), { relative: formatRelativeUpdate(project.updatedAt, lang) })}
+                      </p>
+
+                      <div className="flex items-center justify-between text-sm mb-3">
+                        <div className="flex items-center gap-2 text-slate-300">
+                          <FileText className="w-4 h-4 text-slate-500" />
+                          <span>{project.docs} {t("vault-docs-label")}</span>
+                        </div>
+                        <span className={`text-xs px-2 py-1 rounded-md ${statusClass[project.status]}`}>
+                          {t(statusLabelKey[project.status])}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2 text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-md w-fit">
+                        <ShieldCheck className="w-3 h-3" />
+                        <span className="font-bold">{project.compliance}%</span>
+                      </div>
+
+                      <div className="mt-6 pointer-events-auto">
+                        <Link
+                          href={projectCasesHref}
+                          onClick={(event) => event.stopPropagation()}
+                          className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white transition hover:border-accent/40 hover:bg-accent/10 hover:text-accent"
+                        >
+                          {t("vault-open-in-cases")}
+                        </Link>
+                      </div>
+                    </article>
+                  </motion.div>
+                );
+              })}
 
               <Link
                 href={createProjectHref}
