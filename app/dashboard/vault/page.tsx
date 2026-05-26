@@ -91,10 +91,11 @@ export default function TechVault() {
   const [query, setQuery] = useState(() => searchParams.get("q") ?? "");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<TranslationKey | null>(null);
-  const [statusMutationError, setStatusMutationError] = useState<{ projectId: string; key: TranslationKey } | null>(null);
-  const [statusMutationProjectId, setStatusMutationProjectId] = useState<string | null>(null);
+  const [statusMutationErrors, setStatusMutationErrors] = useState<Record<string, TranslationKey>>({});
+  const [statusMutationProjectIds, setStatusMutationProjectIds] = useState<string[]>([]);
   const [projects, setProjects] = useState<VaultProjectCard[]>([]);
   const latestFetchIdRef = useRef(0);
+  const pendingStatusMutationProjectIdsRef = useRef<Set<string>>(new Set());
   const hasLoadedProjectsRef = useRef(false);
   const lastSuccessfulUserIdRef = useRef<string | null>(null);
   const activeTabRef = useRef(activeTab);
@@ -334,7 +335,7 @@ export default function TechVault() {
   }, [router]);
 
   const handleProjectArchiveToggle = useCallback(async (projectId: string, archived: boolean) => {
-    if (!user || statusMutationProjectId) return;
+    if (!user || pendingStatusMutationProjectIdsRef.current.has(projectId)) return;
 
     const currentProject = projects.find((project) => project.id === projectId);
     if (!currentProject) return;
@@ -342,8 +343,15 @@ export default function TechVault() {
     const nextStatus = archived ? currentProject.restoredStatus : "archived";
     const previousProject = currentProject;
 
-    setStatusMutationProjectId(projectId);
-    setStatusMutationError((current) => (current?.projectId === projectId ? null : current));
+    pendingStatusMutationProjectIdsRef.current.add(projectId);
+    setStatusMutationProjectIds((current) => (current.includes(projectId) ? current : [...current, projectId]));
+    setStatusMutationErrors((current) => {
+      if (!(projectId in current)) return current;
+
+      const next = { ...current };
+      delete next[projectId];
+      return next;
+    });
     setProjects((current) =>
       current.map((project) =>
         project.id === projectId
@@ -372,7 +380,13 @@ export default function TechVault() {
         throw updateError;
       }
 
-      setStatusMutationError((current) => (current?.projectId === projectId ? null : current));
+      setStatusMutationErrors((current) => {
+        if (!(projectId in current)) return current;
+
+        const next = { ...current };
+        delete next[projectId];
+        return next;
+      });
     } catch {
       setProjects((current) =>
         current.map((project) =>
@@ -381,11 +395,15 @@ export default function TechVault() {
             : project
         )
       );
-      setStatusMutationError({ projectId, key: "vault-update-status-error" });
+      setStatusMutationErrors((current) => ({
+        ...current,
+        [projectId]: "vault-update-status-error",
+      }));
     } finally {
-      setStatusMutationProjectId((current) => (current === projectId ? null : current));
+      pendingStatusMutationProjectIdsRef.current.delete(projectId);
+      setStatusMutationProjectIds((current) => current.filter((currentProjectId) => currentProjectId !== projectId));
     }
-  }, [projects, statusMutationProjectId, supabase, user]);
+  }, [projects, supabase, user]);
 
   return (
     <div className="max-w-6xl mx-auto h-[calc(100vh-100px)] flex flex-col">
@@ -554,26 +572,26 @@ export default function TechVault() {
                         <span className="font-bold">{project.compliance}%</span>
                       </div>
 
-                      <div className="mt-6 pointer-events-auto space-y-3">
+                      <div className="mt-6 space-y-3">
                         <div className="flex flex-wrap items-center gap-3">
                           <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white transition group-hover:border-accent/40 group-hover:bg-accent/10 group-hover:text-accent">
                             {t("vault-open-in-cases")}
                           </span>
                           <button
                             type="button"
-                            disabled={statusMutationProjectId === project.id}
+                            disabled={statusMutationProjectIds.includes(project.id)}
                             onClick={(event) => {
                               event.stopPropagation();
                               void handleProjectArchiveToggle(project.id, project.archived);
                             }}
-                            className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
+                            className="pointer-events-auto inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white transition hover:border-white/20 hover:bg-white/10 disabled:cursor-not-allowed disabled:opacity-60"
                           >
                             {t(project.archived ? "vault-restore-project" : "vault-archive-project")}
                           </button>
                         </div>
-                        {statusMutationError?.projectId === project.id ? (
+                        {statusMutationErrors[project.id] ? (
                           <p role="alert" className="text-sm text-red-300">
-                            {t(statusMutationError.key)}
+                            {t(statusMutationErrors[project.id])}
                           </p>
                         ) : null}
                       </div>

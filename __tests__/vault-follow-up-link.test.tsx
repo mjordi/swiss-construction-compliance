@@ -271,6 +271,16 @@ describe("vault follow-up links", () => {
     expect(pushMock).toHaveBeenCalledWith("/dashboard/cases?q=Harbor+Retrofit");
   });
 
+  it("shows the visible open-in-cases CTA without changing the project card destination", async () => {
+    render(<TechVault />);
+
+    await screen.findByText("Harbor Retrofit");
+    expect(within(getProjectCard("Harbor Retrofit")).getByText("vault-open-in-cases")).toBeTruthy();
+
+    const projectCard = await screen.findByRole("link", { name: "Harbor Retrofit vault-open-in-cases" });
+    expect(projectCard.getAttribute("href")).toBe("/dashboard/cases?q=Harbor+Retrofit");
+  });
+
   it("archives a project through Supabase and moves it into the archived tab immediately", async () => {
     render(<TechVault />);
 
@@ -417,6 +427,67 @@ describe("vault follow-up links", () => {
     const pendingArchiveButton = within(getProjectCard("Alpine Tower")).getByRole("button", { name: "vault-archive-project" });
     fireEvent.click(pendingArchiveButton);
     expect(updateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("allows toggling a different project while another archive mutation is still pending", async () => {
+    deferNextUpdate = true;
+
+    render(<TechVault />);
+
+    const firstArchiveButton = await waitFor(() =>
+      within(getProjectCard("Alpine Tower")).getByRole("button", { name: "vault-archive-project" })
+    );
+
+    act(() => {
+      fireEvent.click(firstArchiveButton);
+    });
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledTimes(1);
+    });
+
+    const secondArchiveButton = within(getProjectCard("Harbor Retrofit")).getByRole("button", { name: "vault-archive-project" });
+    act(() => {
+      fireEvent.click(secondArchiveButton);
+    });
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  it("keeps inline mutation errors scoped per project when concurrent updates fail", async () => {
+    deferNextUpdate = true;
+    updateResponses.push({ error: { message: "second failure" } });
+
+    render(<TechVault />);
+
+    const firstArchiveButton = await waitFor(() =>
+      within(getProjectCard("Alpine Tower")).getByRole("button", { name: "vault-archive-project" })
+    );
+
+    act(() => {
+      fireEvent.click(firstArchiveButton);
+    });
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledTimes(1);
+    });
+
+    updateResponses.push({ error: { message: "first failure" } });
+
+    const secondArchiveButton = within(getProjectCard("Harbor Retrofit")).getByRole("button", { name: "vault-archive-project" });
+    act(() => {
+      fireEvent.click(secondArchiveButton);
+    });
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledTimes(2);
+    });
+
+    expect((await within(getProjectCard("Harbor Retrofit")).findByRole("alert")).textContent).toContain("vault-update-status-error");
+
+    updateResponses.shift();
   });
 
   it("clears archive error feedback when a retry succeeds", async () => {
