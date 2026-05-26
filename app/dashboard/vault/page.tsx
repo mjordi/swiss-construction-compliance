@@ -26,6 +26,7 @@ interface VaultProjectCard {
   name: string;
   status: "active" | "review" | "archived";
   restoredStatus: "active" | "review";
+  restoredPrefillTriage: boolean;
   docs: number;
   compliance: number;
   updatedAt: number;
@@ -173,6 +174,7 @@ export default function TechVault() {
         const archived = c.status === "archived";
         const timelineState = timelineStateByCase.get(c.id);
         const restoredStatus = timelineState?.status ?? "active";
+        const restoredPrefillTriage = Boolean(timelineState?.prefillTriage);
         const timelineItem = timelineByCaseId.get(c.id);
         const progress = deriveChecklistProgress(
           normalizeFollowUpChecklistState({
@@ -185,11 +187,12 @@ export default function TechVault() {
           name: c.project_name,
           status: archived ? "archived" : restoredStatus,
           restoredStatus,
+          restoredPrefillTriage,
           docs: docsByCase[c.id] ?? 0,
           compliance: Math.round((progress.completed / progress.total) * 100),
           updatedAt: new Date(c.updated_at).getTime(),
           archived,
-          prefillTriage: !archived && Boolean(timelineState?.prefillTriage),
+          prefillTriage: !archived && restoredPrefillTriage,
         };
       });
 
@@ -348,6 +351,7 @@ export default function TechVault() {
               ...project,
               archived: !archived,
               status: nextStatus,
+              prefillTriage: archived ? project.restoredPrefillTriage : false,
               updatedAt: Date.now(),
             }
           : project

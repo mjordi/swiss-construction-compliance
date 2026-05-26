@@ -100,9 +100,11 @@ vi.mock("@/lib/case-timeline", () => ({
           ? "urgent"
           : input.id === "case-immediate"
             ? "immediate-notice"
-            : input.id === "case-warning"
-              ? "warning"
-              : "ok",
+            : input.id === "case-archived-triage"
+              ? "urgent"
+              : input.id === "case-warning"
+                ? "warning"
+                : "ok",
       checklistDefaults: {
         defectDocumented: true,
         evidenceAttached: false,
@@ -313,6 +315,42 @@ describe("vault follow-up links", () => {
     fireEvent.click(screen.getByRole("tab", { name: "vault-tab-projects" }));
 
     expect(await screen.findByText("Summit Depot")).toBeTruthy();
+  });
+
+  it("restores archived triage projects with their triage-prefill handoff intact", async () => {
+    mockCases = [
+      {
+        id: "case-archived-triage",
+        project_name: "Critical Depot",
+        canton: "GR",
+        contract_date: "2025-01-08",
+        discovery_date: "2026-02-14",
+        updated_at: "2026-05-11T16:45:00.000Z",
+        status: "archived",
+        checklist: {},
+      },
+    ];
+
+    render(<TechVault />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: "vault-tab-archived" }));
+
+    const restoreButton = within(getProjectCard("Critical Depot")).getByRole("button", { name: "vault-restore-project" });
+    act(() => {
+      fireEvent.click(restoreButton);
+    });
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ status: "review" }));
+    });
+    await waitFor(() => {
+      expect(screen.queryByText("Critical Depot")).toBeNull();
+    });
+
+    fireEvent.click(screen.getByRole("tab", { name: "vault-tab-projects" }));
+
+    const restoredProjectCard = await screen.findByRole("link", { name: "Critical Depot vault-open-in-cases" });
+    expect(restoredProjectCard.getAttribute("href")).toBe("/dashboard/cases?q=Critical+Depot&status=triage");
   });
 
   it("rolls back failed archive mutations and surfaces inline feedback", async () => {
