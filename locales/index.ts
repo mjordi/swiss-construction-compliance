@@ -431,6 +431,9 @@ export const de = {
   "vault-new-project": "Neues Projekt",
   "vault-create-project": "Neues Projekt erstellen",
   "vault-open-in-cases": "In Fälle öffnen",
+  "vault-archive-project": "Archivieren",
+  "vault-restore-project": "Wiederherstellen",
+  "vault-update-status-error": "Der Projektstatus konnte nicht aktualisiert werden. Bitte erneut versuchen.",
 };
 
 export const fr = {
@@ -864,6 +867,9 @@ export const fr = {
   "vault-new-project": "Nouveau projet",
   "vault-create-project": "Créer un nouveau projet",
   "vault-open-in-cases": "Ouvrir dans les dossiers",
+  "vault-archive-project": "Archiver",
+  "vault-restore-project": "Restaurer",
+  "vault-update-status-error": "Impossible de mettre à jour le statut du projet. Veuillez réessayer.",
 };
 
 export const it = {
@@ -1297,6 +1303,9 @@ export const it = {
   "vault-new-project": "Nuovo progetto",
   "vault-create-project": "Crea nuovo progetto",
   "vault-open-in-cases": "Apri nei casi",
+  "vault-archive-project": "Archivia",
+  "vault-restore-project": "Ripristina",
+  "vault-update-status-error": "Impossibile aggiornare lo stato del progetto. Riprova.",
 };
 
 export const en = {
@@ -1736,6 +1745,9 @@ export const en = {
   "vault-new-project": "New Project",
   "vault-create-project": "Create New Project",
   "vault-open-in-cases": "Open in Cases",
+  "vault-archive-project": "Archive",
+  "vault-restore-project": "Restore",
+  "vault-update-status-error": "Could not update the project status. Please try again.",
 };
 
 export type TranslationKey = keyof typeof de;
