@@ -361,7 +361,8 @@ export default function TechVault() {
           status: nextStatus,
           updated_at: new Date().toISOString(),
         })
-        .eq("id", projectId);
+        .eq("id", projectId)
+        .eq("user_id", user.id);
 
       if (updateError) {
         throw updateError;
@@ -399,14 +400,20 @@ export default function TechVault() {
 
       <div className="flex-1 glass-card rounded-3xl overflow-hidden flex flex-col border border-white/10">
         <div className="p-4 border-b border-white/5 flex items-center justify-between bg-white/[0.02]">
-          <div className="flex items-center gap-1 bg-black/20 p-1 rounded-lg">
+          <div role="tablist" aria-label={t("vault-title")} className="flex items-center gap-1 bg-black/20 p-1 rounded-lg">
             <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "projects"}
               onClick={() => setActiveTab("projects")}
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${activeTab === "projects" ? "bg-accent text-white shadow-lg" : "text-slate-400 hover:text-white"}`}
             >
               {t("vault-tab-projects")}
             </button>
             <button
+              type="button"
+              role="tab"
+              aria-selected={activeTab === "archived"}
               onClick={() => setActiveTab("archived")}
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${activeTab === "archived" ? "bg-accent text-white shadow-lg" : "text-slate-400 hover:text-white"}`}
             >
@@ -417,6 +424,7 @@ export default function TechVault() {
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
               type="text"
+              aria-label={t("vault-search-placeholder")}
               placeholder={t("vault-search-placeholder")}
               className="bg-black/20 border border-white/5 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-accent/50 w-64 transition"
               value={query}
@@ -544,13 +552,9 @@ export default function TechVault() {
 
                       <div className="mt-6 pointer-events-auto space-y-3">
                         <div className="flex flex-wrap items-center gap-3">
-                          <Link
-                            href={projectCasesHref}
-                            onClick={(event) => event.stopPropagation()}
-                            className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white transition hover:border-accent/40 hover:bg-accent/10 hover:text-accent"
-                          >
+                          <span className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-3 py-2 text-sm font-medium text-white transition group-hover:border-accent/40 group-hover:bg-accent/10 group-hover:text-accent">
                             {t("vault-open-in-cases")}
-                          </Link>
+                          </span>
                           <button
                             type="button"
                             disabled={statusMutationProjectId === project.id}

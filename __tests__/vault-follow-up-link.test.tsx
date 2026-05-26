@@ -61,6 +61,7 @@ const baseCases = [
 
 let mockCases = structuredClone(baseCases);
 let updateResponses: Array<{ error: { message: string } | null }> = [];
+let deferNextUpdate = false;
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/vault",
@@ -133,22 +134,33 @@ vi.mock("@/lib/supabase", () => ({
           update: (payload: Record<string, unknown>) => {
             updateMock(payload);
             return {
-              eq: (_column: string, id: string) => {
-                const response = updateResponses.shift() ?? { error: null };
+              eq: (column: string, id: string) => ({
+                eq: (userColumn: string, userId: string) => {
+                  if (column !== "id" || userColumn !== "user_id" || userId !== "user-1") {
+                    throw new Error("Unexpected update scope");
+                  }
 
-                if (!response.error) {
-                  mockCases = mockCases.map((item) =>
-                    item.id === id
-                      ? {
-                          ...item,
-                          ...payload,
-                        }
-                      : item
-                  );
-                }
+                  if (deferNextUpdate) {
+                    deferNextUpdate = false;
+                    return new Promise<{ error: { message: string } | null }>(() => {});
+                  }
 
-                return Promise.resolve(response);
-              },
+                  const response = updateResponses.shift() ?? { error: null };
+
+                  if (!response.error) {
+                    mockCases = mockCases.map((item) =>
+                      item.id === id
+                        ? {
+                            ...item,
+                            ...payload,
+                          }
+                        : item
+                    );
+                  }
+
+                  return Promise.resolve(response);
+                },
+              }),
             };
           },
         };
@@ -191,17 +203,18 @@ describe("vault follow-up links", () => {
     updateMock.mockReset();
     mockCases = structuredClone(baseCases);
     updateResponses = [];
+    deferNextUpdate = false;
   });
 
   it("routes only triage-eligible review projects into triage while keeping warning review cards scoped to project search", async () => {
     render(<TechVault />);
 
     await waitFor(() => {
-      expect(screen.getAllByRole("link", { name: "vault-open-in-cases" })).toHaveLength(4);
+      expect(screen.getAllByTestId(/vault-project-card-/)).toHaveLength(4);
     });
 
     const hrefs = screen
-      .getAllByRole("link", { name: "vault-open-in-cases" })
+      .getAllByTestId(/vault-project-card-/)
       .map((link) => link.getAttribute("href"));
 
     expect(hrefs).toContain("/dashboard/cases?q=Alpine+Tower");
@@ -275,7 +288,7 @@ describe("vault follow-up links", () => {
 
     expect(alpineCard).toBeTruthy();
 
-    fireEvent.click(screen.getByRole("button", { name: "vault-tab-archived" }));
+    fireEvent.click(screen.getByRole("tab", { name: "vault-tab-archived" }));
 
     expect(await screen.findByText("Alpine Tower")).toBeTruthy();
   });
@@ -283,7 +296,7 @@ describe("vault follow-up links", () => {
   it("restores an archived project through Supabase and returns it to active projects immediately", async () => {
     render(<TechVault />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "vault-tab-archived" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "vault-tab-archived" }));
 
     const restoreButton = within(getProjectCard("Summit Depot")).getByRole("button", { name: "vault-restore-project" });
     act(() => {
@@ -297,7 +310,7 @@ describe("vault follow-up links", () => {
       expect(screen.queryByText("Summit Depot")).toBeNull();
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "vault-tab-projects" }));
+    fireEvent.click(screen.getByRole("tab", { name: "vault-tab-projects" }));
 
     expect(await screen.findByText("Summit Depot")).toBeTruthy();
   });
@@ -322,7 +335,75 @@ describe("vault follow-up links", () => {
     expect(await screen.findByText("Harbor Retrofit")).toBeTruthy();
     expect((await screen.findByRole("alert")).textContent).toContain("vault-update-status-error");
 
-    fireEvent.click(screen.getByRole("button", { name: "vault-tab-archived" }));
+    fireEvent.click(screen.getByRole("tab", { name: "vault-tab-archived" }));
+    expect(screen.queryByText("Harbor Retrofit")).toBeNull();
+  });
+
+  it("rolls back failed restore mutations and keeps the project in archived results", async () => {
+    updateResponses.push({ error: { message: "restore failed" } });
+
+    render(<TechVault />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: "vault-tab-archived" }));
+
+    const restoreButton = within(getProjectCard("Summit Depot")).getByRole("button", { name: "vault-restore-project" });
+    act(() => {
+      fireEvent.click(restoreButton);
+    });
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ status: "active" }));
+    });
+
+    expect(await screen.findByText("Summit Depot")).toBeTruthy();
+    expect((await screen.findByRole("alert")).textContent).toContain("vault-update-status-error");
+  });
+
+  it("ignores repeat archive actions while a mutation is still pending", async () => {
+    deferNextUpdate = true;
+
+    render(<TechVault />);
+
+    const archiveButton = await waitFor(() =>
+      within(getProjectCard("Alpine Tower")).getByRole("button", { name: "vault-archive-project" })
+    );
+
+    act(() => {
+      fireEvent.click(archiveButton);
+    });
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledTimes(1);
+    });
+
+    const pendingArchiveButton = within(getProjectCard("Alpine Tower")).getByRole("button", { name: "vault-archive-project" });
+    fireEvent.click(pendingArchiveButton);
+    expect(updateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears archive error feedback when a retry succeeds", async () => {
+    updateResponses.push({ error: { message: "boom" } });
+
+    render(<TechVault />);
+
+    const archiveButton = await waitFor(() =>
+      within(getProjectCard("Harbor Retrofit")).getByRole("button", { name: "vault-archive-project" })
+    );
+
+    act(() => {
+      fireEvent.click(archiveButton);
+    });
+
+    expect((await screen.findByRole("alert")).textContent).toContain("vault-update-status-error");
+
+    const retryButton = within(getProjectCard("Harbor Retrofit")).getByRole("button", { name: "vault-archive-project" });
+    act(() => {
+      fireEvent.click(retryButton);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("alert")).toBeNull();
+    });
     expect(screen.queryByText("Harbor Retrofit")).toBeNull();
   });
 });

@@ -115,7 +115,7 @@ describe("vault URL synchronization", () => {
     render(<TechVault />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "vault-tab-archived" }).className).toContain("bg-accent");
+      expect(screen.getByRole("tab", { name: "vault-tab-archived" }).className).toContain("bg-accent");
     });
 
     expect((screen.getByPlaceholderText("vault-search-placeholder") as HTMLInputElement).value).toBe("Alpine Tower");
@@ -137,7 +137,7 @@ describe("vault URL synchronization", () => {
 
     render(<TechVault />);
 
-    fireEvent.click(await screen.findByRole("button", { name: "vault-tab-archived" }));
+    fireEvent.click(await screen.findByRole("tab", { name: "vault-tab-archived" }));
 
     await waitFor(() => {
       expect(replaceMock).toHaveBeenCalledWith("/dashboard/vault?q=Zurich&tab=archived", { scroll: false });
@@ -180,14 +180,14 @@ describe("vault URL synchronization", () => {
     const { rerender } = render(<TechVault />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "vault-tab-projects" }).className).toContain("bg-accent");
+      expect(screen.getByRole("tab", { name: "vault-tab-projects" }).className).toContain("bg-accent");
     });
 
     currentSearch = "tab=archived&q=Alpha";
     rerender(<TechVault />);
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "vault-tab-archived" }).className).toContain("bg-accent");
+      expect(screen.getByRole("tab", { name: "vault-tab-archived" }).className).toContain("bg-accent");
     });
   });
 });
