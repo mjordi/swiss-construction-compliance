@@ -487,7 +487,15 @@ export default function TechVault() {
                 </div>
                 <h2 className="text-lg font-semibold text-white mb-2">{emptyStateTitle}</h2>
                 <p className="text-sm text-slate-400 mb-5">{emptyStateBody}</p>
-                {emptyStateActionLabel && emptyState.action && (
+                {emptyStateActionLabel && emptyState.action === "create-project" && (
+                  <Link
+                    href={createProjectHref}
+                    className="inline-flex items-center gap-2 rounded-lg border border-white/10 bg-white/5 px-4 py-2 text-sm font-medium text-white transition hover:bg-white/10"
+                  >
+                    {emptyStateActionLabel}
+                  </Link>
+                )}
+                {emptyStateActionLabel && emptyState.action && emptyState.action !== "create-project" && (
                   <button
                     type="button"
                     onClick={() => handleEmptyStateAction(emptyState.action)}

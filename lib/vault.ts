@@ -1,7 +1,7 @@
 import type { TranslationKey } from "@/locales";
 
 export type VaultTab = "projects" | "archived";
-export type VaultEmptyStateAction = "clear-search" | "show-projects" | "show-archived" | null;
+export type VaultEmptyStateAction = "clear-search" | "show-projects" | "show-archived" | "create-project" | null;
 
 export function parseVaultTab(value: string | null): VaultTab {
   return value === "archived" ? "archived" : "projects";
@@ -103,7 +103,7 @@ export function getVaultEmptyState({
       : "vault-empty-projects-body-no-archived",
     actionLabelKey: hasArchivedProjects
       ? "vault-empty-action-show-archived"
-      : null,
-    action: hasArchivedProjects ? "show-archived" : null,
+      : "vault-create-project",
+    action: hasArchivedProjects ? "show-archived" : "create-project",
   };
 }

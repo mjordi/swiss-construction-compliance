@@ -43,7 +43,7 @@ describe("getVaultEmptyState", () => {
     expect(state.actionLabelKey).toBe("vault-empty-action-show-archived");
   });
 
-  it("avoids misleading tab-switch CTAs when there is no opposite tab content", () => {
+  it("avoids misleading tab-switch CTAs when the archived tab has no active projects", () => {
     const archivedState = getVaultEmptyState({
       activeTab: "archived",
       query: "",
@@ -53,7 +53,9 @@ describe("getVaultEmptyState", () => {
     expect(archivedState.bodyKey).toBe("vault-empty-archived-body-no-active");
     expect(archivedState.action).toBeNull();
     expect(archivedState.actionLabelKey).toBeNull();
+  });
 
+  it("offers a create-project CTA when the primary projects tab has no content", () => {
     const projectsState = getVaultEmptyState({
       activeTab: "projects",
       query: "",
@@ -61,8 +63,8 @@ describe("getVaultEmptyState", () => {
     });
 
     expect(projectsState.bodyKey).toBe("vault-empty-projects-body-no-archived");
-    expect(projectsState.action).toBeNull();
-    expect(projectsState.actionLabelKey).toBeNull();
+    expect(projectsState.action).toBe("create-project");
+    expect(projectsState.actionLabelKey).toBe("vault-create-project");
   });
 });
 
