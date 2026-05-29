@@ -176,6 +176,40 @@ describe("dashboard linked-case loading retry", () => {
     caseResponseFactory = () => ({ data: [], error: null });
   });
 
+  it("keeps the persisted wizard draft cleared after the user discards it", async () => {
+    caseResponseFactory = () => ({ data: [], error: null });
+
+    render(<DashboardPage />);
+
+    fireEvent.change(screen.getByPlaceholderText("dashboard-project-placeholder"), {
+      target: { value: "Alpine Tower" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("dashboard-contractor-placeholder"), {
+      target: { value: "Builder AG" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("dashboard-client-placeholder"), {
+      target: { value: "Owner GmbH" },
+    });
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem("baucompliance:wizard-project-draft")).toContain("Alpine Tower");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "dashboard-draft-discard" }));
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem("baucompliance:wizard-project-draft")).toBeNull();
+    });
+
+    fireEvent.change(screen.getByPlaceholderText("dashboard-project-placeholder"), {
+      target: { value: "Second Tower" },
+    });
+
+    await waitFor(() => {
+      expect(window.localStorage.getItem("baucompliance:wizard-project-draft")).toContain("Second Tower");
+    });
+  });
+
   it("preserves a restored linked case while the initial case fetch is still in flight", async () => {
     let resolveCaseLoad: ((value: { data: Array<Record<string, unknown>> | null; error: { message: string } | null }) => void) | null = null;
 
