@@ -36,6 +36,7 @@ export default function Dashboard() {
   const [noDefectsConfirmed, setNoDefectsConfirmed] = useState(false);
   const sigCanvas = useRef<HTMLCanvasElement>(null);
   const finalizeInFlightRef = useRef(false);
+  const skipNextDraftPersistRef = useRef(false);
   const { t } = useLanguage();
   const { user } = useAuth();
   const supabase = getSupabase();
@@ -148,6 +149,13 @@ export default function Dashboard() {
 
   useEffect(() => {
     if (!draftHydrated) return;
+
+    if (skipNextDraftPersistRef.current) {
+      skipNextDraftPersistRef.current = false;
+      clearPersistedWizardDraft();
+      return;
+    }
+
     const updatedAt = new Date().toISOString();
     setDraftUpdatedAt(updatedAt);
     window.localStorage.setItem(
@@ -173,6 +181,7 @@ export default function Dashboard() {
     Boolean(selectedCaseId);
 
   const clearDraft = () => {
+    skipNextDraftPersistRef.current = true;
     setProjectData({ name: "", contractor: "", client: "" });
     setDefectDescription("");
     setNoDefectsConfirmed(false);
