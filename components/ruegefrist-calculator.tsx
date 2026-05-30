@@ -94,6 +94,16 @@ export default function RuegefristCalculator() {
         })()
       : null;
 
+  function updateContractDate(value: string) {
+    setContractDate(value);
+    setResult(null);
+  }
+
+  function updateDiscoveryDate(value: string) {
+    setDiscoveryDate(value);
+    setResult(null);
+  }
+
   function calculate() {
     if (!contractDate || !discoveryDate || validationError) return;
     const parsedContractDate = parseDateInput(contractDate);
@@ -138,8 +148,9 @@ export default function RuegefristCalculator() {
             </label>
             <input
               type="date"
+              aria-label={t("calc-contract-date")}
               value={contractDate}
-              onChange={(e) => setContractDate(e.target.value)}
+              onChange={(e) => updateContractDate(e.target.value)}
               className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-3 text-cream focus:outline-none focus:border-accent/40 transition-colors duration-300 [color-scheme:dark]"
             />
             <p className="text-[11px] text-muted/60 mt-1.5">{t("calc-contract-hint")}</p>
@@ -152,8 +163,9 @@ export default function RuegefristCalculator() {
             </label>
             <input
               type="date"
+              aria-label={t("calc-discovery-date")}
               value={discoveryDate}
-              onChange={(e) => setDiscoveryDate(e.target.value)}
+              onChange={(e) => updateDiscoveryDate(e.target.value)}
               className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-3 text-cream focus:outline-none focus:border-accent/40 transition-colors duration-300 [color-scheme:dark]"
             />
             <p className="text-[11px] text-muted/60 mt-1.5">{t("calc-discovery-hint")}</p>
@@ -176,6 +188,8 @@ export default function RuegefristCalculator() {
             {(result || contractDate || discoveryDate) && (
               <button
                 onClick={reset}
+                aria-label={t("calc-reset")}
+                title={t("calc-reset")}
                 className="px-4 py-3 border border-white/[0.08] text-muted hover:text-cream hover:border-white/[0.12] rounded-lg transition-all duration-300"
               >
                 <RotateCcw className="w-4 h-4" />
@@ -316,6 +330,7 @@ export default function RuegefristCalculator() {
               {/* Download ICS */}
               <button
                 onClick={downloadICS}
+                aria-label={t("calc-download-ics")}
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-white/[0.08] hover:border-accent/30 text-muted hover:text-accent font-medium rounded-lg transition-all duration-300 text-[13px]"
               >
                 <Download className="w-4 h-4" />
