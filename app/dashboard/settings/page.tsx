@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import { Shield, LogOut, Loader2, Check, User, AlertCircle } from "lucide-react";
 import PageHeader from "@/components/dashboard/PageHeader";
 import { useLanguage } from "@/context/LanguageContext";
@@ -24,11 +24,16 @@ export default function Settings() {
   const [profileError, setProfileError] = useState<TranslationKey | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
+  const latestProfileFormRef = useRef({ fullName: "", company: "" });
 
   const [newPassword, setNewPassword] = useState("");
   const [updatingPassword, setUpdatingPassword] = useState(false);
   const [passwordUpdated, setPasswordUpdated] = useState(false);
   const [passwordFeedback, setPasswordFeedback] = useState<PasswordFeedback | null>(null);
+
+  useEffect(() => {
+    latestProfileFormRef.current = { fullName, company };
+  }, [company, fullName]);
 
   useEffect(() => {
     if (!user) return;
@@ -53,6 +58,7 @@ export default function Settings() {
           company: data?.company ?? "",
         });
 
+        latestProfileFormRef.current = nextProfile;
         setLoadedProfile(nextProfile);
         setFullName(nextProfile.fullName);
         setCompany(nextProfile.company);
@@ -95,10 +101,19 @@ export default function Settings() {
       }
 
       setLoadedProfile(normalizedProfile);
-      setFullName(normalizedProfile.fullName);
-      setCompany(normalizedProfile.company);
-      setSaved(true);
-      setTimeout(() => setSaved(false), 2000);
+
+      const latestVisibleProfile = normalizeSettingsProfileSnapshot(latestProfileFormRef.current);
+      const formStillMatchesSubmittedProfile = !hasSettingsProfileChanges(latestVisibleProfile, normalizedProfile);
+
+      if (formStillMatchesSubmittedProfile) {
+        latestProfileFormRef.current = normalizedProfile;
+        setFullName(normalizedProfile.fullName);
+        setCompany(normalizedProfile.company);
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      } else {
+        setSaved(false);
+      }
     } catch {
       setProfileError("settings-profile-save-error");
     } finally {
@@ -176,7 +191,12 @@ export default function Settings() {
                 type="text"
                 value={fullName}
                 onChange={(e) => {
-                  setFullName(e.target.value);
+                  const nextFullName = e.target.value;
+                  latestProfileFormRef.current = {
+                    ...latestProfileFormRef.current,
+                    fullName: nextFullName,
+                  };
+                  setFullName(nextFullName);
                   setSaved(false);
                   setProfileError(null);
                 }}
@@ -191,7 +211,12 @@ export default function Settings() {
                 type="text"
                 value={company}
                 onChange={(e) => {
-                  setCompany(e.target.value);
+                  const nextCompany = e.target.value;
+                  latestProfileFormRef.current = {
+                    ...latestProfileFormRef.current,
+                    company: nextCompany,
+                  };
+                  setCompany(nextCompany);
                   setSaved(false);
                   setProfileError(null);
                 }}
