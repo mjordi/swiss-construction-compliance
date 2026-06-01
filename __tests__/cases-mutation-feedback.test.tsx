@@ -218,6 +218,43 @@ describe("cases mutation feedback", () => {
     expect(await screen.findByText("Retry Residence Updated")).toBeTruthy();
   });
 
+  it("locks the create form and ignores duplicate submits while a save is in flight", async () => {
+    let resolveInsert: ((value: { error: null }) => void) | null = null;
+    insertMock.mockImplementationOnce(
+      () =>
+        new Promise<{ error: null }>((resolve) => {
+          resolveInsert = resolve;
+        })
+    );
+
+    render(<CasesPage />);
+
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+
+    openCreateForm();
+    fillCreateForm("Pending Residence");
+
+    const saveButton = screen.getByRole("button", { name: "cases-save" });
+    fireEvent.click(saveButton);
+    fireEvent.click(saveButton);
+
+    await waitFor(() => {
+      expect(insertMock).toHaveBeenCalledTimes(1);
+      expect((screen.getByLabelText("cases-project-name") as HTMLInputElement).disabled).toBe(true);
+      expect((screen.getByLabelText("cases-canton-label") as HTMLSelectElement).disabled).toBe(true);
+      expect((screen.getByLabelText("cases-contract-date-input") as HTMLInputElement).disabled).toBe(true);
+      expect((screen.getByLabelText("cases-discovery-date-input") as HTMLInputElement).disabled).toBe(true);
+      expect((screen.getByRole("button", { name: /cases-add-case/i }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByRole("button", { name: "cases-cancel" }) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    resolveInsert?.({ error: null });
+
+    await waitFor(() => {
+      expect(screen.queryByRole("heading", { name: "cases-add-title" })).toBeNull();
+    });
+  });
+
   it("keeps the case visible and shows localized feedback when delete returns an error", async () => {
     deleteEqMock.mockResolvedValueOnce({ error: { message: "delete failed" } });
 

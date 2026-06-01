@@ -102,6 +102,7 @@ export default function CasesPage() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const createInFlightRef = useRef(false);
   const [formData, setFormData] = useState<CaseFormState>(EMPTY_CASE_FORM);
   const [createError, setCreateError] = useState<TranslationKey | null>(null);
   const [deleteError, setDeleteError] = useState<TranslationKey | null>(null);
@@ -565,6 +566,7 @@ export default function CasesPage() {
   async function handleAddCase(e: React.FormEvent) {
     e.preventDefault();
     if (
+      createInFlightRef.current ||
       !user ||
       !formData.projectName ||
       !formData.contractDate ||
@@ -573,6 +575,7 @@ export default function CasesPage() {
     ) {
       return;
     }
+    createInFlightRef.current = true;
     setSaving(true);
 
     try {
@@ -595,6 +598,7 @@ export default function CasesPage() {
     } catch {
       setCreateError("cases-create-error");
     } finally {
+      createInFlightRef.current = false;
       setSaving(false);
     }
   }
@@ -757,7 +761,9 @@ export default function CasesPage() {
       <div className="mb-8 flex items-end justify-between">
         <PageHeader marker={t("cases-marker")} title={t("cases-title")} subtitle={t("cases-subtitle")} />
         <button
+          disabled={saving}
           onClick={() => {
+            if (saving) return;
             setCreateError(null);
             setShowForm((current) => {
               if (current) {
@@ -766,7 +772,7 @@ export default function CasesPage() {
               return !current;
             });
           }}
-          className="bg-accent hover:bg-accent/90 text-white px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors duration-300 text-[13px] font-semibold shrink-0"
+          className="bg-accent hover:bg-accent/90 text-white px-4 py-2.5 rounded-lg flex items-center gap-2 transition-colors duration-300 text-[13px] font-semibold shrink-0 disabled:cursor-not-allowed disabled:opacity-50"
         >
           <Plus className="w-4 h-4" /> {t("cases-add-case")}
         </button>
@@ -784,21 +790,21 @@ export default function CasesPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
               <label htmlFor="cases-project-name" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-project-name")}</label>
-              <input id="cases-project-name" type="text" value={formData.projectName} onChange={(e) => updateFormData({ ...formData, projectName: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none transition-colors duration-200" required />
+              <input id="cases-project-name" type="text" value={formData.projectName} onChange={(e) => updateFormData({ ...formData, projectName: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-60" disabled={saving} required />
             </div>
             <div>
               <label htmlFor="cases-canton" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-canton-label")}</label>
-              <select id="cases-canton" value={formData.canton} onChange={(e) => updateFormData({ ...formData, canton: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none">
+              <select id="cases-canton" value={formData.canton} onChange={(e) => updateFormData({ ...formData, canton: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none disabled:cursor-not-allowed disabled:opacity-60" disabled={saving}>
                 {SWISS_CANTONS.map((c) => <option key={c} value={c} className="bg-black text-cream">{c}</option>)}
               </select>
             </div>
             <div>
               <label htmlFor="cases-contract-date" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-contract-date-input")}</label>
-              <input id="cases-contract-date" type="date" value={formData.contractDate} onChange={(e) => updateFormData({ ...formData, contractDate: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none [color-scheme:dark]" required />
+              <input id="cases-contract-date" type="date" value={formData.contractDate} onChange={(e) => updateFormData({ ...formData, contractDate: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none [color-scheme:dark] disabled:cursor-not-allowed disabled:opacity-60" disabled={saving} required />
             </div>
             <div>
               <label htmlFor="cases-discovery-date" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-discovery-date-input")}</label>
-              <input id="cases-discovery-date" type="date" value={formData.discoveryDate} onChange={(e) => updateFormData({ ...formData, discoveryDate: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none [color-scheme:dark]" required />
+              <input id="cases-discovery-date" type="date" value={formData.discoveryDate} onChange={(e) => updateFormData({ ...formData, discoveryDate: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none [color-scheme:dark] disabled:cursor-not-allowed disabled:opacity-60" disabled={saving} required />
               {caseDateValidationError === "discovery-before-contract" && (
                 <p className="mt-2 text-xs text-red-400">{t("calc-discovery-before-contract")}</p>
               )}
@@ -808,7 +814,7 @@ export default function CasesPage() {
             <button type="submit" disabled={saving || !!caseDateValidationError} className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white font-semibold rounded-lg text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />} {t("cases-save")}
             </button>
-            <button type="button" onClick={closeCreateForm} className="px-5 py-2.5 bg-white/[0.03] border border-white/[0.06] text-muted hover:text-cream font-medium rounded-lg text-sm">
+            <button type="button" onClick={closeCreateForm} disabled={saving} className="px-5 py-2.5 bg-white/[0.03] border border-white/[0.06] text-muted hover:text-cream font-medium rounded-lg text-sm disabled:cursor-not-allowed disabled:opacity-50">
               {t("cases-cancel")}
             </button>
           </div>
