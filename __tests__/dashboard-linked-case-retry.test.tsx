@@ -10,9 +10,28 @@ let caseResponsesQueue: Array<{ data: Array<Record<string, unknown>> | null; err
 let allowRecovery = false;
 let lastComplianceRecordCaseId: string | null | undefined;
 let insertedProtocols: Array<Record<string, unknown>>;
+let protocolInsertFactory: (payload: Record<string, unknown>) => Promise<{ error: null }> | { error: null };
 let signaturePadIsEmpty = true;
 let signaturePadEndStrokeHandler: (() => void) | null = null;
 const authState = { user: { id: "user-1" } };
+type CaseLoadResolution = { data: Array<Record<string, unknown>> | null; error: { message: string } | null };
+
+function resolveCaseLoadPromise(
+  resolver: ((value: CaseLoadResolution) => void) | null,
+  value: CaseLoadResolution,
+) {
+  expect(resolver).not.toBeNull();
+  (resolver as unknown as (value: CaseLoadResolution) => void)(value);
+}
+
+function resolveProtocolInsertPromise(
+  resolver: ((value: { error: null }) => void) | null,
+  value: { error: null },
+) {
+  expect(resolver).not.toBeNull();
+  (resolver as unknown as (value: { error: null }) => void)(value);
+}
+
 const supabaseMock = {
   from: (table: string) => {
     if (table === "cases") {
@@ -46,7 +65,7 @@ const supabaseMock = {
       return {
         insert: (payload: Record<string, unknown>) => {
           insertedProtocols.push(payload);
-          return Promise.resolve({ error: null });
+          return protocolInsertFactory(payload);
         },
       };
     }
@@ -97,6 +116,7 @@ vi.mock("signature_pad", () => ({
         signaturePadEndStrokeHandler = null;
       }
     }
+    on() {}
     off() {}
     clear() {
       signaturePadIsEmpty = true;
@@ -170,6 +190,7 @@ describe("dashboard linked-case loading retry", () => {
     allowRecovery = false;
     lastComplianceRecordCaseId = undefined;
     insertedProtocols = [];
+    protocolInsertFactory = () => Promise.resolve({ error: null });
     signaturePadIsEmpty = true;
     signaturePadEndStrokeHandler = null;
     authState.user = { id: "user-1" };
@@ -228,7 +249,7 @@ describe("dashboard linked-case loading retry", () => {
       expect(lastComplianceRecordCaseId).toBe("case-1");
     });
 
-    resolveCaseLoad?.({ data: null, error: { message: "boom" } });
+    resolveCaseLoadPromise(resolveCaseLoad, { data: null, error: { message: "boom" } });
     expect((await screen.findByRole("alert")).textContent).toContain("dashboard-linked-case-load-error");
   });
 
@@ -276,7 +297,7 @@ describe("dashboard linked-case loading retry", () => {
       expect(lastComplianceRecordCaseId).toBeNull();
     });
 
-    resolveRetryLoad?.({ data: [buildCase()], error: null });
+    resolveCaseLoadPromise(resolveRetryLoad, { data: [buildCase()], error: null });
     expect(await screen.findByRole("option", { name: "Alpine Tower (ZH)" })).toBeTruthy();
   });
 
@@ -331,11 +352,65 @@ describe("dashboard linked-case loading retry", () => {
       expect(insertedProtocols[0]?.case_id).toBe("case-1");
     });
 
-    resolveRefreshLoad?.({ data: [buildCase()], error: null });
+    resolveCaseLoadPromise(resolveRefreshLoad, { data: [buildCase()], error: null });
 
     await waitFor(() => {
       expect(screen.queryByRole("alert")).toBeNull();
       expect(lastComplianceRecordCaseId).toBe("case-1");
+    });
+  });
+
+  it("locks protocol finalization controls and ignores duplicate finalize clicks while saving", async () => {
+    let resolveProtocolInsert: ((value: { error: null }) => void) | null = null;
+    protocolInsertFactory = () =>
+      new Promise<{ error: null }>((resolve) => {
+        resolveProtocolInsert = resolve;
+      });
+    window.localStorage.setItem(
+      "baucompliance:wizard-project-draft",
+      JSON.stringify({
+        name: "Alpine Tower",
+        contractor: "Builder AG",
+        client: "Owner GmbH",
+        updatedAt: "2026-05-15T09:00:00.000Z",
+      })
+    );
+    caseResponseFactory = () => ({ data: [], error: null });
+
+    render(<DashboardPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "btn-next" }));
+    const noDefectsCheckbox = screen.getByRole("checkbox");
+    fireEvent.click(noDefectsCheckbox);
+    signaturePadIsEmpty = false;
+    await act(async () => {
+      signaturePadEndStrokeHandler?.();
+    });
+
+    const finalizeButton = await screen.findByRole("button", { name: "btn-finalize" });
+    await waitFor(() => {
+      expect(finalizeButton.getAttribute("disabled")).toBeNull();
+    });
+
+    fireEvent.click(finalizeButton);
+    fireEvent.click(finalizeButton);
+
+    await waitFor(() => {
+      expect(insertedProtocols).toHaveLength(1);
+      expect((screen.getByPlaceholderText("defect-placeholder") as HTMLTextAreaElement).disabled).toBe(true);
+      expect((screen.getByRole("checkbox") as HTMLInputElement).disabled).toBe(true);
+      expect((screen.getByRole("button", { name: "btn-clear" }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByRole("button", { name: "btn-back" }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByRole("button", { name: "btn-generating" }) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.getByText("sign-here").parentElement?.getAttribute("aria-disabled")).toBe("true");
+    });
+
+    await act(async () => {
+      resolveProtocolInsertPromise(resolveProtocolInsert, { error: null });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "btn-download" })).toBeTruthy();
     });
   });
 
@@ -408,7 +483,7 @@ describe("dashboard linked-case loading retry", () => {
     });
 
     await act(async () => {
-      resolveCaseLoad?.({ data: [buildCase()], error: null });
+      resolveCaseLoadPromise(resolveCaseLoad, { data: [buildCase()], error: null });
     });
   });
 
@@ -500,7 +575,7 @@ describe("dashboard linked-case loading retry", () => {
 
     expect(await screen.findByRole("option", { name: "River Hall (ZH)" })).toBeTruthy();
 
-    resolveFirstRequest?.({ data: null, error: { message: "late failure" } });
+    resolveCaseLoadPromise(resolveFirstRequest, { data: null, error: { message: "late failure" } });
 
     await waitFor(() => {
       expect(screen.queryByRole("alert")).toBeNull();

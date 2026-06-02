@@ -78,6 +78,7 @@ vi.mock("signature_pad", () => ({
     }
     addEventListener() {}
     removeEventListener() {}
+    on() {}
     off() {}
     clear() {}
     toDataURL() {
