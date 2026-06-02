@@ -315,9 +315,21 @@ export default function Dashboard() {
         window.removeEventListener("resize", resizeCanvas);
         pad.removeEventListener("endStroke", handleStrokeEnd);
         pad.off();
+        setSigPad(null);
       };
     }
   }, [step]);
+
+  useEffect(() => {
+    if (!sigPad || step !== 2) return;
+
+    if (isGenerating) {
+      sigPad.off();
+      return;
+    }
+
+    sigPad.on();
+  }, [isGenerating, sigPad, step]);
 
   const handleGenerateProtocol = async () => {
     if (finalizeInFlightRef.current) {
@@ -694,7 +706,8 @@ export default function Dashboard() {
                         setSubmissionError(null);
                       }
                     }}
-                    className="h-4 w-4 rounded border-white/20 bg-transparent"
+                    disabled={isGenerating}
+                    className="h-4 w-4 rounded border-white/20 bg-transparent disabled:cursor-not-allowed disabled:opacity-60"
                   />
                   <span>{t("dashboard-no-defects-confirmed")}</span>
                 </label>
@@ -718,7 +731,12 @@ export default function Dashboard() {
                     {t("btn-clear")}
                   </button>
                 </div>
-                <div className="border border-white/[0.08] rounded-lg bg-white h-28 relative overflow-hidden cursor-crosshair touch-none">
+                <div
+                  aria-disabled={isGenerating}
+                  className={`border border-white/[0.08] rounded-lg bg-white h-28 relative overflow-hidden touch-none ${
+                    isGenerating ? "cursor-not-allowed opacity-70" : "cursor-crosshair"
+                  }`}
+                >
                   <canvas
                     ref={sigCanvas}
                     className="absolute inset-0 w-full h-full"
