@@ -969,6 +969,7 @@ export default function CasesPage() {
           {visibleCases.map((item) => {
             const checklist = effectiveChecklists[item.id] ?? item.checklistDefaults;
             const progress = deriveChecklistProgress(checklist);
+            const isChecklistSaving = Boolean(checklistSavingByCase[item.id]);
 
             return (
               <article key={item.id} className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05]">
@@ -1005,7 +1006,7 @@ export default function CasesPage() {
                         if (!dbCase) return;
                         openEditForm(dbCase);
                       }}
-                      disabled={Boolean(updatingCaseId) || hasDeletingCases}
+                      disabled={Boolean(updatingCaseId) || hasDeletingCases || isChecklistSaving}
                       className="px-2.5 py-1 rounded-md border border-white/[0.14] text-cream hover:bg-white/[0.06] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {t("cases-edit")}
@@ -1015,7 +1016,7 @@ export default function CasesPage() {
                       aria-label={t("cases-delete")}
                       className="ml-2 p-1.5 rounded-md text-muted/40 hover:text-red-400 hover:bg-red-400/[0.06] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                       title={t("cases-delete")}
-                      disabled={!!deletingCaseIds[item.id] || Boolean(updatingCaseId)}
+                      disabled={!!deletingCaseIds[item.id] || Boolean(updatingCaseId) || isChecklistSaving}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -1155,11 +1156,11 @@ export default function CasesPage() {
                     {Object.entries(checklistLabels).map(([key, label]) => {
                       const checklistKey = key as FollowUpChecklistKey;
                       return (
-                        <label key={key} className={`flex items-center gap-2 text-sm text-cream ${checklistSavingByCase[item.id] ? "opacity-70" : ""}`}>
+                        <label key={key} className={`flex items-center gap-2 text-sm text-cream ${isChecklistSaving ? "opacity-70" : ""}`}>
                           <input
                             type="checkbox"
                             checked={checklist[checklistKey]}
-                            disabled={Boolean(checklistSavingByCase[item.id])}
+                            disabled={isChecklistSaving}
                             onChange={() => toggleChecklistItem(item.id, checklistKey)}
                           />
                           <span>{label}</span>
@@ -1176,7 +1177,7 @@ export default function CasesPage() {
                       <button
                         type="button"
                         onClick={() => downloadCaseReminder(item)}
-                        disabled={Boolean(checklistSavingByCase[item.id])}
+                        disabled={isChecklistSaving}
                         className="rounded-lg border border-white/[0.14] px-3 py-2 text-sm text-cream hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {t("cases-export-ics")}
