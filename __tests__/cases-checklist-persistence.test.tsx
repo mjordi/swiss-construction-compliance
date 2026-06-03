@@ -206,6 +206,33 @@ describe("cases checklist persistence", () => {
     });
   });
 
+  it("locks row edit and delete actions while checklist persistence is in flight", async () => {
+    let resolveUpdate: ((value: { error: null }) => void) | null = null;
+    updateEqMock.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          resolveUpdate = resolve;
+        })
+    );
+
+    render(<CasesPage />);
+
+    const checkbox = await screen.findByLabelText("cases-checklist-evidence-attached");
+    fireEvent.click(checkbox);
+
+    await waitFor(() => {
+      expect((screen.getByRole("button", { name: "cases-edit" }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByTitle("cases-delete") as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    resolveUpdate?.({ error: null });
+
+    await waitFor(() => {
+      expect((screen.getByRole("button", { name: "cases-edit" }) as HTMLButtonElement).disabled).toBe(false);
+      expect((screen.getByTitle("cases-delete") as HTMLButtonElement).disabled).toBe(false);
+    });
+  });
+
   it("temporarily disables checklist inputs while a save is in flight and re-enables them after success", async () => {
     let resolveUpdate: ((value: { error: null }) => void) | null = null;
     updateEqMock.mockImplementationOnce(
