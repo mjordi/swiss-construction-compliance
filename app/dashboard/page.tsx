@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useState, useRef, useEffect, useMemo, useCallback } from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { CheckCircle, AlertTriangle, FileText, Loader2, Download, Camera, Calendar } from "lucide-react";
 import { motion } from "framer-motion";
 import { pdf } from '@react-pdf/renderer';
@@ -40,6 +40,8 @@ export default function Dashboard() {
   const { t } = useLanguage();
   const { user } = useAuth();
   const supabase = getSupabase();
+  const router = useRouter();
+  const pathname = usePathname();
   const searchParams = useSearchParams();
   const [sigPad, setSigPad] = useState<SignaturePad | null>(null);
   const [hasSignature, setHasSignature] = useState(false);
@@ -121,7 +123,7 @@ export default function Dashboard() {
     } finally {
       setDraftHydrated(true);
     }
-  }, [requestedCaseId]);
+  }, []);
 
   useEffect(() => {
     setPendingRequestedCaseId(requestedCaseId);
@@ -142,10 +144,15 @@ export default function Dashboard() {
         ...current,
         name: requestedCase.project_name,
       }));
+
+      const nextParams = new URLSearchParams(searchParams.toString());
+      nextParams.delete("case");
+      const nextQuery = nextParams.toString();
+      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
     }
 
     setPendingRequestedCaseId(null);
-  }, [pendingRequestedCaseId, userCases, userCasesLoadedSuccessfully]);
+  }, [pathname, pendingRequestedCaseId, router, searchParams, userCases, userCasesLoadedSuccessfully]);
 
   useEffect(() => {
     if (!draftHydrated) return;

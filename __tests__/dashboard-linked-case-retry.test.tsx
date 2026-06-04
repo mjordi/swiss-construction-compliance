@@ -3,6 +3,7 @@ import { act, fireEvent, render, screen, waitFor } from "@testing-library/react"
 import type { HTMLAttributes, ReactNode } from "react";
 
 let currentSearch = "";
+const replaceMock = vi.fn();
 let caseResponseFactory: () =>
   | { data: Array<Record<string, unknown>> | null; error: { message: string } | null }
   | Promise<{ data: Array<Record<string, unknown>> | null; error: { message: string } | null }>;
@@ -75,6 +76,8 @@ const supabaseMock = {
 };
 
 vi.mock("next/navigation", () => ({
+  usePathname: () => "/dashboard",
+  useRouter: () => ({ replace: replaceMock }),
   useSearchParams: () => {
     const params = new URLSearchParams(currentSearch);
     return {
@@ -185,6 +188,7 @@ function buildCase(id = "case-1", projectName = "Alpine Tower") {
 describe("dashboard linked-case loading retry", () => {
   beforeEach(() => {
     currentSearch = "";
+    replaceMock.mockClear();
     window.localStorage.clear();
     caseResponsesQueue = [];
     allowRecovery = false;
@@ -488,7 +492,7 @@ describe("dashboard linked-case loading retry", () => {
   });
 
   it("hydrates a requested linked case from the dashboard URL handoff", async () => {
-    currentSearch = "case=case-1";
+    currentSearch = "case=case-1&view=wizard";
     window.localStorage.setItem(
       "baucompliance:wizard-project-draft",
       JSON.stringify({
@@ -501,7 +505,7 @@ describe("dashboard linked-case loading retry", () => {
     );
     caseResponseFactory = () => ({ data: [buildCase()], error: null });
 
-    render(<DashboardPage />);
+    const { rerender } = render(<DashboardPage />);
 
     expect(await screen.findByRole("option", { name: "Alpine Tower (ZH)" })).toBeTruthy();
     await waitFor(() => {
@@ -509,6 +513,18 @@ describe("dashboard linked-case loading retry", () => {
     });
     expect((screen.getByLabelText("wizard-case-selector") as HTMLSelectElement).value).toBe("case-1");
     await waitFor(() => {
+      expect((screen.getByPlaceholderText("dashboard-project-placeholder") as HTMLInputElement).value).toBe("Alpine Tower");
+    });
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith("/dashboard?view=wizard", { scroll: false });
+    });
+
+    currentSearch = "view=wizard";
+    rerender(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(lastComplianceRecordCaseId).toBe("case-1");
+      expect((screen.getByLabelText("wizard-case-selector") as HTMLSelectElement).value).toBe("case-1");
       expect((screen.getByPlaceholderText("dashboard-project-placeholder") as HTMLInputElement).value).toBe("Alpine Tower");
     });
 
