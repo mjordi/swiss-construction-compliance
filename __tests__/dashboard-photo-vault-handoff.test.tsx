@@ -37,6 +37,8 @@ const supabaseMock = {
 };
 
 vi.mock("next/navigation", () => ({
+  usePathname: () => "/dashboard",
+  useRouter: () => ({ replace: vi.fn() }),
   useSearchParams: () => {
     const params = new URLSearchParams("");
     return {
