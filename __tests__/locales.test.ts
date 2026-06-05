@@ -88,6 +88,20 @@ describe("locales", () => {
     }
   });
 
+  it("includes calculator share-link localization keys in every locale", () => {
+    const requiredCalculatorShareKeys = [
+      "calc-share-link",
+      "calc-share-link-copied",
+      "calc-share-link-error",
+    ] as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      for (const key of requiredCalculatorShareKeys) {
+        expect(translations[key], `Locale '${lang}' missing calculator share-link key '${key}'`).toBeDefined();
+      }
+    }
+  });
+
   it("includes cases share-link and load-error localization keys in every locale", () => {
     const requiredCasesShareKeys = [
       "cases-share-link",

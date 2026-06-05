@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Download,
   RotateCcw,
@@ -10,6 +10,7 @@ import {
   Scale,
   Calendar,
   Info,
+  Share2,
 } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import {
@@ -51,23 +52,116 @@ export default function RuegefristCalculator() {
   const [discoveryDate, setDiscoveryDate] = useState("");
   const [isDraftLoaded, setIsDraftLoaded] = useState(false);
   const [result, setResult] = useState<RuegefristResult | null>(null);
+  const [calculatedDates, setCalculatedDates] = useState<{
+    contractDate: string;
+    discoveryDate: string;
+  } | null>(null);
+  const [shareLinkFeedback, setShareLinkFeedback] = useState<
+    "calc-share-link-copied" | "calc-share-link-error" | null
+  >(null);
+  const shareLinkResetTimerRef = useRef<number | null>(null);
+  const shareLinkRequestIdRef = useRef(0);
+
+  function clearShareLinkFeedback() {
+    shareLinkRequestIdRef.current += 1;
+    if (shareLinkResetTimerRef.current !== null) {
+      window.clearTimeout(shareLinkResetTimerRef.current);
+      shareLinkResetTimerRef.current = null;
+    }
+    setShareLinkFeedback(null);
+  }
 
   useEffect(() => {
-    try {
-      const rawDraft = window.localStorage.getItem(STORAGE_KEY);
-      if (!rawDraft) return;
-      const parsedDraft = JSON.parse(rawDraft) as {
-        contractDate?: string;
-        discoveryDate?: string;
-      };
-      setContractDate(parsedDraft.contractDate ?? "");
-      setDiscoveryDate(parsedDraft.discoveryDate ?? "");
-    } catch {
-      setContractDate("");
-      setDiscoveryDate("");
-    } finally {
+    function readSavedDraft() {
+      try {
+        const rawDraft = window.localStorage.getItem(STORAGE_KEY);
+        if (!rawDraft) return null;
+        return JSON.parse(rawDraft) as {
+          contractDate?: string;
+          discoveryDate?: string;
+        };
+      } catch {
+        return null;
+      }
+    }
+
+    function loadSavedDraft() {
+      const savedDraft = readSavedDraft();
+      setContractDate(savedDraft?.contractDate ?? "");
+      setDiscoveryDate(savedDraft?.discoveryDate ?? "");
       setIsDraftLoaded(true);
     }
+
+    function loadSharedDates(nextContractDate: string, nextDiscoveryDate: string) {
+      setContractDate(nextContractDate);
+      setDiscoveryDate(nextDiscoveryDate);
+    }
+
+    function loadSharedResult(parsedContractDate: Date, parsedDiscoveryDate: Date) {
+      setResult(calculateRuegefrist(parsedContractDate, parsedDiscoveryDate));
+      setCalculatedDates({
+        contractDate: rawContractDate ?? "",
+        discoveryDate: rawDiscoveryDate ?? "",
+      });
+    }
+
+    function markDraftLoaded() {
+      setIsDraftLoaded(true);
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const rawContractDate = params.get("contract");
+    const rawDiscoveryDate = params.get("discovery");
+    const hasSharedDates = rawContractDate !== null || rawDiscoveryDate !== null;
+
+    if (hasSharedDates) {
+      const sharedContractDate = rawContractDate && parseDateInput(rawContractDate) ? rawContractDate : "";
+      const sharedDiscoveryDate = rawDiscoveryDate && parseDateInput(rawDiscoveryDate) ? rawDiscoveryDate : "";
+
+      if (rawContractDate !== null && !sharedContractDate) params.delete("contract");
+      if (rawDiscoveryDate !== null && !sharedDiscoveryDate) params.delete("discovery");
+
+      const nextQuery = params.toString();
+      const nextUrl = nextQuery ? `?${nextQuery}` : window.location.pathname;
+      const currentUrl = `${window.location.pathname}${window.location.search}`;
+      if (nextUrl !== currentUrl) {
+        window.history.replaceState(null, "", nextUrl);
+      }
+
+      if (!sharedContractDate && !sharedDiscoveryDate) {
+        loadSavedDraft();
+        return;
+      }
+
+      const savedDraft = readSavedDraft();
+      const nextContractDate = sharedContractDate || savedDraft?.contractDate || "";
+      const nextDiscoveryDate = sharedDiscoveryDate || savedDraft?.discoveryDate || "";
+
+      loadSharedDates(nextContractDate, nextDiscoveryDate);
+
+      const parsedContractDate = sharedContractDate ? parseDateInput(sharedContractDate) : null;
+      const parsedDiscoveryDate = sharedDiscoveryDate ? parseDateInput(sharedDiscoveryDate) : null;
+      if (
+        parsedContractDate &&
+        parsedDiscoveryDate &&
+        !validateRuegefristInput(parsedContractDate, parsedDiscoveryDate)
+      ) {
+        loadSharedResult(parsedContractDate, parsedDiscoveryDate);
+      }
+      markDraftLoaded();
+      return;
+    }
+
+    loadSavedDraft();
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      shareLinkRequestIdRef.current += 1;
+      if (shareLinkResetTimerRef.current !== null) {
+        window.clearTimeout(shareLinkResetTimerRef.current);
+      }
+    };
   }, []);
 
   useEffect(() => {
@@ -95,29 +189,75 @@ export default function RuegefristCalculator() {
       : null;
 
   function updateContractDate(value: string) {
+    clearShareLinkFeedback();
     setContractDate(value);
     setResult(null);
   }
 
   function updateDiscoveryDate(value: string) {
+    clearShareLinkFeedback();
     setDiscoveryDate(value);
     setResult(null);
   }
 
   function calculate() {
+    clearShareLinkFeedback();
     if (!contractDate || !discoveryDate || validationError) return;
     const parsedContractDate = parseDateInput(contractDate);
     const parsedDiscoveryDate = parseDateInput(discoveryDate);
     if (!parsedContractDate || !parsedDiscoveryDate) return;
     const r = calculateRuegefrist(parsedContractDate, parsedDiscoveryDate);
     setResult(r);
+    setCalculatedDates({ contractDate, discoveryDate });
+
+    const params = new URLSearchParams(window.location.search);
+    params.set("contract", contractDate);
+    params.set("discovery", discoveryDate);
+    window.history.replaceState(null, "", `?${params.toString()}`);
   }
 
   function reset() {
+    clearShareLinkFeedback();
     setContractDate("");
     setDiscoveryDate("");
     setResult(null);
+    setCalculatedDates(null);
     window.localStorage.removeItem(STORAGE_KEY);
+    const params = new URLSearchParams(window.location.search);
+    params.delete("contract");
+    params.delete("discovery");
+    const query = params.toString();
+    window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
+  }
+
+  async function copyShareLink() {
+    if (!calculatedDates) return;
+    const url = new URL(window.location.href);
+    url.searchParams.set("contract", calculatedDates.contractDate);
+    url.searchParams.set("discovery", calculatedDates.discoveryDate);
+
+    if (shareLinkResetTimerRef.current !== null) {
+      window.clearTimeout(shareLinkResetTimerRef.current);
+      shareLinkResetTimerRef.current = null;
+    }
+
+    const requestId = shareLinkRequestIdRef.current + 1;
+    shareLinkRequestIdRef.current = requestId;
+
+    try {
+      await navigator.clipboard.writeText(url.toString());
+      if (requestId !== shareLinkRequestIdRef.current) return;
+      setShareLinkFeedback("calc-share-link-copied");
+    } catch {
+      if (requestId !== shareLinkRequestIdRef.current) return;
+      setShareLinkFeedback("calc-share-link-error");
+    }
+
+    shareLinkResetTimerRef.current = window.setTimeout(() => {
+      if (requestId !== shareLinkRequestIdRef.current) return;
+      setShareLinkFeedback(null);
+      shareLinkResetTimerRef.current = null;
+    }, 2000);
   }
 
   function downloadICS() {
@@ -198,6 +338,17 @@ export default function RuegefristCalculator() {
           </div>
         </div>
       </div>
+
+      {calculatedDates && (
+        <button
+          onClick={copyShareLink}
+          aria-label={shareLinkFeedback ? t(shareLinkFeedback) : t("calc-share-link")}
+          className="w-full mb-8 flex items-center justify-center gap-2 px-4 py-3 border border-white/[0.08] hover:border-accent/30 text-muted hover:text-accent font-medium rounded-lg transition-all duration-300 text-[13px]"
+        >
+          <Share2 className="w-4 h-4" />
+          {shareLinkFeedback ? t(shareLinkFeedback) : t("calc-share-link")}
+        </button>
+      )}
 
       {/* Results */}
       {result && (
