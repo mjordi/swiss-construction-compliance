@@ -72,6 +72,24 @@ export default function RuegefristCalculator() {
   }
 
   useEffect(() => {
+    function loadSavedDraft() {
+      try {
+        const rawDraft = window.localStorage.getItem(STORAGE_KEY);
+        if (!rawDraft) return;
+        const parsedDraft = JSON.parse(rawDraft) as {
+          contractDate?: string;
+          discoveryDate?: string;
+        };
+        setContractDate(parsedDraft.contractDate ?? "");
+        setDiscoveryDate(parsedDraft.discoveryDate ?? "");
+      } catch {
+        setContractDate("");
+        setDiscoveryDate("");
+      } finally {
+        setIsDraftLoaded(true);
+      }
+    }
+
     const params = new URLSearchParams(window.location.search);
     const rawContractDate = params.get("contract");
     const rawDiscoveryDate = params.get("discovery");
@@ -81,14 +99,19 @@ export default function RuegefristCalculator() {
       const sharedContractDate = rawContractDate && parseDateInput(rawContractDate) ? rawContractDate : "";
       const sharedDiscoveryDate = rawDiscoveryDate && parseDateInput(rawDiscoveryDate) ? rawDiscoveryDate : "";
 
-      if (rawContractDate && !sharedContractDate) params.delete("contract");
-      if (rawDiscoveryDate && !sharedDiscoveryDate) params.delete("discovery");
+      if (rawContractDate !== null && !sharedContractDate) params.delete("contract");
+      if (rawDiscoveryDate !== null && !sharedDiscoveryDate) params.delete("discovery");
 
       const nextQuery = params.toString();
       const nextUrl = nextQuery ? `?${nextQuery}` : window.location.pathname;
       const currentUrl = `${window.location.pathname}${window.location.search}`;
       if (nextUrl !== currentUrl) {
         window.history.replaceState(null, "", nextUrl);
+      }
+
+      if (!sharedContractDate && !sharedDiscoveryDate) {
+        loadSavedDraft();
+        return;
       }
 
       setContractDate(sharedContractDate);
@@ -111,21 +134,7 @@ export default function RuegefristCalculator() {
       return;
     }
 
-    try {
-      const rawDraft = window.localStorage.getItem(STORAGE_KEY);
-      if (!rawDraft) return;
-      const parsedDraft = JSON.parse(rawDraft) as {
-        contractDate?: string;
-        discoveryDate?: string;
-      };
-      setContractDate(parsedDraft.contractDate ?? "");
-      setDiscoveryDate(parsedDraft.discoveryDate ?? "");
-    } catch {
-      setContractDate("");
-      setDiscoveryDate("");
-    } finally {
-      setIsDraftLoaded(true);
-    }
+    loadSavedDraft();
   }, []);
 
   useEffect(() => {
