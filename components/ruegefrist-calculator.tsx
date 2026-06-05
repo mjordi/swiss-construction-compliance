@@ -72,22 +72,41 @@ export default function RuegefristCalculator() {
   }
 
   useEffect(() => {
-    function loadSavedDraft() {
+    function readSavedDraft() {
       try {
         const rawDraft = window.localStorage.getItem(STORAGE_KEY);
-        if (!rawDraft) return;
-        const parsedDraft = JSON.parse(rawDraft) as {
+        if (!rawDraft) return null;
+        return JSON.parse(rawDraft) as {
           contractDate?: string;
           discoveryDate?: string;
         };
-        setContractDate(parsedDraft.contractDate ?? "");
-        setDiscoveryDate(parsedDraft.discoveryDate ?? "");
       } catch {
-        setContractDate("");
-        setDiscoveryDate("");
-      } finally {
-        setIsDraftLoaded(true);
+        return null;
       }
+    }
+
+    function loadSavedDraft() {
+      const savedDraft = readSavedDraft();
+      setContractDate(savedDraft?.contractDate ?? "");
+      setDiscoveryDate(savedDraft?.discoveryDate ?? "");
+      setIsDraftLoaded(true);
+    }
+
+    function loadSharedDates(nextContractDate: string, nextDiscoveryDate: string) {
+      setContractDate(nextContractDate);
+      setDiscoveryDate(nextDiscoveryDate);
+    }
+
+    function loadSharedResult(parsedContractDate: Date, parsedDiscoveryDate: Date) {
+      setResult(calculateRuegefrist(parsedContractDate, parsedDiscoveryDate));
+      setCalculatedDates({
+        contractDate: rawContractDate ?? "",
+        discoveryDate: rawDiscoveryDate ?? "",
+      });
+    }
+
+    function markDraftLoaded() {
+      setIsDraftLoaded(true);
     }
 
     const params = new URLSearchParams(window.location.search);
@@ -114,8 +133,11 @@ export default function RuegefristCalculator() {
         return;
       }
 
-      setContractDate(sharedContractDate);
-      setDiscoveryDate(sharedDiscoveryDate);
+      const savedDraft = readSavedDraft();
+      const nextContractDate = sharedContractDate || savedDraft?.contractDate || "";
+      const nextDiscoveryDate = sharedDiscoveryDate || savedDraft?.discoveryDate || "";
+
+      loadSharedDates(nextContractDate, nextDiscoveryDate);
 
       const parsedContractDate = sharedContractDate ? parseDateInput(sharedContractDate) : null;
       const parsedDiscoveryDate = sharedDiscoveryDate ? parseDateInput(sharedDiscoveryDate) : null;
@@ -124,13 +146,9 @@ export default function RuegefristCalculator() {
         parsedDiscoveryDate &&
         !validateRuegefristInput(parsedContractDate, parsedDiscoveryDate)
       ) {
-        setResult(calculateRuegefrist(parsedContractDate, parsedDiscoveryDate));
-        setCalculatedDates({
-          contractDate: sharedContractDate,
-          discoveryDate: sharedDiscoveryDate,
-        });
+        loadSharedResult(parsedContractDate, parsedDiscoveryDate);
       }
-      setIsDraftLoaded(true);
+      markDraftLoaded();
       return;
     }
 

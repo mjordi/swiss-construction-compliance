@@ -107,6 +107,30 @@ describe("RuegefristCalculator", () => {
     );
   });
 
+  it("merges a valid one-sided shared date with the saved draft sibling", async () => {
+    window.localStorage.setItem(
+      "baucompliance:ruegefrist-draft",
+      JSON.stringify({ contractDate: "2026-02-01", discoveryDate: "2026-03-01" })
+    );
+    window.history.replaceState(
+      null,
+      "",
+      "/tools/ruegefrist-rechner?contract=bad-date&discovery=2026-04-01"
+    );
+
+    render(<RuegefristCalculator />);
+
+    await waitFor(() => {
+      expect(window.location.search).toBe("?discovery=2026-04-01");
+    });
+
+    expect((screen.getByLabelText("calc-contract-date") as HTMLInputElement).value).toBe("2026-02-01");
+    expect((screen.getByLabelText("calc-discovery-date") as HTMLInputElement).value).toBe("2026-04-01");
+    expect(window.localStorage.getItem("baucompliance:ruegefrist-draft")).toBe(
+      JSON.stringify({ contractDate: "2026-02-01", discoveryDate: "2026-04-01" })
+    );
+  });
+
   it("copies the last calculated dates rather than live edited input", async () => {
     render(<RuegefristCalculator />);
 
