@@ -148,7 +148,68 @@ describe("RuegefristCalculator", () => {
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(
-        "http://localhost:3000/tools/ruegefrist-rechner?contract=2026-02-01&discovery=2026-03-01"
+        "http://localhost:3000/tools/ruegefrist-rechner?contract=2026-02-01&discovery=2026-03-01&reminders=14%2C7%2C1"
+      );
+    });
+  });
+
+  it("hydrates shared reminder presets and includes them in copied links", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/tools/ruegefrist-rechner?contract=2026-02-01&discovery=2026-03-01&reminders=30,3"
+    );
+
+    render(<RuegefristCalculator />);
+
+    await waitFor(() => {
+      expect(screen.getByText("calc-60day-title")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "calc-share-link" }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        "http://localhost:3000/tools/ruegefrist-rechner?contract=2026-02-01&discovery=2026-03-01&reminders=30%2C3"
+      );
+    });
+  });
+
+  it("sanitizes invalid shared reminder params while preserving valid dates", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/tools/ruegefrist-rechner?contract=2026-02-01&discovery=2026-03-01&reminders=foo,99"
+    );
+
+    render(<RuegefristCalculator />);
+
+    await waitFor(() => {
+      expect(window.location.search).toBe(
+        "?contract=2026-02-01&discovery=2026-03-01&reminders=14%2C7%2C1"
+      );
+    });
+
+    expect(screen.getByText("calc-60day-title")).toBeTruthy();
+  });
+
+  it("copies reminder changes made with the preset toggles", async () => {
+    render(<RuegefristCalculator />);
+
+    fireEvent.change(screen.getByLabelText("calc-contract-date"), {
+      target: { value: "2026-02-01" },
+    });
+    fireEvent.change(screen.getByLabelText("calc-discovery-date"), {
+      target: { value: "2026-03-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "30 deadlines-reminder-days" }));
+    fireEvent.click(screen.getByRole("button", { name: "14 deadlines-reminder-days" }));
+    fireEvent.click(screen.getByRole("button", { name: "calc-calculate" }));
+    fireEvent.click(screen.getByRole("button", { name: "calc-share-link" }));
+
+    await waitFor(() => {
+      expect(writeText).toHaveBeenCalledWith(
+        "http://localhost:3000/tools/ruegefrist-rechner?contract=2026-02-01&discovery=2026-03-01&reminders=30%2C7%2C1"
       );
     });
   });
@@ -223,7 +284,7 @@ describe("RuegefristCalculator", () => {
 
     await waitFor(() => {
       expect(writeText).toHaveBeenCalledWith(
-        "http://localhost:3000/tools/ruegefrist-rechner?contract=2026-02-01&discovery=2026-03-01"
+        "http://localhost:3000/tools/ruegefrist-rechner?contract=2026-02-01&discovery=2026-03-01&reminders=14%2C7%2C1"
       );
     });
 

@@ -15,9 +15,13 @@ import {
 import { useLanguage } from "@/context/LanguageContext";
 import {
   calculateRuegefrist,
+  DEADLINE_REMINDER_OFFSET_OPTIONS,
+  DEFAULT_DEADLINE_REMINDER_OFFSETS,
   formatDateCH,
   generateDeadlineICS,
   parseDateInput,
+  sanitizeDeadlineReminderQueryParam,
+  serializeDeadlineReminderQueryParam,
   validateRuegefristInput,
   type RuegefristResult,
 } from "@/lib/legal-utils";
@@ -56,6 +60,9 @@ export default function RuegefristCalculator() {
     contractDate: string;
     discoveryDate: string;
   } | null>(null);
+  const [reminderOffsets, setReminderOffsets] = useState<number[]>([
+    ...DEFAULT_DEADLINE_REMINDER_OFFSETS,
+  ]);
   const [shareLinkFeedback, setShareLinkFeedback] = useState<
     "calc-share-link-copied" | "calc-share-link-error" | null
   >(null);
@@ -97,6 +104,10 @@ export default function RuegefristCalculator() {
       setDiscoveryDate(nextDiscoveryDate);
     }
 
+    function loadSharedReminders(nextReminderOffsets: number[]) {
+      setReminderOffsets(nextReminderOffsets);
+    }
+
     function loadSharedResult(parsedContractDate: Date, parsedDiscoveryDate: Date) {
       setResult(calculateRuegefrist(parsedContractDate, parsedDiscoveryDate));
       setCalculatedDates({
@@ -112,23 +123,33 @@ export default function RuegefristCalculator() {
     const params = new URLSearchParams(window.location.search);
     const rawContractDate = params.get("contract");
     const rawDiscoveryDate = params.get("discovery");
-    const hasSharedDates = rawContractDate !== null || rawDiscoveryDate !== null;
+    const rawReminders = params.get("reminders");
+    const hasSharedParams =
+      rawContractDate !== null || rawDiscoveryDate !== null || rawReminders !== null;
 
-    if (hasSharedDates) {
+    if (hasSharedParams) {
       const sharedContractDate = rawContractDate && parseDateInput(rawContractDate) ? rawContractDate : "";
       const sharedDiscoveryDate = rawDiscoveryDate && parseDateInput(rawDiscoveryDate) ? rawDiscoveryDate : "";
+      const sharedReminderOffsets = sanitizeDeadlineReminderQueryParam(rawReminders);
+      const serializedReminderOffsets = serializeDeadlineReminderQueryParam(sharedReminderOffsets);
 
       if (rawContractDate !== null && !sharedContractDate) params.delete("contract");
       if (rawDiscoveryDate !== null && !sharedDiscoveryDate) params.delete("discovery");
+      if (rawReminders !== null && rawReminders !== serializedReminderOffsets) {
+        params.set("reminders", serializedReminderOffsets);
+      }
 
       const nextQuery = params.toString();
       const nextUrl = nextQuery ? `?${nextQuery}` : window.location.pathname;
-      const currentUrl = `${window.location.pathname}${window.location.search}`;
+      const currentUrl = nextQuery
+        ? window.location.search
+        : `${window.location.pathname}${window.location.search}`;
       if (nextUrl !== currentUrl) {
         window.history.replaceState(null, "", nextUrl);
       }
 
       if (!sharedContractDate && !sharedDiscoveryDate) {
+        loadSharedReminders(sharedReminderOffsets);
         loadSavedDraft();
         return;
       }
@@ -138,6 +159,7 @@ export default function RuegefristCalculator() {
       const nextDiscoveryDate = sharedDiscoveryDate || savedDraft?.discoveryDate || "";
 
       loadSharedDates(nextContractDate, nextDiscoveryDate);
+      loadSharedReminders(sharedReminderOffsets);
 
       const parsedContractDate = sharedContractDate ? parseDateInput(sharedContractDate) : null;
       const parsedDiscoveryDate = sharedDiscoveryDate ? parseDateInput(sharedDiscoveryDate) : null;
@@ -213,6 +235,7 @@ export default function RuegefristCalculator() {
     const params = new URLSearchParams(window.location.search);
     params.set("contract", contractDate);
     params.set("discovery", discoveryDate);
+    params.set("reminders", serializeDeadlineReminderQueryParam(reminderOffsets));
     window.history.replaceState(null, "", `?${params.toString()}`);
   }
 
@@ -222,10 +245,12 @@ export default function RuegefristCalculator() {
     setDiscoveryDate("");
     setResult(null);
     setCalculatedDates(null);
+    setReminderOffsets([...DEFAULT_DEADLINE_REMINDER_OFFSETS]);
     window.localStorage.removeItem(STORAGE_KEY);
     const params = new URLSearchParams(window.location.search);
     params.delete("contract");
     params.delete("discovery");
+    params.delete("reminders");
     const query = params.toString();
     window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
   }
@@ -235,6 +260,7 @@ export default function RuegefristCalculator() {
     const url = new URL(window.location.href);
     url.searchParams.set("contract", calculatedDates.contractDate);
     url.searchParams.set("discovery", calculatedDates.discoveryDate);
+    url.searchParams.set("reminders", serializeDeadlineReminderQueryParam(reminderOffsets));
 
     if (shareLinkResetTimerRef.current !== null) {
       window.clearTimeout(shareLinkResetTimerRef.current);
@@ -265,7 +291,8 @@ export default function RuegefristCalculator() {
     const content = generateDeadlineICS(
       result.ruegefrist60.date,
       "BauCompliance: 60-Tage-Rügefrist (Art. 370 OR 2026)",
-      `Rügefrist Ablauf\nVertragsdatum: ${formatDateCH(result.contractDate)}\nMängel entdeckt: ${formatDateCH(result.discoveryDate)}`
+      `Rügefrist Ablauf\nVertragsdatum: ${formatDateCH(result.contractDate)}\nMängel entdeckt: ${formatDateCH(result.discoveryDate)}`,
+      reminderOffsets
     );
     const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -275,6 +302,30 @@ export default function RuegefristCalculator() {
     a.click();
     URL.revokeObjectURL(url);
   }
+
+  function toggleReminder(offset: number) {
+    clearShareLinkFeedback();
+    setReminderOffsets((current) =>
+      current.includes(offset)
+        ? current.filter((value) => value !== offset)
+        : [...current, offset]
+    );
+  }
+
+  useEffect(() => {
+    if (!calculatedDates) return;
+
+    const params = new URLSearchParams(window.location.search);
+    params.set("contract", calculatedDates.contractDate);
+    params.set("discovery", calculatedDates.discoveryDate);
+    params.set("reminders", serializeDeadlineReminderQueryParam(reminderOffsets));
+    const nextUrl = `?${params.toString()}`;
+    const currentUrl = window.location.search;
+
+    if (nextUrl !== currentUrl) {
+      window.history.replaceState(null, "", nextUrl);
+    }
+  }, [calculatedDates, reminderOffsets]);
 
   return (
     <div className="max-w-2xl mx-auto">
@@ -335,6 +386,28 @@ export default function RuegefristCalculator() {
                 <RotateCcw className="w-4 h-4" />
               </button>
             )}
+          </div>
+          <div className="pt-4 border-t border-white/[0.06]">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-2">
+              {t("deadlines-reminder-label")}
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {DEADLINE_REMINDER_OFFSET_OPTIONS.map((offset) => (
+                <button
+                  key={offset}
+                  type="button"
+                  aria-pressed={reminderOffsets.includes(offset)}
+                  onClick={() => toggleReminder(offset)}
+                  className={`px-3 py-1.5 rounded-md text-xs border transition-colors duration-200 ${
+                    reminderOffsets.includes(offset)
+                      ? "bg-accent/20 border-accent/40 text-accent"
+                      : "bg-white/[0.03] border-white/[0.08] text-muted hover:text-cream"
+                  }`}
+                >
+                  {offset} {t("deadlines-reminder-days")}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       </div>

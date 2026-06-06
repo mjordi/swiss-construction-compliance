@@ -258,7 +258,8 @@ function escapeICSText(value: string): string {
 export function generateDeadlineICS(
   deadlineDate: Date,
   title: string,
-  description: string
+  description: string,
+  reminderOffsets: readonly number[] = DEFAULT_DEADLINE_REMINDER_OFFSETS
 ): string {
   const now = new Date();
   const stamp = now.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
@@ -269,8 +270,7 @@ export function generateDeadlineICS(
     .toISOString()
     .split("T")[0]
     .replace(/-/g, "");
-  const reminderOffsets = [14, 7, 1] as const;
-  const alarms = reminderOffsets
+  const alarms = normalizeDeadlineReminderOffsets(reminderOffsets)
     .map((offset) => {
       const reminderStr = addDays(deadlineDate, -offset)
         .toISOString()

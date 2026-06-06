@@ -129,6 +129,20 @@ describe("generateDeadlineICS", () => {
     expect(ics).toContain("TRIGGER;VALUE=DATE:20260429");
   });
 
+  it("creates configurable reminders for single deadline exports", () => {
+    const ics = generateDeadlineICS(
+      new Date("2026-04-30"),
+      "Deadline",
+      "Description",
+      [30, 3]
+    );
+
+    expect(ics).toContain("TRIGGER;VALUE=DATE:20260331");
+    expect(ics).toContain("TRIGGER;VALUE=DATE:20260427");
+    expect(ics).not.toContain("TRIGGER;VALUE=DATE:20260416");
+    expect(ics).not.toContain("TRIGGER;VALUE=DATE:20260423");
+  });
+
   it("escapes ICS reserved characters in title and description", () => {
     const ics = generateDeadlineICS(
       new Date("2026-04-30"),
