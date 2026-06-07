@@ -89,6 +89,22 @@ describe("deadlines share-link restoration", () => {
     expect(screen.getByText("deadlines-5year-title")).toBeTruthy();
   });
 
+  it("exposes selected reminder presets with aria-pressed and updates when toggled", () => {
+    render(<DeadlinesPage />);
+
+    expect(screen.getByRole("button", { name: "14 deadlines-reminder-days" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "7 deadlines-reminder-days" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "1 deadlines-reminder-days" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "30 deadlines-reminder-days" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "3 deadlines-reminder-days" }).getAttribute("aria-pressed")).toBe("false");
+
+    fireEvent.click(screen.getByRole("button", { name: "30 deadlines-reminder-days" }));
+    fireEvent.click(screen.getByRole("button", { name: "14 deadlines-reminder-days" }));
+
+    expect(screen.getByRole("button", { name: "30 deadlines-reminder-days" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "14 deadlines-reminder-days" }).getAttribute("aria-pressed")).toBe("false");
+  });
+
   it("restores custom reminder presets from shared links", async () => {
     window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30&reminders=30,3");
 
@@ -97,6 +113,12 @@ describe("deadlines share-link restoration", () => {
     await waitFor(() => {
       expect(screen.getByText("deadlines-result-title")).toBeTruthy();
     });
+
+    expect(screen.getByRole("button", { name: "30 deadlines-reminder-days" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "3 deadlines-reminder-days" }).getAttribute("aria-pressed")).toBe("true");
+    expect(screen.getByRole("button", { name: "14 deadlines-reminder-days" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "7 deadlines-reminder-days" }).getAttribute("aria-pressed")).toBe("false");
+    expect(screen.getByRole("button", { name: "1 deadlines-reminder-days" }).getAttribute("aria-pressed")).toBe("false");
 
     fireEvent.click(screen.getByRole("button", { name: "deadlines-share-link" }));
 

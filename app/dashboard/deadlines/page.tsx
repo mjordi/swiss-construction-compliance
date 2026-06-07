@@ -354,6 +354,7 @@ export default function DeadlinesPage() {
               <button
                 key={offset}
                 type="button"
+                aria-pressed={reminderOffsets.includes(offset)}
                 onClick={() => toggleReminder(offset)}
                 className={`px-3 py-1.5 rounded-md text-xs border transition-colors duration-200 ${
                   reminderOffsets.includes(offset)
