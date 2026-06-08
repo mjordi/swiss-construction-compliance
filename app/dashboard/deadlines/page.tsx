@@ -322,6 +322,14 @@ export default function DeadlinesPage() {
             value={acceptanceDate}
             onChange={(e) => {
               setAcceptanceDate(e.target.value);
+              if (deadlines || calculatedAcceptanceDate) {
+                setDeadlines(null);
+                setCalculatedAcceptanceDate(null);
+                const params = new URLSearchParams(window.location.search);
+                params.delete("acceptance");
+                const query = params.toString();
+                window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
+              }
               clearShareLinkFeedback();
             }}
             max={getTodayLocalDateInputValue()}
