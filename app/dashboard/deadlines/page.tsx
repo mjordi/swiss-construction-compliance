@@ -325,6 +325,10 @@ export default function DeadlinesPage() {
               if (deadlines || calculatedAcceptanceDate) {
                 setDeadlines(null);
                 setCalculatedAcceptanceDate(null);
+                const params = new URLSearchParams(window.location.search);
+                params.delete("acceptance");
+                const query = params.toString();
+                window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
               }
               clearShareLinkFeedback();
             }}

@@ -205,6 +205,26 @@ describe("deadlines share-link restoration", () => {
     expect(screen.queryByText("deadlines-result-title")).toBeNull();
     expect(screen.queryByRole("button", { name: "deadlines-download-ics" })).toBeNull();
     expect(input.value).toBe("2026-05-01");
+    expect(window.location.search).toBe("?reminders=14%2C7%2C1");
+  });
+
+  it("removes hydrated acceptance query state when the acceptance input changes", async () => {
+    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30&reminders=30,3");
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("deadlines-result-title")).toBeTruthy();
+    });
+
+    const input = screen.getByLabelText("deadlines-input-label") as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { value: "2026-05-01" },
+    });
+
+    expect(screen.queryByText("deadlines-result-title")).toBeNull();
+    expect(input.value).toBe("2026-05-01");
+    expect(window.location.search).toBe("?reminders=30%2C3");
   });
 
   it("shows localized feedback when copying the shared deadline link fails", async () => {
