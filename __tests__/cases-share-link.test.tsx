@@ -100,7 +100,9 @@ describe("cases share-link action", () => {
       expect((screen.getByLabelText("cases-search-label") as HTMLInputElement).value).toBe("beta");
     });
 
-    expect(screen.getByRole("button", { name: "cases-share-link" })).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "cases-share-link" })).toBeTruthy();
+    });
   });
 
   it("shows localized feedback when copying the shared view link fails", async () => {

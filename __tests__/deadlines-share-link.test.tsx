@@ -184,24 +184,27 @@ describe("deadlines share-link restoration", () => {
     });
   });
 
-  it("copies the last calculated acceptance date even after the input is edited", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
-
+  it("clears stale calculated results when the acceptance input changes", async () => {
     render(<DeadlinesPage />);
+
+    const input = screen.getByLabelText("deadlines-input-label") as HTMLInputElement;
+    fireEvent.change(input, {
+      target: { value: "2026-04-30" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "deadlines-calculate" }));
 
     await waitFor(() => {
       expect(screen.getByText("deadlines-result-title")).toBeTruthy();
     });
+    expect(screen.getByRole("button", { name: "deadlines-download-ics" })).toBeTruthy();
 
-    fireEvent.change(screen.getByLabelText("deadlines-input-label"), {
+    fireEvent.change(input, {
       target: { value: "2026-05-01" },
     });
 
-    fireEvent.click(screen.getByRole("button", { name: "deadlines-share-link" }));
-
-    await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30&reminders=14%2C7%2C1");
-    });
+    expect(screen.queryByText("deadlines-result-title")).toBeNull();
+    expect(screen.queryByRole("button", { name: "deadlines-download-ics" })).toBeNull();
+    expect(input.value).toBe("2026-05-01");
   });
 
   it("shows localized feedback when copying the shared deadline link fails", async () => {
@@ -331,10 +334,12 @@ describe("deadlines share-link restoration", () => {
       target: { value: "2026-05-01" },
     });
 
-    expect(screen.getByRole("button", { name: "deadlines-share-link" })).toBeTruthy();
+    expect(screen.queryByText("deadlines-result-title")).toBeNull();
+    expect(screen.queryByRole("button", { name: "deadlines-share-link" })).toBeNull();
+    expect(screen.queryByRole("button", { name: "deadlines-share-link-copied" })).toBeNull();
 
     await waitFor(() => {
-      expect(screen.getByRole("button", { name: "deadlines-share-link" })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "deadlines-share-link-copied" })).toBeNull();
     }, { timeout: 3000 });
   });
 
@@ -368,7 +373,8 @@ describe("deadlines share-link restoration", () => {
       expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30&reminders=14%2C7%2C1");
     });
 
-    expect(screen.getByRole("button", { name: "deadlines-share-link" })).toBeTruthy();
+    expect(screen.queryByText("deadlines-result-title")).toBeNull();
+    expect(screen.queryByRole("button", { name: "deadlines-share-link" })).toBeNull();
     expect(screen.queryByRole("button", { name: "deadlines-share-link-copied" })).toBeNull();
     expect(screen.queryByRole("button", { name: "deadlines-share-link-error" })).toBeNull();
   });

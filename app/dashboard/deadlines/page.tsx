@@ -322,6 +322,10 @@ export default function DeadlinesPage() {
             value={acceptanceDate}
             onChange={(e) => {
               setAcceptanceDate(e.target.value);
+              if (deadlines || calculatedAcceptanceDate) {
+                setDeadlines(null);
+                setCalculatedAcceptanceDate(null);
+              }
               clearShareLinkFeedback();
             }}
             max={getTodayLocalDateInputValue()}
