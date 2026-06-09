@@ -1,4 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 let currentLang: "de" | "en" = "de";
@@ -141,6 +142,34 @@ describe("settings password feedback", () => {
 
     const networkError = await screen.findByText("Network down");
     expect(networkError).toBeTruthy();
+
+    const updateButton = screen.getByRole("button", { name: "Passwort aktualisieren" });
+    expect(updateButton.getAttribute("disabled")).toBeNull();
+  });
+
+  it("does not show stale success or clear newer edits after a pending password update resolves", async () => {
+    let resolveUpdate: (value: { error: null }) => void = () => {};
+    updateUserMock.mockReturnValueOnce(
+      new Promise<{ error: null }>((resolve) => {
+        resolveUpdate = resolve;
+      })
+    );
+    render(<SettingsPage />);
+
+    const passwordInput = screen.getByPlaceholderText("••••••••") as HTMLInputElement;
+    fireEvent.change(passwordInput, { target: { value: "123456" } });
+    fireEvent.click(screen.getByRole("button", { name: "Passwort aktualisieren" }));
+
+    await waitFor(() => expect(updateUserMock).toHaveBeenCalledWith({ password: "123456" }));
+
+    fireEvent.change(passwordInput, { target: { value: "newer-password" } });
+
+    await act(async () => {
+      resolveUpdate({ error: null });
+    });
+
+    expect(passwordInput.value).toBe("newer-password");
+    expect(screen.queryByRole("button", { name: "Passwort aktualisiert" })).toBeNull();
 
     const updateButton = screen.getByRole("button", { name: "Passwort aktualisieren" });
     expect(updateButton.getAttribute("disabled")).toBeNull();
