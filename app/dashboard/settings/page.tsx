@@ -30,10 +30,15 @@ export default function Settings() {
   const [updatingPassword, setUpdatingPassword] = useState(false);
   const [passwordUpdated, setPasswordUpdated] = useState(false);
   const [passwordFeedback, setPasswordFeedback] = useState<PasswordFeedback | null>(null);
+  const latestPasswordRef = useRef("");
 
   useEffect(() => {
     latestProfileFormRef.current = { fullName, company };
   }, [company, fullName]);
+
+  useEffect(() => {
+    latestPasswordRef.current = newPassword;
+  }, [newPassword]);
 
   useEffect(() => {
     if (!user) return;
@@ -122,25 +127,31 @@ export default function Settings() {
   };
 
   const handleUpdatePassword = async () => {
-    if (newPassword.length < 6) {
+    const submittedPassword = newPassword;
+
+    if (submittedPassword.length < 6) {
       setPasswordFeedback({ kind: "translation", key: "settings-password-min" });
       return;
     }
 
+    latestPasswordRef.current = submittedPassword;
     setUpdatingPassword(true);
     setPasswordFeedback(null);
     setPasswordUpdated(false);
 
     try {
-      const { error } = await supabase.auth.updateUser({ password: newPassword });
+      const { error } = await supabase.auth.updateUser({ password: submittedPassword });
       if (error) {
         setPasswordFeedback({ kind: "message", message: error.message });
         return;
       }
 
-      setPasswordUpdated(true);
-      setNewPassword("");
-      setTimeout(() => setPasswordUpdated(false), 2000);
+      if (latestPasswordRef.current === submittedPassword) {
+        latestPasswordRef.current = "";
+        setPasswordUpdated(true);
+        setNewPassword("");
+        setTimeout(() => setPasswordUpdated(false), 2000);
+      }
     } catch (error) {
       setPasswordFeedback({
         kind: "message",
@@ -261,7 +272,9 @@ export default function Settings() {
                 type="password"
                 value={newPassword}
                 onChange={(e) => {
-                  setNewPassword(e.target.value);
+                  const nextPassword = e.target.value;
+                  latestPasswordRef.current = nextPassword;
+                  setNewPassword(nextPassword);
                   setPasswordFeedback(null);
                   setPasswordUpdated(false);
                 }}
