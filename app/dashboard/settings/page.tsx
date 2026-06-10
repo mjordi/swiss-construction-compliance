@@ -195,10 +195,11 @@ export default function Settings() {
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">
+              <label htmlFor="settings-full-name" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">
                 {t("settings-name")}
               </label>
               <input
+                id="settings-full-name"
                 type="text"
                 value={fullName}
                 onChange={(e) => {
@@ -215,10 +216,11 @@ export default function Settings() {
               />
             </div>
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">
+              <label htmlFor="settings-company" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">
                 {t("settings-company")}
               </label>
               <input
+                id="settings-company"
                 type="text"
                 value={company}
                 onChange={(e) => {
@@ -265,10 +267,11 @@ export default function Settings() {
 
           <div className="max-w-sm space-y-4">
             <div>
-              <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">
+              <label htmlFor="settings-new-password" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">
                 {t("settings-new-password")}
               </label>
               <input
+                id="settings-new-password"
                 type="password"
                 value={newPassword}
                 onChange={(e) => {
