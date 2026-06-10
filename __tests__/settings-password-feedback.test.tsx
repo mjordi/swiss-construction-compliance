@@ -99,6 +99,14 @@ describe("settings password feedback", () => {
     updateUserMock.mockResolvedValue({ error: null });
   });
 
+  it("associates settings field labels with their inputs", () => {
+    render(<SettingsPage />);
+
+    expect(screen.getByLabelText("Name")).toBeInstanceOf(HTMLInputElement);
+    expect(screen.getByLabelText("Firma")).toBeInstanceOf(HTMLInputElement);
+    expect(screen.getByLabelText("Neues Passwort")).toBeInstanceOf(HTMLInputElement);
+  });
+
   it("re-translates the minimum password error when the language changes", async () => {
     const { rerender } = render(<SettingsPage />);
 
