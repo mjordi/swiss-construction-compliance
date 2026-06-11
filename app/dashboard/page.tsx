@@ -613,8 +613,9 @@ export default function Dashboard() {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("label-project")}</label>
+                    <label htmlFor="dashboard-project-name" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("label-project")}</label>
                     <input
+                      id="dashboard-project-name"
                       type="text"
                       placeholder={t("dashboard-project-placeholder")}
                       className={INPUT_CLASS}
@@ -632,8 +633,9 @@ export default function Dashboard() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("label-contractor")}</label>
+                  <label htmlFor="dashboard-project-contractor" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("label-contractor")}</label>
                   <input
+                    id="dashboard-project-contractor"
                     type="text"
                     placeholder={t("dashboard-contractor-placeholder")}
                     className={INPUT_CLASS}
@@ -643,8 +645,9 @@ export default function Dashboard() {
                 </div>
 
                 <div>
-                  <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("label-client")}</label>
+                  <label htmlFor="dashboard-project-client" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("label-client")}</label>
                   <input
+                    id="dashboard-project-client"
                     type="text"
                     placeholder={t("dashboard-client-placeholder")}
                     className={INPUT_CLASS}

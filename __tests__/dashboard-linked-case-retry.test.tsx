@@ -201,6 +201,18 @@ describe("dashboard linked-case loading retry", () => {
     caseResponseFactory = () => ({ data: [], error: null });
   });
 
+  it("exposes handover wizard project fields by their visible labels", async () => {
+    caseResponseFactory = () => ({ data: [], error: null });
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("label-project")).toBeInstanceOf(HTMLInputElement);
+      expect(screen.getByLabelText("label-contractor")).toBeInstanceOf(HTMLInputElement);
+      expect(screen.getByLabelText("label-client")).toBeInstanceOf(HTMLInputElement);
+    });
+  });
+
   it("keeps the persisted wizard draft cleared after the user discards it", async () => {
     caseResponseFactory = () => ({ data: [], error: null });
 
