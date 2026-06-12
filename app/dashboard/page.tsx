@@ -32,10 +32,12 @@ export default function Dashboard() {
   const [step, setStep] = useState(1);
   const [isGenerating, setIsGenerating] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
+  const [downloadFeedback, setDownloadFeedback] = useState<TranslationKey | null>(null);
   const [defectDescription, setDefectDescription] = useState("");
   const [noDefectsConfirmed, setNoDefectsConfirmed] = useState(false);
   const sigCanvas = useRef<HTMLCanvasElement>(null);
   const finalizeInFlightRef = useRef(false);
+  const latestDownloadRequestIdRef = useRef(0);
   const skipNextDraftPersistRef = useRef(false);
   const { t } = useLanguage();
   const { user } = useAuth();
@@ -424,6 +426,9 @@ export default function Dashboard() {
   };
 
   const handleDownload = async () => {
+    const requestId = latestDownloadRequestIdRef.current + 1;
+    latestDownloadRequestIdRef.current = requestId;
+    setDownloadFeedback(null);
     setIsGenerating(true);
     try {
       const blob = await pdf(
@@ -436,6 +441,10 @@ export default function Dashboard() {
         />
       ).toBlob();
 
+      if (latestDownloadRequestIdRef.current !== requestId) {
+        return;
+      }
+
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
@@ -443,12 +452,28 @@ export default function Dashboard() {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+      setDownloadFeedback("dashboard-download-success");
     } catch (error) {
+      if (latestDownloadRequestIdRef.current !== requestId) {
+        return;
+      }
       console.error("PDF Gen failed", error);
+      setDownloadFeedback("dashboard-download-failed");
     } finally {
-      setIsGenerating(false);
+      if (latestDownloadRequestIdRef.current === requestId) {
+        setIsGenerating(false);
+      }
     }
   }
+
+  const startNewProtocol = () => {
+    latestDownloadRequestIdRef.current += 1;
+    setDownloadFeedback(null);
+    setIsGenerating(false);
+    clearDraft();
+    setStep(1);
+  };
 
   return (
     <div>
@@ -801,20 +826,27 @@ export default function Dashboard() {
               <div className="flex gap-3 justify-center">
                 <button
                   onClick={handleDownload}
-                  className="px-6 py-3 bg-cream text-background font-semibold rounded-lg hover:bg-white transition-colors duration-200 flex items-center gap-2 text-sm"
+                  disabled={isGenerating}
+                  className="px-6 py-3 bg-cream text-background font-semibold rounded-lg hover:bg-white transition-colors duration-200 flex items-center gap-2 text-sm disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-cream"
                 >
-                  <Download className="w-4 h-4" /> {t("btn-download")}
+                  {isGenerating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Download className="w-4 h-4" />}
+                  {isGenerating ? t("btn-generating") : t("btn-download")}
                 </button>
                 <button
-                  onClick={() => {
-                    clearDraft();
-                    setStep(1);
-                  }}
+                  onClick={startNewProtocol}
                   className="px-8 py-3.5 bg-white/[0.03] border border-white/[0.06] text-cream font-semibold rounded-lg hover:bg-white/[0.05] transition-all duration-300"
                 >
                   {t("btn-new")}
                 </button>
               </div>
+              {downloadFeedback && (
+                <p
+                  role="status"
+                  className={`mt-4 text-xs ${downloadFeedback === "dashboard-download-success" ? "text-emerald-300" : "text-rose-300"}`}
+                >
+                  {t(downloadFeedback)}
+                </p>
+              )}
             </motion.div>
           )}
 
