@@ -130,6 +130,8 @@ export const de = {
   "success-desc": "Das Abnahmeprotokoll wurde kryptografisch signiert und sicher gespeichert.",
   "btn-download": "PDF Herunterladen",
   "btn-new": "Neue Abnahme",
+  "dashboard-download-success": "PDF wurde heruntergeladen.",
+  "dashboard-download-failed": "PDF konnte nicht erstellt werden. Bitte erneut versuchen.",
 
   // Legal Context Sidebar
   "context-title": "Rechtlicher Kontext (2026)",
@@ -570,6 +572,8 @@ export const fr = {
   "success-desc": "Le protocole de réception a été signé cryptographiquement et stocké de manière sécurisée.",
   "btn-download": "Télécharger PDF",
   "btn-new": "Nouvelle Réception",
+  "dashboard-download-success": "Le PDF a été téléchargé.",
+  "dashboard-download-failed": "Le PDF n'a pas pu être créé. Veuillez réessayer.",
 
   // Legal Context Sidebar
   "context-title": "Contexte Juridique (2026)",
@@ -1010,6 +1014,8 @@ export const it = {
   "success-desc": "Il protocollo di collaudo è stato firmato crittograficamente e archiviato in modo sicuro.",
   "btn-download": "Scarica PDF",
   "btn-new": "Nuovo Collaudo",
+  "dashboard-download-success": "Il PDF è stato scaricato.",
+  "dashboard-download-failed": "Non è stato possibile creare il PDF. Riprova.",
 
   // Legal Context Sidebar
   "context-title": "Contesto Legale (2026)",
@@ -1450,6 +1456,8 @@ export const en = {
   "success-desc": "The handover protocol has been cryptographically signed and securely stored.",
   "btn-download": "Download PDF",
   "btn-new": "New Handover",
+  "dashboard-download-success": "PDF downloaded successfully.",
+  "dashboard-download-failed": "PDF could not be generated. Please try again.",
 
   // Legal Context Sidebar
   "context-title": "Legal Context (2026)",

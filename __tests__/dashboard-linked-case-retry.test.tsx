@@ -14,8 +14,17 @@ let insertedProtocols: Array<Record<string, unknown>>;
 let protocolInsertFactory: (payload: Record<string, unknown>) => Promise<{ error: null }> | { error: null };
 let signaturePadIsEmpty = true;
 let signaturePadEndStrokeHandler: (() => void) | null = null;
+let pdfToBlobFactory: () => Promise<Blob>;
+const createObjectURLMock = vi.fn(() => "blob:dashboard-pdf");
+const revokeObjectURLMock = vi.fn();
+const anchorClickMock = vi.fn();
 const authState = { user: { id: "user-1" } };
 type CaseLoadResolution = { data: Array<Record<string, unknown>> | null; error: { message: string } | null };
+type DeferredBlob = {
+  promise: Promise<Blob>;
+  resolve: (value: Blob) => void;
+  reject: (error: unknown) => void;
+};
 
 function resolveCaseLoadPromise(
   resolver: ((value: CaseLoadResolution) => void) | null,
@@ -31,6 +40,17 @@ function resolveProtocolInsertPromise(
 ) {
   expect(resolver).not.toBeNull();
   (resolver as unknown as (value: { error: null }) => void)(value);
+}
+
+function createDeferredBlob(): DeferredBlob {
+  let resolve: (value: Blob) => void = () => {};
+  let reject: (error: unknown) => void = () => {};
+  const promise = new Promise<Blob>((promiseResolve, promiseReject) => {
+    resolve = promiseResolve;
+    reject = promiseReject;
+  });
+
+  return { promise, resolve, reject };
 }
 
 const supabaseMock = {
@@ -132,7 +152,7 @@ vi.mock("signature_pad", () => ({
 
 vi.mock("@react-pdf/renderer", () => ({
   pdf: () => ({
-    toBlob: async () => new Blob(),
+    toBlob: () => pdfToBlobFactory(),
   }),
 }));
 
@@ -185,6 +205,32 @@ function buildCase(id = "case-1", projectName = "Alpine Tower") {
   };
 }
 
+async function completeProtocolToDownload() {
+  fireEvent.change(screen.getByPlaceholderText("dashboard-project-placeholder"), {
+    target: { value: "Alpine Tower" },
+  });
+  fireEvent.change(screen.getByPlaceholderText("dashboard-contractor-placeholder"), {
+    target: { value: "Builder AG" },
+  });
+  fireEvent.change(screen.getByPlaceholderText("dashboard-client-placeholder"), {
+    target: { value: "Owner GmbH" },
+  });
+  fireEvent.click(screen.getByRole("button", { name: "btn-next" }));
+  fireEvent.click(screen.getByRole("checkbox"));
+  signaturePadIsEmpty = false;
+  await act(async () => {
+    signaturePadEndStrokeHandler?.();
+  });
+
+  const finalizeButton = await screen.findByRole("button", { name: "btn-finalize" });
+  await waitFor(() => {
+    expect(finalizeButton.getAttribute("disabled")).toBeNull();
+  });
+  fireEvent.click(finalizeButton);
+
+  return screen.findByRole("button", { name: "btn-download" });
+}
+
 describe("dashboard linked-case loading retry", () => {
   beforeEach(() => {
     currentSearch = "";
@@ -197,6 +243,22 @@ describe("dashboard linked-case loading retry", () => {
     protocolInsertFactory = () => Promise.resolve({ error: null });
     signaturePadIsEmpty = true;
     signaturePadEndStrokeHandler = null;
+    pdfToBlobFactory = () => Promise.resolve(new Blob(["pdf"], { type: "application/pdf" }));
+    createObjectURLMock.mockClear();
+    revokeObjectURLMock.mockClear();
+    anchorClickMock.mockClear();
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURLMock,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURLMock,
+    });
+    Object.defineProperty(HTMLAnchorElement.prototype, "click", {
+      configurable: true,
+      value: anchorClickMock,
+    });
     authState.user = { id: "user-1" };
     caseResponseFactory = () => ({ data: [], error: null });
   });
@@ -428,6 +490,65 @@ describe("dashboard linked-case loading retry", () => {
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "btn-download" })).toBeTruthy();
     });
+  });
+
+  it("shows localized success feedback and disables the dashboard PDF download while pending", async () => {
+    const pendingDownload = createDeferredBlob();
+    pdfToBlobFactory = () => pendingDownload.promise;
+
+    render(<DashboardPage />);
+
+    const downloadButton = await completeProtocolToDownload();
+    fireEvent.click(downloadButton);
+
+    await waitFor(() => {
+      expect((screen.getByRole("button", { name: "btn-generating" }) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    await act(async () => {
+      pendingDownload.resolve(new Blob(["pdf"], { type: "application/pdf" }));
+    });
+
+    expect(await screen.findByText("dashboard-download-success")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "btn-download" }).getAttribute("disabled")).toBeNull();
+    expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows localized failure feedback when dashboard PDF download fails", async () => {
+    pdfToBlobFactory = () => Promise.reject(new Error("pdf failed"));
+
+    render(<DashboardPage />);
+
+    const downloadButton = await completeProtocolToDownload();
+    fireEvent.click(downloadButton);
+
+    expect(await screen.findByText("dashboard-download-failed")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "btn-download" }).getAttribute("disabled")).toBeNull();
+    expect(createObjectURLMock).not.toHaveBeenCalled();
+  });
+
+  it("ignores stale dashboard PDF download completion after starting a new protocol", async () => {
+    const staleDownload = createDeferredBlob();
+    pdfToBlobFactory = () => staleDownload.promise;
+
+    render(<DashboardPage />);
+
+    const downloadButton = await completeProtocolToDownload();
+    fireEvent.click(downloadButton);
+
+    await waitFor(() => {
+      expect((screen.getByRole("button", { name: "btn-generating" }) as HTMLButtonElement).disabled).toBe(true);
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "btn-new" }));
+
+    await act(async () => {
+      staleDownload.resolve(new Blob(["stale"], { type: "application/pdf" }));
+    });
+
+    expect(screen.getByPlaceholderText("dashboard-project-placeholder")).toBeTruthy();
+    expect(screen.queryByText("dashboard-download-success")).toBeNull();
+    expect(screen.queryByText("dashboard-download-failed")).toBeNull();
   });
 
   it("retries linked-case loading and restores the case selector after recovery", async () => {
