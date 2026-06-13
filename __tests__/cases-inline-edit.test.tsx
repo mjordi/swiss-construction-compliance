@@ -101,8 +101,8 @@ vi.mock("@/lib/case-timeline", () => ({
   isDeadlineReminderIcsExportEligible: () => false,
 }));
 
-vi.mock("@/lib/supabase", () => ({
-  getSupabase: () => ({
+vi.mock("@/lib/supabase", () => {
+  const supabaseMock = {
     from: (table: string) => {
       if (table === "cases") {
         return {
@@ -139,8 +139,12 @@ vi.mock("@/lib/supabase", () => ({
 
       throw new Error(`Unexpected table ${table}`);
     },
-  }),
-}));
+  };
+
+  return {
+    getSupabase: () => supabaseMock,
+  };
+});
 
 import CasesPage from "@/app/dashboard/cases/page";
 
@@ -405,6 +409,225 @@ describe("cases inline edit", () => {
     expect(screen.getByText("Riverside Hall")).toBeTruthy();
 
     confirmSpy.mockRestore();
+  });
+
+  it("keeps a successfully edited case visible when the follow-up refresh fails", async () => {
+    const refreshCasesDeferred = createDeferred<{ data: CaseRecord[] | null; error: { message: string } | null }>();
+    updateEqMock.mockImplementationOnce(async (_payload: Record<string, unknown>, _field: string, caseId: string) => {
+      casesData = casesData.map((item) =>
+        item.id === caseId
+          ? {
+              ...item,
+              project_name: "Alpine Tower Revised",
+              canton: "BE",
+              contract_date: "2026-04-01",
+              discovery_date: "2026-04-20",
+            }
+          : item
+      );
+      casesSelectResponses.push(refreshCasesDeferred.promise);
+      protocolsSelectResponses.push(Promise.resolve({ data: [], error: null }));
+      return { error: null };
+    });
+
+    render(<CasesPage />);
+
+    const firstCard = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    fireEvent.click(within(firstCard).getByRole("button", { name: "cases-edit" }));
+
+    fireEvent.change(within(firstCard).getByLabelText("cases-project-name"), {
+      target: { value: "Alpine Tower Revised" },
+    });
+    fireEvent.change(within(firstCard).getByLabelText("cases-canton-label"), {
+      target: { value: "BE" },
+    });
+    fireEvent.change(within(firstCard).getByLabelText("cases-contract-date-input"), {
+      target: { value: "2026-04-01" },
+    });
+    fireEvent.change(within(firstCard).getByLabelText("cases-discovery-date-input"), {
+      target: { value: "2026-04-20" },
+    });
+
+    fireEvent.click(within(firstCard).getByRole("button", { name: "cases-save" }));
+
+    await waitFor(() => {
+      expect(updateEqMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          project_name: "Alpine Tower Revised",
+          canton: "BE",
+          contract_date: "2026-04-01",
+          discovery_date: "2026-04-20",
+        }),
+        "id",
+        "case-1"
+      );
+    });
+
+    refreshCasesDeferred.resolve({ data: null, error: { message: "refresh failed" } });
+
+    await waitFor(() => {
+      expect(casesSelectResponses).toHaveLength(0);
+      expect(protocolsSelectResponses).toHaveLength(0);
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Alpine Tower")).toBeNull();
+    });
+    expect(screen.getByText("Alpine Tower Revised")).toBeTruthy();
+    expect(screen.getByText("Riverside Hall")).toBeTruthy();
+    expect(screen.queryByText("cases-load-error")).toBeNull();
+  });
+
+  it("keeps a successfully saved checklist toggle after an edit refresh fallback", async () => {
+    const refreshCasesDeferred = createDeferred<{ data: CaseRecord[] | null; error: { message: string } | null }>();
+
+    updateEqMock
+      .mockImplementationOnce(async (payload: Record<string, unknown>, _field: string, caseId: string) => {
+        const checklist = payload.checklist as Record<string, boolean>;
+        expect(checklist.evidenceAttached).toBe(true);
+        casesData = casesData.map((item) => (item.id === caseId ? { ...item, checklist } : item));
+        return { error: null };
+      })
+      .mockImplementationOnce(async (_payload: Record<string, unknown>, _field: string, caseId: string) => {
+        casesData = casesData.map((item) =>
+          item.id === caseId
+            ? {
+                ...item,
+                project_name: "Alpine Tower Revised",
+                canton: "BE",
+                contract_date: "2026-04-01",
+                discovery_date: "2026-04-20",
+              }
+            : item
+        );
+        casesSelectResponses.push(refreshCasesDeferred.promise);
+        protocolsSelectResponses.push(Promise.resolve({ data: [], error: null }));
+        return { error: null };
+      });
+
+    render(<CasesPage />);
+
+    const firstCard = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    const evidenceCheckbox = within(firstCard).getByLabelText("cases-checklist-evidence-attached") as HTMLInputElement;
+    expect(evidenceCheckbox.checked).toBe(false);
+
+    fireEvent.click(evidenceCheckbox);
+
+    await waitFor(() => {
+      expect(evidenceCheckbox.checked).toBe(true);
+      expect(evidenceCheckbox.disabled).toBe(false);
+    });
+
+    fireEvent.click(within(firstCard).getByRole("button", { name: "cases-edit" }));
+    fireEvent.change(within(firstCard).getByLabelText("cases-project-name"), {
+      target: { value: "Alpine Tower Revised" },
+    });
+    fireEvent.change(within(firstCard).getByLabelText("cases-canton-label"), {
+      target: { value: "BE" },
+    });
+    fireEvent.change(within(firstCard).getByLabelText("cases-contract-date-input"), {
+      target: { value: "2026-04-01" },
+    });
+    fireEvent.change(within(firstCard).getByLabelText("cases-discovery-date-input"), {
+      target: { value: "2026-04-20" },
+    });
+
+    fireEvent.click(within(firstCard).getByRole("button", { name: "cases-save" }));
+
+    await waitFor(() => {
+      expect(updateEqMock).toHaveBeenCalledTimes(2);
+    });
+
+    refreshCasesDeferred.resolve({ data: null, error: { message: "refresh failed" } });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Alpine Tower")).toBeNull();
+    });
+
+    const refreshedCard = screen.getByText("Alpine Tower Revised").closest("article") as HTMLElement;
+    expect((within(refreshedCard).getByLabelText("cases-checklist-evidence-attached") as HTMLInputElement).checked).toBe(true);
+    expect(screen.queryByText("cases-load-error")).toBeNull();
+  });
+
+  it("restores a pending checklist save when another case edit refresh falls back first", async () => {
+    const checklistDeferred = createDeferred<{ error: { message: string } | null }>();
+    const refreshCasesDeferred = createDeferred<{ data: CaseRecord[] | null; error: { message: string } | null }>();
+
+    updateEqMock
+      .mockImplementationOnce((payload: Record<string, unknown>, _field: string, caseId: string) => {
+        const checklist = payload.checklist as Record<string, boolean>;
+        expect(caseId).toBe("case-2");
+        expect(checklist.evidenceAttached).toBe(true);
+        casesData = casesData.map((item) => (item.id === caseId ? { ...item, checklist } : item));
+        return checklistDeferred.promise;
+      })
+      .mockImplementationOnce(async (_payload: Record<string, unknown>, _field: string, caseId: string) => {
+        expect(caseId).toBe("case-1");
+        casesData = casesData.map((item) =>
+          item.id === caseId
+            ? {
+                ...item,
+                project_name: "Alpine Tower Revised",
+                canton: "BE",
+                contract_date: "2026-04-01",
+                discovery_date: "2026-04-20",
+              }
+            : item
+        );
+        casesSelectResponses.push(refreshCasesDeferred.promise);
+        protocolsSelectResponses.push(Promise.resolve({ data: [], error: null }));
+        return { error: null };
+      });
+
+    render(<CasesPage />);
+
+    const firstCard = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    const secondCard = (await screen.findByText("Riverside Hall")).closest("article") as HTMLElement;
+    const secondEvidenceCheckbox = within(secondCard).getByLabelText(
+      "cases-checklist-evidence-attached"
+    ) as HTMLInputElement;
+
+    fireEvent.click(secondEvidenceCheckbox);
+
+    await waitFor(() => {
+      expect(secondEvidenceCheckbox.checked).toBe(true);
+      expect(secondEvidenceCheckbox.disabled).toBe(true);
+    });
+
+    fireEvent.click(within(firstCard).getByRole("button", { name: "cases-edit" }));
+    fireEvent.change(within(firstCard).getByLabelText("cases-project-name"), {
+      target: { value: "Alpine Tower Revised" },
+    });
+    fireEvent.change(within(firstCard).getByLabelText("cases-canton-label"), {
+      target: { value: "BE" },
+    });
+    fireEvent.change(within(firstCard).getByLabelText("cases-contract-date-input"), {
+      target: { value: "2026-04-01" },
+    });
+    fireEvent.change(within(firstCard).getByLabelText("cases-discovery-date-input"), {
+      target: { value: "2026-04-20" },
+    });
+
+    fireEvent.click(within(firstCard).getByRole("button", { name: "cases-save" }));
+
+    await waitFor(() => {
+      expect(updateEqMock).toHaveBeenCalledTimes(2);
+    });
+
+    refreshCasesDeferred.resolve({ data: null, error: { message: "refresh failed" } });
+
+    await waitFor(() => {
+      expect(casesSelectResponses).toHaveLength(0);
+      expect(protocolsSelectResponses).toHaveLength(0);
+    });
+    expect(screen.getByText("Alpine Tower Revised")).toBeTruthy();
+
+    checklistDeferred.resolve({ error: null });
+
+    await waitFor(() => {
+      const restoredSecondCard = screen.getByText("Riverside Hall").closest("article") as HTMLElement;
+      expect((within(restoredSecondCard).getByLabelText("cases-checklist-evidence-attached") as HTMLInputElement).checked).toBe(true);
+    });
   });
 
   it("keeps a successfully deleted case hidden when the follow-up refresh fails", async () => {

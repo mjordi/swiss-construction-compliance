@@ -505,16 +505,17 @@ export default function CasesPage() {
       return next;
     });
     setChecklistSavingByCase((current) => ({ ...current, [caseId]: true }));
-    setDbCases((current) =>
-      current.map((item) =>
+    const applyChecklistState = (cases: Case[], checklist: FollowUpChecklistState) =>
+      cases.map((item) =>
         item.id === caseId
           ? {
               ...item,
-              checklist: updated,
+              checklist,
             }
           : item
-      )
-    );
+      );
+
+    setDbCases((current) => applyChecklistState(current, updated));
 
     try {
       const { error } = await supabase
@@ -525,17 +526,11 @@ export default function CasesPage() {
       if (error) {
         throw error;
       }
+
+      lastSuccessfulCasesRef.current = applyChecklistState(lastSuccessfulCasesRef.current, updated);
+      setDbCases((current) => applyChecklistState(current, updated));
     } catch {
-      setDbCases((current) =>
-        current.map((item) =>
-          item.id === caseId
-            ? {
-                ...item,
-                checklist: previous,
-              }
-            : item
-        )
-      );
+      setDbCases((current) => applyChecklistState(current, previous));
       setChecklistSaveErrorByCase((prev) => ({
         ...prev,
         [caseId]: "cases-checklist-save-error",
@@ -694,18 +689,21 @@ export default function CasesPage() {
         throw error;
       }
 
-      setDbCases((current) =>
-        current.map((item) =>
+      const applyUpdatedCase = (cases: Case[]) =>
+        cases.map((item) =>
           item.id === caseId
             ? {
                 ...item,
                 ...payload,
               }
             : item
-        )
-      );
+        );
+
+      lastSuccessfulCasesRef.current = applyUpdatedCase(lastSuccessfulCasesRef.current);
+      setDbCases((current) => applyUpdatedCase(current));
       closeEditForm();
       setCaseUpdateFeedback({ caseId, key: "cases-update-success", tone: "success" });
+      triggerCasesRefresh();
     } catch {
       setCaseUpdateFeedback({ caseId, key: "cases-update-error", tone: "error" });
     } finally {
