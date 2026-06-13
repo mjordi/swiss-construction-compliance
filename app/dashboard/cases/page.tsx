@@ -528,6 +528,7 @@ export default function CasesPage() {
       }
 
       lastSuccessfulCasesRef.current = applyChecklistState(lastSuccessfulCasesRef.current, updated);
+      setDbCases((current) => applyChecklistState(current, updated));
     } catch {
       setDbCases((current) => applyChecklistState(current, previous));
       setChecklistSaveErrorByCase((prev) => ({
