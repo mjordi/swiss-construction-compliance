@@ -505,16 +505,17 @@ export default function CasesPage() {
       return next;
     });
     setChecklistSavingByCase((current) => ({ ...current, [caseId]: true }));
-    setDbCases((current) =>
-      current.map((item) =>
+    const applyChecklistState = (cases: Case[], checklist: FollowUpChecklistState) =>
+      cases.map((item) =>
         item.id === caseId
           ? {
               ...item,
-              checklist: updated,
+              checklist,
             }
           : item
-      )
-    );
+      );
+
+    setDbCases((current) => applyChecklistState(current, updated));
 
     try {
       const { error } = await supabase
@@ -525,17 +526,10 @@ export default function CasesPage() {
       if (error) {
         throw error;
       }
+
+      lastSuccessfulCasesRef.current = applyChecklistState(lastSuccessfulCasesRef.current, updated);
     } catch {
-      setDbCases((current) =>
-        current.map((item) =>
-          item.id === caseId
-            ? {
-                ...item,
-                checklist: previous,
-              }
-            : item
-        )
-      );
+      setDbCases((current) => applyChecklistState(current, previous));
       setChecklistSaveErrorByCase((prev) => ({
         ...prev,
         [caseId]: "cases-checklist-save-error",
