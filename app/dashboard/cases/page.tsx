@@ -694,18 +694,21 @@ export default function CasesPage() {
         throw error;
       }
 
-      setDbCases((current) =>
-        current.map((item) =>
+      const applyUpdatedCase = (cases: Case[]) =>
+        cases.map((item) =>
           item.id === caseId
             ? {
                 ...item,
                 ...payload,
               }
             : item
-        )
-      );
+        );
+
+      lastSuccessfulCasesRef.current = applyUpdatedCase(lastSuccessfulCasesRef.current);
+      setDbCases((current) => applyUpdatedCase(current));
       closeEditForm();
       setCaseUpdateFeedback({ caseId, key: "cases-update-success", tone: "success" });
+      triggerCasesRefresh();
     } catch {
       setCaseUpdateFeedback({ caseId, key: "cases-update-error", tone: "error" });
     } finally {
