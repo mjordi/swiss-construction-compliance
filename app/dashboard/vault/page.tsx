@@ -513,6 +513,7 @@ export default function TechVault() {
                   projectName: project.name,
                   prefillTriage: project.prefillTriage,
                 });
+                const isStatusMutationPending = statusMutationProjectIds.includes(project.id);
 
                 return (
                   <motion.div
@@ -522,34 +523,45 @@ export default function TechVault() {
                     transition={{ delay: i * 0.06 }}
                     className="bg-white/5 hover:bg-white/10 border border-white/5 hover:border-accent/30 rounded-2xl transition group relative overflow-hidden"
                   >
-                    <Link
-                      href={projectCasesHref}
-                      data-testid={`vault-project-card-${project.id}`}
-                      aria-label={`${project.name} ${t("vault-open-in-cases")}`}
-                      onClick={(event) => {
-                        if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-                          return;
-                        }
+                    {isStatusMutationPending ? (
+                      <span
+                        data-testid={`vault-project-card-${project.id}`}
+                        aria-label={`${project.name} ${t("vault-open-in-cases")}`}
+                        aria-disabled="true"
+                        className="absolute inset-0 rounded-2xl cursor-not-allowed"
+                      >
+                        <span className="sr-only">{project.name} {t("vault-open-in-cases")}</span>
+                      </span>
+                    ) : (
+                      <Link
+                        href={projectCasesHref}
+                        data-testid={`vault-project-card-${project.id}`}
+                        aria-label={`${project.name} ${t("vault-open-in-cases")}`}
+                        onClick={(event) => {
+                          if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                            return;
+                          }
 
-                        event.preventDefault();
-                        navigateToProjectCases(projectCasesHref);
-                      }}
-                      onKeyDown={(event) => {
-                        if (event.key !== "Enter" && event.key !== " ") {
-                          return;
-                        }
+                          event.preventDefault();
+                          navigateToProjectCases(projectCasesHref);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key !== "Enter" && event.key !== " ") {
+                            return;
+                          }
 
-                        if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
-                          return;
-                        }
+                          if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) {
+                            return;
+                          }
 
-                        event.preventDefault();
-                        navigateToProjectCases(projectCasesHref);
-                      }}
-                      className="absolute inset-0 rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent/60 focus:ring-inset"
-                    >
-                      <span className="sr-only">{project.name} {t("vault-open-in-cases")}</span>
-                    </Link>
+                          event.preventDefault();
+                          navigateToProjectCases(projectCasesHref);
+                        }}
+                        className="absolute inset-0 rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent/60 focus:ring-inset"
+                      >
+                        <span className="sr-only">{project.name} {t("vault-open-in-cases")}</span>
+                      </Link>
+                    )}
 
                     <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-accent to-transparent opacity-0 group-hover:opacity-100 transition duration-500" />
 
@@ -587,7 +599,7 @@ export default function TechVault() {
                           </span>
                           <button
                             type="button"
-                            disabled={statusMutationProjectIds.includes(project.id)}
+                            disabled={isStatusMutationPending}
                             onClick={(event) => {
                               event.stopPropagation();
                               void handleProjectArchiveToggle(project.id, project.archived);

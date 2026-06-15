@@ -429,6 +429,38 @@ describe("vault follow-up links", () => {
     expect(updateMock).toHaveBeenCalledTimes(1);
   });
 
+  it("locks the pending project handoff while an archive mutation is unresolved", async () => {
+    deferNextUpdate = true;
+
+    render(<TechVault />);
+
+    const archiveButton = await waitFor(() =>
+      within(getProjectCard("Alpine Tower")).getByRole("button", { name: "vault-archive-project" })
+    );
+
+    act(() => {
+      fireEvent.click(archiveButton);
+    });
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledTimes(1);
+    });
+
+    const pendingProjectCard = await screen.findByTestId("vault-project-card-case-active");
+    await waitFor(() => {
+      expect(pendingProjectCard.getAttribute("aria-disabled")).toBe("true");
+      expect(pendingProjectCard.hasAttribute("href")).toBe(false);
+    });
+
+    fireEvent.click(pendingProjectCard);
+    pendingProjectCard.focus();
+    fireEvent.keyDown(pendingProjectCard, { key: "Enter" });
+    fireEvent.keyDown(pendingProjectCard, { key: " " });
+
+    expect(pushMock).not.toHaveBeenCalled();
+    expect(within(getProjectCard("Alpine Tower")).getByRole("button", { name: "vault-archive-project" }).hasAttribute("disabled")).toBe(true);
+  });
+
   it("allows toggling a different project while another archive mutation is still pending", async () => {
     deferNextUpdate = true;
 
