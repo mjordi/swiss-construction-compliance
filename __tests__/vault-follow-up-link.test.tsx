@@ -5,6 +5,7 @@ import type { HTMLAttributes, ReactNode } from "react";
 const replaceMock = vi.fn();
 const pushMock = vi.fn();
 const updateMock = vi.fn();
+const mockUser = { id: "user-1" };
 
 const baseCases = [
   {
@@ -81,7 +82,7 @@ vi.mock("@/context/LanguageContext", () => ({
 
 vi.mock("@/context/AuthContext", () => ({
   useAuth: () => ({
-    user: { id: "user-1" },
+    user: mockUser,
   }),
 }));
 
@@ -424,9 +425,52 @@ describe("vault follow-up links", () => {
       expect(updateMock).toHaveBeenCalledTimes(1);
     });
 
-    const pendingArchiveButton = within(getProjectCard("Alpine Tower")).getByRole("button", { name: "vault-archive-project" });
-    fireEvent.click(pendingArchiveButton);
+    fireEvent.click(screen.getByRole("tab", { name: "vault-tab-archived" }));
+
+    await waitFor(() => {
+      const pendingRestoreButton = within(getProjectCard("Alpine Tower")).getByRole("button", { name: "vault-restore-project" });
+      expect(pendingRestoreButton.hasAttribute("disabled")).toBe(true);
+    });
+
+    const pendingRestoreButton = within(getProjectCard("Alpine Tower")).getByRole("button", { name: "vault-restore-project" });
+    fireEvent.click(pendingRestoreButton);
     expect(updateMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("locks the pending project handoff while a restore mutation is unresolved", async () => {
+    deferNextUpdate = true;
+
+    render(<TechVault />);
+
+    fireEvent.click(await screen.findByRole("tab", { name: "vault-tab-archived" }));
+
+    const restoreButton = within(getProjectCard("Summit Depot")).getByRole("button", { name: "vault-restore-project" });
+    act(() => {
+      fireEvent.click(restoreButton);
+    });
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledTimes(1);
+    });
+
+    act(() => {
+      fireEvent.click(screen.getByRole("tab", { name: "vault-tab-projects" }));
+    });
+
+    await waitFor(() => {
+      const pendingProjectCard = screen.getByTestId("vault-project-card-case-archived");
+      expect(pendingProjectCard.getAttribute("aria-disabled")).toBe("true");
+      expect(pendingProjectCard.hasAttribute("href")).toBe(false);
+    });
+
+    const pendingProjectCard = screen.getByTestId("vault-project-card-case-archived");
+    fireEvent.click(pendingProjectCard);
+    pendingProjectCard.focus();
+    fireEvent.keyDown(pendingProjectCard, { key: "Enter" });
+    fireEvent.keyDown(pendingProjectCard, { key: " " });
+
+    expect(pushMock).not.toHaveBeenCalled();
+    expect(within(getProjectCard("Summit Depot")).getByRole("button", { name: "vault-archive-project" }).hasAttribute("disabled")).toBe(true);
   });
 
   it("allows toggling a different project while another archive mutation is still pending", async () => {
