@@ -93,7 +93,7 @@ function buildCaseFormState(item: Pick<Case, "project_name" | "canton" | "contra
 export default function CasesPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
-  const supabase = getSupabase();
+  const supabase = useMemo(() => getSupabase(), []);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();
