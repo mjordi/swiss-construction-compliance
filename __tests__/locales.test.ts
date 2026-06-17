@@ -5,6 +5,22 @@ const locales = { de, fr, it: itLocale, en };
 const referenceKeys = Object.keys(de).sort();
 
 describe("locales", () => {
+  it("includes dashboard menu localization keys in every locale", () => {
+    const requiredDashboardMenuKeys = [
+      "menu-audit",
+      "menu-deadlines",
+      "menu-cases",
+      "menu-vault",
+      "menu-settings",
+    ] as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      for (const key of requiredDashboardMenuKeys) {
+        expect(translations[key], `Locale '${lang}' missing dashboard menu key '${key}'`).toBeDefined();
+      }
+    }
+  });
+
   it("includes vault localization keys in every locale", () => {
     const requiredVaultKeys = [
       "vault-title",
