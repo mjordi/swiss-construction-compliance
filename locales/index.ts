@@ -92,6 +92,7 @@ export const de = {
   // Dashboard Sidebar
   "menu-audit": "Abnahme-Engine",
   "menu-cases": "Fälle",
+  "menu-vault": "Tech-Archiv",
   "menu-settings": "Einstellungen",
   "menu-logout": "Abmelden",
   "menu-logged-in": "Angemeldet als",
@@ -534,6 +535,7 @@ export const fr = {
   // Dashboard Sidebar
   "menu-audit": "Moteur de Réception",
   "menu-cases": "Dossiers",
+  "menu-vault": "Archive technique",
   "menu-settings": "Paramètres",
   "menu-logout": "Déconnexion",
   "menu-logged-in": "Connecté en tant que",
@@ -976,6 +978,7 @@ export const it = {
   // Dashboard Sidebar
   "menu-audit": "Motore Collaudo",
   "menu-cases": "Casi",
+  "menu-vault": "Archivio tecnico",
   "menu-settings": "Impostazioni",
   "menu-logout": "Disconnetti",
   "menu-logged-in": "Accesso come",
@@ -1418,6 +1421,7 @@ export const en = {
   // Dashboard Sidebar
   "menu-audit": "Handover Engine",
   "menu-cases": "Cases",
+  "menu-vault": "Tech Vault",
   "menu-settings": "Settings",
   "menu-logout": "Sign Out",
   "menu-logged-in": "Logged in as",

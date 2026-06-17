@@ -1,6 +1,6 @@
 "use client";
 
-import { FileText, Settings, LogOut, Clock, Briefcase } from "lucide-react";
+import { Archive, FileText, Settings, LogOut, Clock, Briefcase } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { clsx } from "clsx";
@@ -11,6 +11,7 @@ export const navItems = [
   { icon: FileText, label: "menu-audit" as const, href: "/dashboard" },
   { icon: Clock, label: "menu-deadlines" as const, href: "/dashboard/deadlines" },
   { icon: Briefcase, label: "menu-cases" as const, href: "/dashboard/cases" },
+  { icon: Archive, label: "menu-vault" as const, href: "/dashboard/vault" },
   { icon: Settings, label: "menu-settings" as const, href: "/dashboard/settings" },
 ];
 
