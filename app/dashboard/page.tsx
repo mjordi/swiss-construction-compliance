@@ -41,7 +41,7 @@ export default function Dashboard() {
   const skipNextDraftPersistRef = useRef(false);
   const { t } = useLanguage();
   const { user } = useAuth();
-  const supabase = getSupabase();
+  const supabase = useMemo(() => getSupabase(), []);
   const router = useRouter();
   const pathname = usePathname();
   const searchParams = useSearchParams();

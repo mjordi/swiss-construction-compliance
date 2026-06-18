@@ -16,7 +16,7 @@ type PasswordFeedback =
 export default function Settings() {
   const { t } = useLanguage();
   const { user, logout } = useAuth();
-  const supabase = getSupabase();
+  const supabase = useMemo(() => getSupabase(), []);
 
   const [fullName, setFullName] = useState("");
   const [company, setCompany] = useState("");
