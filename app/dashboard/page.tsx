@@ -146,12 +146,12 @@ export default function Dashboard() {
         ...current,
         name: requestedCase.project_name,
       }));
-
-      const nextParams = new URLSearchParams(searchParams.toString());
-      nextParams.delete("case");
-      const nextQuery = nextParams.toString();
-      router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
     }
+
+    const nextParams = new URLSearchParams(searchParams.toString());
+    nextParams.delete("case");
+    const nextQuery = nextParams.toString();
+    router.replace(nextQuery ? `${pathname}?${nextQuery}` : pathname, { scroll: false });
 
     setPendingRequestedCaseId(null);
   }, [pathname, pendingRequestedCaseId, router, searchParams, userCases, userCasesLoadedSuccessfully]);

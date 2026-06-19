@@ -624,6 +624,21 @@ describe("dashboard linked-case loading retry", () => {
     });
   });
 
+  it("removes an invalid requested case from the URL while preserving sibling params", async () => {
+    currentSearch = "case=missing-case&view=wizard";
+    caseResponseFactory = () => ({ data: [buildCase("case-1", "Alpine Tower")], error: null });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole("option", { name: "Alpine Tower (ZH)" })).toBeTruthy();
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith("/dashboard?view=wizard", { scroll: false });
+      expect(lastComplianceRecordCaseId).toBeNull();
+    });
+    expect((screen.getByLabelText("wizard-case-selector") as HTMLSelectElement).value).toBe("");
+    expect((screen.getByPlaceholderText("dashboard-project-placeholder") as HTMLInputElement).value).toBe("");
+  });
+
   it("hydrates a requested linked case from the dashboard URL handoff", async () => {
     currentSearch = "case=case-1&view=wizard";
     window.localStorage.setItem(
