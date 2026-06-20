@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import { Lock, Loader2, UserPlus, LogIn, FlaskConical } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -22,6 +22,7 @@ export default function Login() {
   const [fullName, setFullName] = useState("");
   const [error, setError] = useState<AuthFeedback | null>(null);
   const [successKey, setSuccessKey] = useState<TranslationKey | null>(null);
+  const authInFlightRef = useRef(false);
   const { login, signUp } = useAuth();
   const { t } = useLanguage();
   const supabaseConfigured = isSupabaseConfigured();
@@ -36,8 +37,16 @@ export default function Login() {
   const errorMessage = error?.kind === "translation" ? t(error.key) : error?.message ?? null;
   const successMessage = successKey ? t(successKey) : null;
 
+  const finishAuthRequest = () => {
+    authInFlightRef.current = false;
+    setIsLoading(false);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (authInFlightRef.current) return;
+
+    authInFlightRef.current = true;
     setError(null);
     setSuccessKey(null);
     setIsLoading(true);
@@ -45,29 +54,29 @@ export default function Login() {
     try {
       if (!supabaseConfigured) {
         setError(getAuthFeedback(CONFIG_ERROR_MESSAGE));
-        setIsLoading(false);
+        finishAuthRequest();
         return;
       }
 
       if (isSignUp) {
         if (!fullName.trim()) {
           setError({ kind: "translation", key: "login-error-name-required" });
-          setIsLoading(false);
+          finishAuthRequest();
           return;
         }
         const { error: signUpError } = await signUp(email, password, fullName, attribution);
         if (signUpError) {
           setError(getAuthFeedback(signUpError.message));
-          setIsLoading(false);
+          finishAuthRequest();
         } else {
           setSuccessKey("login-signup-success");
-          setIsLoading(false);
+          finishAuthRequest();
         }
       } else {
         const { error: loginError } = await login(email, password);
         if (loginError) {
           setError(getAuthFeedback(loginError.message));
-          setIsLoading(false);
+          finishAuthRequest();
         }
         // On success, login() triggers window.location.href = "/dashboard"
         // which does a full page reload — keep spinner visible during navigation.
@@ -78,12 +87,15 @@ export default function Login() {
           ? getAuthFeedback(err.message) ?? { kind: "translation", key: "login-error-generic" }
           : { kind: "translation", key: "login-error-generic" }
       );
-      setIsLoading(false);
+      finishAuthRequest();
     }
   };
 
   const handleDemoLogin = async () => {
     if (!demoEmail || !demoPassword) return;
+    if (authInFlightRef.current) return;
+
+    authInFlightRef.current = true;
     setError(null);
     setSuccessKey(null);
     setIsSignUp(false);
@@ -94,7 +106,7 @@ export default function Login() {
       const { error: loginError } = await login(demoEmail, demoPassword);
       if (loginError) {
         setError(getAuthFeedback(loginError.message));
-        setIsLoading(false);
+        finishAuthRequest();
       }
     } catch (err) {
       setError(
@@ -102,7 +114,7 @@ export default function Login() {
           ? getAuthFeedback(err.message) ?? { kind: "translation", key: "login-error-generic" }
           : { kind: "translation", key: "login-error-generic" }
       );
-      setIsLoading(false);
+      finishAuthRequest();
     }
   };
 
