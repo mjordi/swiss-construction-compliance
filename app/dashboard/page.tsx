@@ -711,7 +711,7 @@ export default function Dashboard() {
 
               <div className="mb-6 p-4 border border-white/[0.06] rounded-xl bg-white/[0.02]">
                 <div className="flex justify-between items-center mb-3">
-                  <span className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">{t("defect-detected")}</span>
+                  <label htmlFor="dashboard-defect-description" className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">{t("defect-detected")}</label>
                   <Link
                     href={buildCaseVaultHref(projectData.name)}
                     className="text-[11px] bg-accent/[0.08] text-accent px-2.5 py-1 rounded-md font-semibold hover:bg-accent/15 transition-colors duration-200 flex items-center gap-1.5 border border-accent/15"
@@ -720,6 +720,7 @@ export default function Dashboard() {
                   </Link>
                 </div>
                 <textarea
+                  id="dashboard-defect-description"
                   className="w-full bg-transparent text-sm text-cream resize-none outline-none h-20 placeholder-muted/40 disabled:opacity-70"
                   placeholder={t("defect-placeholder")}
                   value={defectDescription}
