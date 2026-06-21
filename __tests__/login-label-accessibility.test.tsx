@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const loginMock = vi.fn();
 const signUpMock = vi.fn();
@@ -57,6 +57,12 @@ vi.mock("@/lib/marketing-attribution", () => ({
 import LoginPage from "@/app/login/page";
 
 describe("login form label accessibility", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    delete process.env.NEXT_PUBLIC_DEMO_EMAIL;
+    delete process.env.NEXT_PUBLIC_DEMO_PASSWORD;
+  });
+
   it("exposes sign-in fields by their visible labels", () => {
     render(<LoginPage />);
 
@@ -79,5 +85,46 @@ describe("login form label accessibility", () => {
     expect(screen.queryByLabelText("Full name")).toBeNull();
     expect(screen.getByLabelText("Work email")).toBeInstanceOf(HTMLInputElement);
     expect(screen.getByLabelText("Password")).toBeInstanceOf(HTMLInputElement);
+  });
+
+  it("suppresses duplicate sign-in submits while the first login request is pending", () => {
+    loginMock.mockReturnValue(new Promise(() => {}));
+    render(<LoginPage />);
+
+    const form = screen.getByRole("button", { name: "Log in" }).closest("form");
+    expect(form).not.toBeNull();
+    fireEvent.submit(form!);
+    fireEvent.submit(form!);
+
+    expect(loginMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("suppresses duplicate sign-up submits while the first signup request is pending", () => {
+    signUpMock.mockReturnValue(new Promise(() => {}));
+    render(<LoginPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "No account? Sign up" }));
+    fireEvent.change(screen.getByLabelText("Full name"), { target: { value: "Max Muster" } });
+
+    const form = screen.getByRole("button", { name: "Create account" }).closest("form");
+    expect(form).not.toBeNull();
+    fireEvent.submit(form!);
+    fireEvent.submit(form!);
+
+    expect(signUpMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("suppresses duplicate demo login clicks while the first demo request is pending", () => {
+    process.env.NEXT_PUBLIC_DEMO_EMAIL = "demo@example.ch";
+    process.env.NEXT_PUBLIC_DEMO_PASSWORD = "demo-password";
+    loginMock.mockReturnValue(new Promise(() => {}));
+    render(<LoginPage />);
+
+    const demoLogin = screen.getByRole("button", { name: "Use demo account" });
+    fireEvent.click(demoLogin);
+    fireEvent.click(demoLogin);
+
+    expect(loginMock).toHaveBeenCalledTimes(1);
+    expect(loginMock).toHaveBeenCalledWith("demo@example.ch", "demo-password");
   });
 });
