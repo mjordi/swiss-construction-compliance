@@ -181,4 +181,17 @@ describe("dashboard photo vault handoff", () => {
       "/dashboard/vault?q=Updated+Tower"
     );
   });
+
+  it("exposes the Step 2 defect description by its visible label", async () => {
+    render(<DashboardPage />);
+
+    completeStep1("Alpine Tower");
+
+    const defectDescription = await screen.findByLabelText("defect-detected");
+    fireEvent.change(defectDescription, {
+      target: { value: "Hairline crack near the balcony door" },
+    });
+
+    expect((defectDescription as HTMLTextAreaElement).value).toBe("Hairline crack near the balcony door");
+  });
 });
