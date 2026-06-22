@@ -194,4 +194,12 @@ describe("dashboard photo vault handoff", () => {
 
     expect((defectDescription as HTMLTextAreaElement).value).toBe("Hairline crack near the balcony door");
   });
+
+  it("exposes the Step 2 signature capture area by its visible label", async () => {
+    render(<DashboardPage />);
+
+    completeStep1("Alpine Tower");
+
+    expect(await screen.findByRole("group", { name: "label-signature" })).toBeTruthy();
+  });
 });

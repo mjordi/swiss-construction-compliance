@@ -754,7 +754,7 @@ export default function Dashboard() {
 
               <div className="mb-6">
                 <div className="flex items-center justify-between mb-1.5">
-                  <label className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">{t("label-signature")}</label>
+                  <div id="dashboard-signature-label" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">{t("label-signature")}</div>
                   <button
                     onClick={() => {
                       sigPad?.clear();
@@ -769,6 +769,8 @@ export default function Dashboard() {
                 </div>
                 <div
                   aria-disabled={isGenerating}
+                  aria-labelledby="dashboard-signature-label"
+                  role="group"
                   className={`border border-white/[0.08] rounded-lg bg-white h-28 relative overflow-hidden touch-none ${
                     isGenerating ? "cursor-not-allowed opacity-70" : "cursor-crosshair"
                   }`}
