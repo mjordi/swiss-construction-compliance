@@ -512,6 +512,9 @@ describe("dashboard linked-case loading retry", () => {
     expect(await screen.findByText("dashboard-download-success")).toBeTruthy();
     expect(screen.getByRole("button", { name: "btn-download" }).getAttribute("disabled")).toBeNull();
     expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(screen.queryByText("dashboard-download-success")).toBeNull();
+    }, { timeout: 3000 });
   });
 
   it("shows localized failure feedback when dashboard PDF download fails", async () => {
@@ -525,6 +528,9 @@ describe("dashboard linked-case loading retry", () => {
     expect(await screen.findByText("dashboard-download-failed")).toBeTruthy();
     expect(screen.getByRole("button", { name: "btn-download" }).getAttribute("disabled")).toBeNull();
     expect(createObjectURLMock).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.queryByText("dashboard-download-failed")).toBeNull();
+    }, { timeout: 3000 });
   });
 
   it("ignores stale dashboard PDF download completion after starting a new protocol", async () => {

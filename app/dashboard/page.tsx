@@ -38,6 +38,7 @@ export default function Dashboard() {
   const sigCanvas = useRef<HTMLCanvasElement>(null);
   const finalizeInFlightRef = useRef(false);
   const latestDownloadRequestIdRef = useRef(0);
+  const downloadFeedbackTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const skipNextDraftPersistRef = useRef(false);
   const { t } = useLanguage();
   const { user } = useAuth();
@@ -340,6 +341,32 @@ export default function Dashboard() {
     sigPad.on();
   }, [isGenerating, sigPad, step]);
 
+  useEffect(() => {
+    return () => {
+      if (downloadFeedbackTimeoutRef.current) {
+        clearTimeout(downloadFeedbackTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const clearDownloadFeedbackTimer = () => {
+    if (downloadFeedbackTimeoutRef.current) {
+      clearTimeout(downloadFeedbackTimeoutRef.current);
+      downloadFeedbackTimeoutRef.current = null;
+    }
+  };
+
+  const showTemporaryDownloadFeedback = (feedback: TranslationKey, requestId: number) => {
+    clearDownloadFeedbackTimer();
+    setDownloadFeedback(feedback);
+    downloadFeedbackTimeoutRef.current = setTimeout(() => {
+      if (latestDownloadRequestIdRef.current === requestId) {
+        setDownloadFeedback(null);
+      }
+      downloadFeedbackTimeoutRef.current = null;
+    }, 2000);
+  };
+
   const handleGenerateProtocol = async () => {
     if (finalizeInFlightRef.current) {
       return;
@@ -428,6 +455,7 @@ export default function Dashboard() {
   const handleDownload = async () => {
     const requestId = latestDownloadRequestIdRef.current + 1;
     latestDownloadRequestIdRef.current = requestId;
+    clearDownloadFeedbackTimer();
     setDownloadFeedback(null);
     setIsGenerating(true);
     try {
@@ -453,13 +481,13 @@ export default function Dashboard() {
       link.click();
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
-      setDownloadFeedback("dashboard-download-success");
+      showTemporaryDownloadFeedback("dashboard-download-success", requestId);
     } catch (error) {
       if (latestDownloadRequestIdRef.current !== requestId) {
         return;
       }
       console.error("PDF Gen failed", error);
-      setDownloadFeedback("dashboard-download-failed");
+      showTemporaryDownloadFeedback("dashboard-download-failed", requestId);
     } finally {
       if (latestDownloadRequestIdRef.current === requestId) {
         setIsGenerating(false);
@@ -469,6 +497,7 @@ export default function Dashboard() {
 
   const startNewProtocol = () => {
     latestDownloadRequestIdRef.current += 1;
+    clearDownloadFeedbackTimer();
     setDownloadFeedback(null);
     setIsGenerating(false);
     clearDraft();
