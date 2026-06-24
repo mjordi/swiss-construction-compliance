@@ -206,7 +206,7 @@ describe("cases checklist persistence", () => {
     });
   });
 
-  it("locks row edit and delete actions while checklist persistence is in flight", async () => {
+  it("locks row edit, delete, and navigation actions while checklist persistence is in flight", async () => {
     let resolveUpdate: ((value: { error: null }) => void) | null = null;
     updateEqMock.mockImplementationOnce(
       () =>
@@ -217,12 +217,19 @@ describe("cases checklist persistence", () => {
 
     render(<CasesPage />);
 
+    expect(await screen.findByRole("link", { name: "cases-open-in-vault" })).toBeTruthy();
+    expect(await screen.findByRole("link", { name: "cases-create-protocol" })).toBeTruthy();
+
     const checkbox = await screen.findByLabelText("cases-checklist-evidence-attached");
     fireEvent.click(checkbox);
 
     await waitFor(() => {
       expect((screen.getByRole("button", { name: "cases-edit" }) as HTMLButtonElement).disabled).toBe(true);
       expect((screen.getByTitle("cases-delete") as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.queryByRole("link", { name: "cases-open-in-vault" })).toBeNull();
+      expect(screen.queryByRole("link", { name: "cases-create-protocol" })).toBeNull();
+      expect(screen.getByText("cases-open-in-vault").getAttribute("aria-disabled")).toBe("true");
+      expect(screen.getByText("cases-create-protocol").getAttribute("aria-disabled")).toBe("true");
     });
 
     resolveUpdate?.({ error: null });
@@ -230,6 +237,8 @@ describe("cases checklist persistence", () => {
     await waitFor(() => {
       expect((screen.getByRole("button", { name: "cases-edit" }) as HTMLButtonElement).disabled).toBe(false);
       expect((screen.getByTitle("cases-delete") as HTMLButtonElement).disabled).toBe(false);
+      expect(screen.getByRole("link", { name: "cases-open-in-vault" }).getAttribute("href")).toBe("/dashboard/vault?q=Alpine+Tower");
+      expect(screen.getByRole("link", { name: "cases-create-protocol" }).getAttribute("href")).toBe("/dashboard?case=case-1");
     });
   });
 

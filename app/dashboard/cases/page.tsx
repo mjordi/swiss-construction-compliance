@@ -985,18 +985,36 @@ export default function CasesPage() {
                         {protocolCounts[item.id]} {t("cases-protocols")}
                       </span>
                     )}
-                    <Link
-                      href={buildCaseVaultHref(item.projectName)}
-                      className="px-2.5 py-1 rounded-md border border-cyan-500/30 text-cyan-200 bg-cyan-500/[0.08] hover:bg-cyan-500/[0.14] transition-colors"
-                    >
-                      {t("cases-open-in-vault")}
-                    </Link>
-                    <Link
-                      href={buildDashboardProtocolHref(item.id)}
-                      className="px-2.5 py-1 rounded-md border border-blue-500/30 text-blue-200 bg-blue-500/[0.08] hover:bg-blue-500/[0.14] transition-colors"
-                    >
-                      {t("cases-create-protocol")}
-                    </Link>
+                    {isChecklistSaving ? (
+                      <span
+                        aria-disabled="true"
+                        className="px-2.5 py-1 rounded-md border border-cyan-500/20 text-cyan-200/60 bg-cyan-500/[0.04] cursor-not-allowed"
+                      >
+                        {t("cases-open-in-vault")}
+                      </span>
+                    ) : (
+                      <Link
+                        href={buildCaseVaultHref(item.projectName)}
+                        className="px-2.5 py-1 rounded-md border border-cyan-500/30 text-cyan-200 bg-cyan-500/[0.08] hover:bg-cyan-500/[0.14] transition-colors"
+                      >
+                        {t("cases-open-in-vault")}
+                      </Link>
+                    )}
+                    {isChecklistSaving ? (
+                      <span
+                        aria-disabled="true"
+                        className="px-2.5 py-1 rounded-md border border-blue-500/20 text-blue-200/60 bg-blue-500/[0.04] cursor-not-allowed"
+                      >
+                        {t("cases-create-protocol")}
+                      </span>
+                    ) : (
+                      <Link
+                        href={buildDashboardProtocolHref(item.id)}
+                        className="px-2.5 py-1 rounded-md border border-blue-500/30 text-blue-200 bg-blue-500/[0.08] hover:bg-blue-500/[0.14] transition-colors"
+                      >
+                        {t("cases-create-protocol")}
+                      </Link>
+                    )}
                     <button
                       type="button"
                       onClick={() => {
