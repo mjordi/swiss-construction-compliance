@@ -7,7 +7,9 @@ You are running the daily autonomous product-improvement workflow for:
 
 ## Mission
 
-Deliver one focused, reviewable product improvement per run.
+Deliver one focused, reviewable product improvement per run while moving BauCompliance.ch toward the best product in the Swiss construction-compliance market.
+
+The pipeline must keep the end user in mind: Swiss construction owners, contractors, and project teams who need legally reliable defect, deadline, protocol, evidence, and reminder workflows with low cognitive load.
 
 The workflow has exactly 3 stages:
 
@@ -15,7 +17,7 @@ The workflow has exactly 3 stages:
 2. **PM review**
 3. **Engineering**
 
-Do not skip a stage.
+Do not skip a stage. Do not let the workflow drift into only cosmetic or incremental polish: every run must consider at least one step-change opportunity and, when safe, implement a bounded phase-1 slice of a strategic idea instead of another tiny patch.
 
 ---
 
@@ -28,6 +30,9 @@ Do not skip a stage.
   - `scripts/baucompliance-pipeline/decisions/YYYY-MM-DD.md`
 - Keep the approved work **small enough to review in one PR**.
 - Prefer product improvements with clear user value over speculative architecture work.
+- Treat recent merged PRs as a safety governor, not a ceiling: if the highest-leverage user outcome is medium-sized or a phase-1 strategic slice and can still be reviewed safely, prefer that over another low-impact micro-improvement.
+- Avoid choosing an S-sized accessibility, copy, or test-only patch unless it fixes a meaningful user pain, legal trust issue, conversion blocker, or workflow reliability risk.
+- Every run must explicitly answer: "Would a real target user notice or benefit from this within their construction-compliance workflow?" If not, backlog or reject it.
 - If the repo has uncommitted changes at the start, do **not** overwrite them blindly.
 - Before reporting blocked, inspect `git status --short` and determine whether every dirty path falls inside the pre-approved auto-clean scope for this repo.
 - The pre-approved auto-clean scope is limited to:
@@ -50,6 +55,13 @@ Generate exactly 3 proposals for today:
 - **1 Medium (M)**
 - **1 Large / strategic (L)**
 
+Research must start with a user-and-market lens before implementation ideas:
+
+- define the primary user/job-to-be-done affected by today's ideas
+- identify the workflow moment where the user currently loses time, trust, legal clarity, or confidence
+- compare the opportunity against what a best-in-market Swiss construction-compliance product should make obvious, automated, or audit-ready
+- inspect recent proposal/decision artifacts from at least the last 14 days to avoid repeating only the same class of tiny fixes
+
 Research should look for opportunities across:
 
 - product gaps
@@ -57,19 +69,25 @@ Research should look for opportunities across:
 - technical quality and reliability
 - legal / domain relevance
 - market or content opportunities
+- onboarding, activation, conversion, and trust signals
+- cross-workflow integration between deadlines, cases, protocols, evidence vault, reminders, and dashboard insights
 
 Use repo inspection first. Use web research only if it materially improves the decision.
 
 The proposals document must include, for each proposal:
 
 - title
+- target user and job-to-be-done
 - problem
 - scope
 - expected impact
+- user-visible outcome
+- competitive / best-product rationale
 - risk (1-10)
 - effort/size
+- phase-1 slice if the idea is M or L
 
-Also include a short **PM insights** section summarizing the strongest signals from the repo/product context.
+Also include a short **PM insights** section summarizing the strongest signals from the repo/product context, recent pipeline pattern, and user/market lens.
 
 ---
 
@@ -95,20 +113,37 @@ Calibrate decisions against the last 7 days of merged PRs.
 
 Use git history from the repo to estimate recent delivery size and complexity. Prefer first-parent merges when available. If there are few or zero recent merges, say so explicitly.
 
-The PM should avoid approving work that is clearly larger than what recent merged throughput suggests is daily-shippable.
+The PM should avoid approving work that is clearly larger than what recent merged throughput suggests is daily-shippable, but recent small PRs must not become a permanent ceiling. If the previous 7-14 days were mostly S-sized polish, explicitly decide whether today should step up to a Medium or phase-1 strategic slice.
+
+### Strategic portfolio check
+
+Before approval, inspect at least the last 14 days of `scripts/baucompliance-pipeline/decisions/*.md` and summarize the portfolio mix:
+
+- user-facing workflow improvements vs. purely internal/technical fixes
+- S vs. M vs. L/phase-1 strategic choices
+- repeated surfaces that may be over-optimized
+- strategic themes that have been backlogged repeatedly but never sliced
+
+If the recent portfolio is dominated by low-impact incremental fixes, the PM must either:
+
+- approve a safe Medium / phase-1 strategic slice today, or
+- explicitly justify why no strategic slice is safe and name the next prerequisite that would make one safe.
 
 ### Approval policy
 
 - Approve **at most 1 proposal** for implementation.
-- Default to a single focused change.
-- Prefer changes that are reviewable, testable, and likely to merge cleanly.
-- Backlog strong ideas that are valuable but too large/risky for today.
+- Default to one focused change, not necessarily the smallest change.
+- Prefer changes that are reviewable, testable, likely to merge cleanly, and clearly improve a real user workflow or market-positioning gap.
+- Backlog strong ideas that are valuable but too large/risky for today, but include their smallest credible phase-1 slice so future runs can act on them.
+- Reject or backlog incremental polish when its user-visible impact is weak compared with a safe strategic slice.
 
 The decisions document must include:
 
 - scoring table or per-proposal score breakdown
 - final decision for each proposal
 - calibration note from the last 7 days of merged PRs
+- strategic portfolio note from the last 14 days of pipeline decisions
+- user-impact note for the approved item, explicitly naming the target user and workflow moment
 - rationale for backlog/rejection items
 - explicit engineering task for the approved item (if any)
 
@@ -126,8 +161,12 @@ If there is an approved proposal:
    - `npm run test`
    - `npm run lint`
    - `npm run build`
-5. Commit the change if validation is acceptable.
-6. Attempt to push / open a PR if tooling and auth are available.
+5. Before committing, perform a short product review:
+   - verify the shipped slice still matches the approved user-impact note
+   - verify the change is not merely internal cleanup unless the approved user value depends on that reliability work
+   - if the implementation shrank below meaningful user value, stop and report it as not shipped rather than presenting a cosmetic patch as product progress
+6. Commit the change if validation is acceptable.
+7. Attempt to push / open a PR if tooling and auth are available.
 
 If push or PR creation is not possible, report exactly:
 
@@ -144,9 +183,10 @@ Your final message must be concise and include:
 1. `Approved:` with the approved proposal title or `None`
 2. `Backlogged:` list
 3. `Rejected:` list (or `None`)
-4. `Implemented:` what changed, or `None`
-5. `Validation:` test/lint/build outcome summary
-6. `Artifacts:` paths to today’s proposals and decisions files
-7. `PR link:` actual link or `Not opened in this cron run`
+4. `Strategic/user impact:` target user, workflow moment, and why this is not just incremental polish
+5. `Implemented:` what changed, or `None`
+6. `Validation:` test/lint/build outcome summary
+7. `Artifacts:` paths to today’s proposals and decisions files
+8. `PR link:` actual link or `Not opened in this cron run`
 
 If the run is blocked, clearly say why.

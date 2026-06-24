@@ -6,11 +6,11 @@ This directory defines the daily autonomous product-improvement workflow for `mj
 
 Every day, the pipeline should:
 
-1. **Research** one small (S), one medium (M), and one large/strategic (L) product improvement.
-2. **PM-review** those options and decide `APPROVED`, `BACKLOG`, or `REJECTED`.
+1. **Research** one small (S), one medium (M), and one large/strategic (L) product improvement through a user-and-market lens.
+2. **PM-review** those options and decide `APPROVED`, `BACKLOG`, or `REJECTED` using delivery calibration plus a strategic portfolio check.
 3. **Engineering** exactly one approved, reviewable improvement and ideally open a PR.
 
-The pipeline is intentionally optimized for **small, mergeable, product-aware improvements**, not random feature generation.
+The pipeline is optimized for **reviewable, product-aware improvements that compound toward a best-in-market Swiss construction-compliance product**. It should not default to random feature generation, but it also must not get trapped in only cosmetic or incremental polish.
 
 ## Outputs per run
 
@@ -28,8 +28,12 @@ The PM step should evaluate:
 - strategic fit
 - risk
 - phaseability
+- user-visible impact
+- competitive differentiation / best-product rationale
 
 It must also calibrate scope using the last **7 days of merged PRs**, so that the system does not suddenly approve oversized work when recent throughput has mostly supported small/medium changes.
+
+That calibration is a safety governor, not a permanent ceiling. The PM step must inspect the last **14 days of pipeline decisions** for portfolio drift. If recent approvals are mostly S-sized polish, it should intentionally consider a Medium or phase-1 strategic slice, or explicitly explain why such a slice is not safe today and what prerequisite would make it safe.
 
 ## Engineering expectations
 
