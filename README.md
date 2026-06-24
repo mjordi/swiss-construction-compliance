@@ -79,9 +79,9 @@ A Hermes-driven daily pipeline is documented in:
 
 It performs:
 
-- daily product research (S / M / L ideas)
-- PM calibration and approval decisions
-- implementation of one focused approved change
+- daily product research (S / M / L ideas) with a user-and-market lens
+- PM calibration, strategic portfolio review, and approval decisions
+- implementation of one focused approved change that should be user-visible or strategically compounding
 - artifact generation under `scripts/baucompliance-pipeline/{proposals,decisions}/`
 
 Manual trigger:
