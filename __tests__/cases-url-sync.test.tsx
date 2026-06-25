@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 let currentSearch = "";
 const replaceMock = vi.fn();
+const routerMock = { replace: replaceMock };
 const deleteCaseEqMock = vi.fn();
 
 type CasesResponse = { data: Array<Record<string, unknown>> | null; error: { message: string } | null };
@@ -16,7 +17,7 @@ let protocolResponseFactory: () => ProtocolsFactoryResult;
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/cases",
-  useRouter: () => ({ replace: replaceMock }),
+  useRouter: () => routerMock,
   useSearchParams: () => {
     const params = new URLSearchParams(currentSearch);
     return {
@@ -169,6 +170,44 @@ describe("cases filter URL synchronization", () => {
     });
 
     expect((screen.getByLabelText("cases-search-label") as HTMLInputElement).value).toBe("Riverside Bridge");
+  });
+
+  it("removes invalid filter params while preserving valid search and unrelated params", async () => {
+    currentSearch = "regime=bad&status=triage&sort=sideways&q=Riverside+Bridge&tab=active";
+
+    render(<CasesPage />);
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith(
+        "/dashboard/cases?status=triage&q=Riverside+Bridge&tab=active",
+        { scroll: false }
+      );
+    });
+
+    expect((screen.getByLabelText("cases-filter-regime") as HTMLSelectElement).value).toBe("all");
+    expect((screen.getByLabelText("cases-filter-status") as HTMLSelectElement).value).toBe("triage");
+    expect((screen.getByLabelText("cases-filter-sort") as HTMLSelectElement).value).toBe("nearest-deadline");
+    expect((screen.getByLabelText("cases-search-label") as HTMLInputElement).value).toBe("Riverside Bridge");
+  });
+
+  it("normalizes externally introduced invalid filter params even when parsed filters are unchanged", async () => {
+    const { rerender } = render(<CasesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("cases-filter-regime")).toBeTruthy();
+    });
+    replaceMock.mockClear();
+
+    currentSearch = "regime=legacy&status=nope&sort=random&q=alpha";
+    rerender(<CasesPage />);
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith("/dashboard/cases?q=alpha", { scroll: false });
+    });
+
+    expect((screen.getByLabelText("cases-filter-regime") as HTMLSelectElement).value).toBe("all");
+    expect((screen.getByLabelText("cases-filter-status") as HTMLSelectElement).value).toBe("all");
+    expect((screen.getByLabelText("cases-filter-sort") as HTMLSelectElement).value).toBe("nearest-deadline");
   });
 
   it("re-hydrates filter state when the query params change externally", async () => {
