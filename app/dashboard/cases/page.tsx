@@ -237,6 +237,17 @@ export default function CasesPage() {
     const nextStatus = parseStatusFilter(params.get("status"));
     const nextSort = parseSortMode(params.get("sort"));
     const nextSearch = params.get("q") ?? "";
+    const sanitizedParams = new URLSearchParams(params);
+
+    if (params.has("regime") && nextRegime === "all") sanitizedParams.delete("regime");
+    if (params.has("status") && nextStatus === "all") sanitizedParams.delete("status");
+    if (params.has("sort") && nextSort === "nearest-deadline") sanitizedParams.delete("sort");
+
+    const sanitizedSearch = sanitizedParams.toString();
+    if (sanitizedSearch !== searchParamString) {
+      router.replace(sanitizedSearch ? `${pathname}?${sanitizedSearch}` : pathname, { scroll: false });
+    }
+
     const currentFilters = filterStateRef.current;
 
     const needsSync =
@@ -256,7 +267,7 @@ export default function CasesPage() {
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [searchParamString]);
+  }, [searchParamString, pathname, router]);
 
   useEffect(() => {
     if (skipNextUrlWriteRef.current) {
