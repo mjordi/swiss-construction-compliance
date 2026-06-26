@@ -238,6 +238,16 @@ export default function TechVault() {
     const params = new URLSearchParams(searchParamString);
     const nextActiveTab = parseVaultTab(params.get("tab"));
     const nextQuery = params.get("q") ?? "";
+    const sanitizedParams = new URLSearchParams(params);
+
+    if (params.has("tab") && nextActiveTab === "projects") {
+      sanitizedParams.delete("tab");
+    }
+
+    const sanitizedSearch = sanitizedParams.toString();
+    if (sanitizedSearch !== searchParamString) {
+      router.replace(sanitizedSearch ? `${pathname}?${sanitizedSearch}` : pathname, { scroll: false });
+    }
 
     if (nextActiveTab === activeTabRef.current && nextQuery === queryRef.current) {
       return;
@@ -250,7 +260,7 @@ export default function TechVault() {
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [searchParamString]);
+  }, [pathname, router, searchParamString]);
 
   useEffect(() => {
     if (skipNextUrlWriteRef.current) {
