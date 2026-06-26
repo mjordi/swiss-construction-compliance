@@ -4,10 +4,11 @@ import type { HTMLAttributes, ReactNode } from "react";
 
 let currentSearch = "";
 const replaceMock = vi.fn();
+const routerMock = { replace: replaceMock };
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/vault",
-  useRouter: () => ({ replace: replaceMock }),
+  useRouter: () => routerMock,
   useSearchParams: () => {
     const params = new URLSearchParams(currentSearch);
     return {
@@ -119,6 +120,37 @@ describe("vault URL synchronization", () => {
     });
 
     expect((screen.getByPlaceholderText("vault-search-placeholder") as HTMLInputElement).value).toBe("Alpine Tower");
+  });
+
+  it("removes an invalid tab query param while preserving search and unrelated params", async () => {
+    currentSearch = "tab=stale&q=Alpine+Tower&source=support";
+
+    render(<TechVault />);
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith("/dashboard/vault?q=Alpine+Tower&source=support", { scroll: false });
+    });
+
+    expect((screen.getByPlaceholderText("vault-search-placeholder") as HTMLInputElement).value).toBe("Alpine Tower");
+    expect(screen.getByRole("tab", { name: "vault-tab-projects" }).className).toContain("bg-accent");
+  });
+
+  it("cleans an externally introduced invalid tab even when parsed tab state is unchanged", async () => {
+    currentSearch = "q=Alpha";
+
+    const { rerender } = render(<TechVault />);
+
+    await waitFor(() => {
+      expect((screen.getByPlaceholderText("vault-search-placeholder") as HTMLInputElement).value).toBe("Alpha");
+    });
+
+    replaceMock.mockClear();
+    currentSearch = "tab=stale&q=Alpha&source=email";
+    rerender(<TechVault />);
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith("/dashboard/vault?q=Alpha&source=email", { scroll: false });
+    });
   });
 
   it("writes q back into the URL when the search changes", async () => {
