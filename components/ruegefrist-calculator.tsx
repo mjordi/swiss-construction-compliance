@@ -333,11 +333,15 @@ export default function RuegefristCalculator() {
       <div className="p-6 md:p-8 rounded-2xl bg-white/[0.02] border border-white/[0.05] mb-8">
         <div className="space-y-5">
           <div>
-            <label className="block text-[13px] font-medium text-cream/70 mb-2">
+            <label
+              htmlFor="ruegefrist-contract-date"
+              className="block text-[13px] font-medium text-cream/70 mb-2"
+            >
               <Calendar className="w-4 h-4 inline mr-2 text-muted" />
               {t("calc-contract-date")}
             </label>
             <input
+              id="ruegefrist-contract-date"
               type="date"
               aria-label={t("calc-contract-date")}
               value={contractDate}
@@ -348,11 +352,15 @@ export default function RuegefristCalculator() {
           </div>
 
           <div>
-            <label className="block text-[13px] font-medium text-cream/70 mb-2">
+            <label
+              htmlFor="ruegefrist-discovery-date"
+              className="block text-[13px] font-medium text-cream/70 mb-2"
+            >
               <AlertTriangle className="w-4 h-4 inline mr-2 text-muted" />
               {t("calc-discovery-date")}
             </label>
             <input
+              id="ruegefrist-discovery-date"
               type="date"
               aria-label={t("calc-discovery-date")}
               value={discoveryDate}
