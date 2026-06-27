@@ -27,6 +27,20 @@ describe("RuegefristCalculator", () => {
     vi.useRealTimers();
   });
 
+  it("associates visible date labels with the matching inputs", () => {
+    render(<RuegefristCalculator />);
+
+    const contractLabel = screen.getByText("calc-contract-date").closest("label");
+    const discoveryLabel = screen.getByText("calc-discovery-date").closest("label");
+    const contractInput = screen.getByLabelText("calc-contract-date") as HTMLInputElement;
+    const discoveryInput = screen.getByLabelText("calc-discovery-date") as HTMLInputElement;
+
+    expect(contractLabel?.getAttribute("for")).toBe("ruegefrist-contract-date");
+    expect(discoveryLabel?.getAttribute("for")).toBe("ruegefrist-discovery-date");
+    expect(contractInput.id).toBe("ruegefrist-contract-date");
+    expect(discoveryInput.id).toBe("ruegefrist-discovery-date");
+  });
+
   it("clears a displayed deadline result when source dates change", async () => {
     render(<RuegefristCalculator />);
 

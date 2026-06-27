@@ -4,6 +4,7 @@ import type { HTMLAttributes, ReactNode } from "react";
 
 const replaceMock = vi.fn();
 const pushMock = vi.fn();
+const routerMock = { replace: replaceMock, push: pushMock };
 const updateMock = vi.fn();
 const mockUser = { id: "user-1" };
 
@@ -66,7 +67,7 @@ let deferNextUpdate = false;
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/vault",
-  useRouter: () => ({ replace: replaceMock, push: pushMock }),
+  useRouter: () => routerMock,
   useSearchParams: () => ({
     get: () => null,
     toString: () => "",
