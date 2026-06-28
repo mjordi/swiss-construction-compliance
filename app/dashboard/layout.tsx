@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import Sidebar from "@/components/dashboard/Sidebar";
 import SiteHeader from "@/components/SiteHeader";
 import MobileNav from "@/components/dashboard/MobileNav";
 import { useAuth } from "@/context/AuthContext";
+import { buildLoginRedirectHref } from "@/lib/auth-redirect";
 
 export default function DashboardLayout({
   children,
@@ -14,12 +15,14 @@ export default function DashboardLayout({
 }) {
   const { user, isLoading } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (!isLoading && !user) {
-      router.push("/login");
+      router.push(buildLoginRedirectHref(pathname, searchParams.toString()));
     }
-  }, [user, isLoading, router]);
+  }, [user, isLoading, pathname, router, searchParams]);
 
   if (isLoading) {
     return (
