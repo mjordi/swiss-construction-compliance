@@ -26,7 +26,7 @@ import {
 } from "@/lib/case-timeline";
 import { buildDashboardProtocolHref } from "@/lib/dashboard-linked-case";
 import { buildCaseVaultHref } from "@/lib/vault";
-import { validateRuegefristInput } from "@/lib/legal-utils";
+import { sanitizeDateQueryParam, validateRuegefristInput } from "@/lib/legal-utils";
 import type { TranslationKey } from "@/locales";
 
 const SWISS_CANTONS = [
@@ -237,11 +237,30 @@ export default function CasesPage() {
     const nextStatus = parseStatusFilter(params.get("status"));
     const nextSort = parseSortMode(params.get("sort"));
     const nextSearch = params.get("q") ?? "";
+    const rawHandoffContractDate = params.get("contract");
+    const rawHandoffDiscoveryDate = params.get("discovery");
+    const handoffContractDate = sanitizeDateQueryParam(rawHandoffContractDate);
+    const handoffDiscoveryDate = sanitizeDateQueryParam(rawHandoffDiscoveryDate);
+    const hasCaseHandoffParams = rawHandoffContractDate !== null || rawHandoffDiscoveryDate !== null;
     const sanitizedParams = new URLSearchParams(params);
 
     if (params.has("regime") && nextRegime === "all") sanitizedParams.delete("regime");
     if (params.has("status") && nextStatus === "all") sanitizedParams.delete("status");
     if (params.has("sort") && nextSort === "nearest-deadline") sanitizedParams.delete("sort");
+    if (hasCaseHandoffParams) {
+      sanitizedParams.delete("contract");
+      sanitizedParams.delete("discovery");
+    }
+
+    if (handoffContractDate || handoffDiscoveryDate) {
+      setCreateError(null);
+      setShowForm(true);
+      setFormData((current) => ({
+        ...current,
+        contractDate: handoffContractDate ?? current.contractDate,
+        discoveryDate: handoffDiscoveryDate ?? current.discoveryDate,
+      }));
+    }
 
     const sanitizedSearch = sanitizedParams.toString();
     if (sanitizedSearch !== searchParamString) {

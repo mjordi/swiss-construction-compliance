@@ -229,6 +229,22 @@ describe("RuegefristCalculator", () => {
     expect(screen.getByText("calc-60day-title")).toBeTruthy();
   });
 
+  it("renders a case-tracking handoff with the calculated dates", () => {
+    render(<RuegefristCalculator />);
+
+    fireEvent.change(screen.getByLabelText("calc-contract-date"), {
+      target: { value: "2026-02-01" },
+    });
+    fireEvent.change(screen.getByLabelText("calc-discovery-date"), {
+      target: { value: "2026-03-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "calc-calculate" }));
+
+    expect(screen.getByRole("link", { name: "cases-add-case" }).getAttribute("href")).toBe(
+      "/dashboard/cases?contract=2026-02-01&discovery=2026-03-01"
+    );
+  });
+
   it("copies reminder changes made with the preset toggles", async () => {
     render(<RuegefristCalculator />);
 

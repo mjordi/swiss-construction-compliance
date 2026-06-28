@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useEffect, useRef, useState } from "react";
 import {
   Download,
@@ -303,6 +304,10 @@ export default function RuegefristCalculator() {
     URL.revokeObjectURL(url);
   }
 
+  const trackCaseHref = calculatedDates
+    ? `/dashboard/cases?contract=${encodeURIComponent(calculatedDates.contractDate)}&discovery=${encodeURIComponent(calculatedDates.discoveryDate)}`
+    : null;
+
   function toggleReminder(offset: number) {
     clearShareLinkFeedback();
     setReminderOffsets((current) =>
@@ -421,14 +426,25 @@ export default function RuegefristCalculator() {
       </div>
 
       {calculatedDates && (
-        <button
-          onClick={copyShareLink}
-          aria-label={shareLinkFeedback ? t(shareLinkFeedback) : t("calc-share-link")}
-          className="w-full mb-8 flex items-center justify-center gap-2 px-4 py-3 border border-white/[0.08] hover:border-accent/30 text-muted hover:text-accent font-medium rounded-lg transition-all duration-300 text-[13px]"
-        >
-          <Share2 className="w-4 h-4" />
-          {shareLinkFeedback ? t(shareLinkFeedback) : t("calc-share-link")}
-        </button>
+        <div className="mb-8 grid gap-3 sm:grid-cols-2">
+          <button
+            onClick={copyShareLink}
+            aria-label={shareLinkFeedback ? t(shareLinkFeedback) : t("calc-share-link")}
+            className="flex items-center justify-center gap-2 px-4 py-3 border border-white/[0.08] hover:border-accent/30 text-muted hover:text-accent font-medium rounded-lg transition-all duration-300 text-[13px]"
+          >
+            <Share2 className="w-4 h-4" />
+            {shareLinkFeedback ? t(shareLinkFeedback) : t("calc-share-link")}
+          </button>
+          {trackCaseHref && (
+            <Link
+              href={trackCaseHref}
+              className="flex items-center justify-center gap-2 px-4 py-3 border border-accent/30 bg-accent/[0.08] hover:bg-accent/[0.14] text-accent font-medium rounded-lg transition-all duration-300 text-[13px]"
+            >
+              <Scale className="w-4 h-4" />
+              {t("cases-add-case")}
+            </Link>
+          )}
+        </div>
       )}
 
       {/* Results */}
