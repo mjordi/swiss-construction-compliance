@@ -6,6 +6,7 @@ import Sidebar from "@/components/dashboard/Sidebar";
 import SiteHeader from "@/components/SiteHeader";
 import MobileNav from "@/components/dashboard/MobileNav";
 import { useAuth } from "@/context/AuthContext";
+import { buildLoginRedirectHref } from "@/lib/auth-redirect";
 
 export default function DashboardLayout({
   children,
@@ -17,7 +18,7 @@ export default function DashboardLayout({
 
   useEffect(() => {
     if (!isLoading && !user) {
-      router.push("/login");
+      router.push(buildLoginRedirectHref(window.location.pathname, window.location.search.slice(1)));
     }
   }, [user, isLoading, router]);
 

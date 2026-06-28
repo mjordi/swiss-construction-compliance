@@ -161,7 +161,7 @@ describe("RuegefristCalculator", () => {
     );
   });
 
-  it("copies the last calculated dates rather than live edited input", async () => {
+  it("hides calculator handoff links after editing dates until recalculation", async () => {
     render(<RuegefristCalculator />);
 
     const contractDate = screen.getByLabelText("calc-contract-date") as HTMLInputElement;
@@ -171,16 +171,17 @@ describe("RuegefristCalculator", () => {
     fireEvent.change(discoveryDate, { target: { value: "2026-03-01" } });
     fireEvent.click(screen.getByRole("button", { name: "calc-calculate" }));
 
-    expect(screen.getByText("calc-60day-title")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "calc-share-link" })).toBeTruthy();
+    expect(screen.getByRole("link", { name: "cases-add-case" }).getAttribute("href")).toBe(
+      "/dashboard/cases?contract=2026-02-01&discovery=2026-03-01"
+    );
 
     fireEvent.change(discoveryDate, { target: { value: "2026-03-02" } });
-    fireEvent.click(screen.getByRole("button", { name: "calc-share-link" }));
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith(
-        "http://localhost:3000/tools/ruegefrist-rechner?contract=2026-02-01&discovery=2026-03-01&reminders=14%2C7%2C1"
-      );
+      expect(screen.queryByRole("button", { name: "calc-share-link" })).toBeNull();
     });
+    expect(screen.queryByRole("link", { name: "cases-add-case" })).toBeNull();
   });
 
   it("hydrates shared reminder presets and includes them in copied links", async () => {
@@ -227,6 +228,22 @@ describe("RuegefristCalculator", () => {
     });
 
     expect(screen.getByText("calc-60day-title")).toBeTruthy();
+  });
+
+  it("renders a case-tracking handoff with the calculated dates", () => {
+    render(<RuegefristCalculator />);
+
+    fireEvent.change(screen.getByLabelText("calc-contract-date"), {
+      target: { value: "2026-02-01" },
+    });
+    fireEvent.change(screen.getByLabelText("calc-discovery-date"), {
+      target: { value: "2026-03-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "calc-calculate" }));
+
+    expect(screen.getByRole("link", { name: "cases-add-case" }).getAttribute("href")).toBe(
+      "/dashboard/cases?contract=2026-02-01&discovery=2026-03-01"
+    );
   });
 
   it("copies reminder changes made with the preset toggles", async () => {
@@ -324,7 +341,7 @@ describe("RuegefristCalculator", () => {
       );
     });
 
-    expect(screen.getByRole("button", { name: "calc-share-link" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "calc-share-link" })).toBeNull();
     expect(screen.queryByRole("button", { name: "calc-share-link-copied" })).toBeNull();
     expect(screen.queryByRole("button", { name: "calc-share-link-error" })).toBeNull();
   });

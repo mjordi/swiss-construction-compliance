@@ -2,6 +2,7 @@
 
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
 import { getSupabase } from "@/lib/supabase";
+import { getPostLoginRedirect } from "@/lib/auth-redirect";
 import type { User, AuthError, Session } from "@supabase/supabase-js";
 import type { MarketingAttribution } from "@/lib/marketing-attribution";
 
@@ -94,7 +95,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         });
         // Full page reload ensures dashboard gets a clean auth state —
         // router.push can hang during client-side transitions.
-        window.location.href = "/dashboard";
+        window.location.href = getPostLoginRedirect(window.location.search);
       }
       return { error };
     },

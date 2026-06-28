@@ -231,6 +231,35 @@ describe("cases filter URL synchronization", () => {
     expect((screen.getByLabelText("cases-search-label") as HTMLInputElement).value).toBe("beta");
   });
 
+  it("consumes calculator handoff dates into the create-case form while preserving filters", async () => {
+    currentSearch = "contract=2026-02-01&discovery=2026-03-01&q=Riverside+Bridge&status=triage&from=calc";
+
+    render(<CasesPage />);
+
+    await waitFor(() => {
+      expect((screen.getByLabelText("cases-contract-date-input") as HTMLInputElement).value).toBe("2026-02-01");
+    });
+
+    expect((screen.getByLabelText("cases-discovery-date-input") as HTMLInputElement).value).toBe("2026-03-01");
+    expect(screen.getByText("cases-add-title")).toBeTruthy();
+    expect(replaceMock).toHaveBeenCalledWith(
+      "/dashboard/cases?q=Riverside+Bridge&status=triage&from=calc",
+      { scroll: false }
+    );
+  });
+
+  it("removes invalid calculator handoff params without opening the create-case form", async () => {
+    currentSearch = "contract=bad-date&discovery=nope&q=Riverside+Bridge";
+
+    render(<CasesPage />);
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith("/dashboard/cases?q=Riverside+Bridge", { scroll: false });
+    });
+
+    expect(screen.queryByText("cases-add-title")).toBeNull();
+  });
+
   it("renders an initial load error with retry instead of the empty state when fetch fails", async () => {
     caseResponseFactory = () => ({ data: null, error: { message: "boom" } });
     protocolResponseFactory = () => ({ data: [], error: null });
