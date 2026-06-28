@@ -215,12 +215,14 @@ export default function RuegefristCalculator() {
     clearShareLinkFeedback();
     setContractDate(value);
     setResult(null);
+    setCalculatedDates(null);
   }
 
   function updateDiscoveryDate(value: string) {
     clearShareLinkFeedback();
     setDiscoveryDate(value);
     setResult(null);
+    setCalculatedDates(null);
   }
 
   function calculate() {
