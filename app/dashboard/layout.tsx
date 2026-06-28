@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect } from "react";
-import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useRouter } from "next/navigation";
 import Sidebar from "@/components/dashboard/Sidebar";
 import SiteHeader from "@/components/SiteHeader";
 import MobileNav from "@/components/dashboard/MobileNav";
@@ -15,14 +15,12 @@ export default function DashboardLayout({
 }) {
   const { user, isLoading } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
-  const searchParams = useSearchParams();
 
   useEffect(() => {
     if (!isLoading && !user) {
-      router.push(buildLoginRedirectHref(pathname, searchParams.toString()));
+      router.push(buildLoginRedirectHref(window.location.pathname, window.location.search.slice(1)));
     }
-  }, [user, isLoading, pathname, router, searchParams]);
+  }, [user, isLoading, router]);
 
   if (isLoading) {
     return (
