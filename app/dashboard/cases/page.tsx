@@ -90,6 +90,19 @@ function buildCaseFormState(item: Pick<Case, "project_name" | "canton" | "contra
   };
 }
 
+function formatCaseReminderReadiness(item: ComplianceCaseViewModel, t: (key: TranslationKey) => string) {
+  const calendarReadiness = item.noticeApplies
+    ? item.reminderReadiness.calendarExportReady
+      ? t("cases-calendar-ready")
+      : t("cases-calendar-pending")
+    : t("cases-calendar-not-applicable");
+
+  return [
+    calendarReadiness,
+    item.reminderReadiness.evidenceComplete ? t("cases-evidence-complete") : t("cases-evidence-incomplete"),
+  ].join(" · ");
+}
+
 export default function CasesPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
@@ -1081,10 +1094,7 @@ export default function CasesPage() {
                   />
                   <InfoCell
                     label={t("cases-reminder-readiness")}
-                    value={[
-                      item.reminderReadiness.calendarExportReady ? t("cases-calendar-ready") : t("cases-calendar-pending"),
-                      item.reminderReadiness.evidenceComplete ? t("cases-evidence-complete") : t("cases-evidence-incomplete"),
-                    ].join(" · ")}
+                    value={formatCaseReminderReadiness(item, t)}
                   />
                 </div>
 

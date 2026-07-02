@@ -51,7 +51,7 @@ vi.mock("@/components/dashboard/PageHeader", () => ({
 
 vi.mock("@/lib/case-timeline", () => ({
   applyComplianceCaseView: (cases: unknown[]) => cases,
-  buildComplianceCaseTimeline: (inputs: Array<{ id: string; projectName: string; canton: string }>) =>
+  buildComplianceCaseTimeline: (inputs: Array<{ id: string; projectName: string; canton: string; contractDate: Date }>) =>
     inputs.map((input) => ({
       id: input.id,
       projectName: input.projectName,
@@ -62,7 +62,7 @@ vi.mock("@/lib/case-timeline", () => ({
       deadlineCountdownLabel: "10 days left",
       regimeLabel: "New law",
       regime: "new",
-      noticeApplies: true,
+      noticeApplies: input.contractDate >= new Date("2026-01-01T00:00:00.000Z"),
       noticeDeadlineLabel: "2026-05-20",
       contractDateLabel: "2026-03-01",
       discoveryDateLabel: "2026-03-21",
@@ -121,7 +121,7 @@ vi.mock("@/lib/supabase", () => ({
 
 import CasesPage from "@/app/dashboard/cases/page";
 
-function successCase(id = "case-1", projectName = "Alpine Tower") {
+function successCase(id = "case-1", projectName = "Alpine Tower", overrides: Record<string, unknown> = {}) {
   return {
     id,
     user_id: "user-1",
@@ -133,6 +133,7 @@ function successCase(id = "case-1", projectName = "Alpine Tower") {
     created_at: "2026-03-21T00:00:00.000Z",
     updated_at: "2026-03-21T00:00:00.000Z",
     status: "active",
+    ...overrides,
   };
 }
 
@@ -341,6 +342,20 @@ describe("cases filter URL synchronization", () => {
     expect(snapshot.textContent).toContain("cases-deadline-countdown");
     expect(snapshot.textContent).toContain("10 days left");
     expect(snapshot.textContent).toContain("cases-reminder-readiness");
+  });
+
+  it("does not show ineligible calendar exports as pending in the visible case row snapshot", async () => {
+    caseResponseFactory = () => ({
+      data: [successCase("case-old-law", "Legacy Renovation", { contract_date: "2025-12-31T00:00:00.000Z" })],
+      error: null,
+    });
+    protocolResponseFactory = () => ({ data: [], error: null });
+
+    render(<CasesPage />);
+
+    const snapshot = await screen.findByTestId("cases-action-snapshot-case-old-law");
+    expect(snapshot.textContent).toContain("cases-calendar-not-applicable");
+    expect(snapshot.textContent).not.toContain("cases-calendar-pending");
   });
 
   it("renders a per-case vault handoff scoped to the case project name", async () => {
