@@ -329,6 +329,20 @@ describe("cases filter URL synchronization", () => {
     );
   });
 
+  it("shows next legal action and countdown in the visible case row snapshot", async () => {
+    caseResponseFactory = () => ({ data: [successCase()], error: null });
+    protocolResponseFactory = () => ({ data: [], error: null });
+
+    render(<CasesPage />);
+
+    const snapshot = await screen.findByTestId("cases-action-snapshot-case-1");
+    expect(snapshot.textContent).toContain("cases-next-legal-action");
+    expect(snapshot.textContent).toContain("Draft notice");
+    expect(snapshot.textContent).toContain("cases-deadline-countdown");
+    expect(snapshot.textContent).toContain("10 days left");
+    expect(snapshot.textContent).toContain("cases-reminder-readiness");
+  });
+
   it("renders a per-case vault handoff scoped to the case project name", async () => {
     caseResponseFactory = () => ({ data: [successCase()], error: null });
     protocolResponseFactory = () => ({ data: [], error: null });

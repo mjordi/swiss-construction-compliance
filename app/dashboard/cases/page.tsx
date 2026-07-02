@@ -1069,6 +1069,25 @@ export default function CasesPage() {
                   </div>
                 </div>
 
+                <div
+                  data-testid={`cases-action-snapshot-${item.id}`}
+                  className="mb-5 grid gap-3 rounded-xl border border-white/[0.06] bg-black/20 p-3 text-sm md:grid-cols-3"
+                >
+                  <InfoCell label={t("cases-next-legal-action")} value={item.nextAction} />
+                  <InfoCell
+                    label={t("cases-deadline-countdown")}
+                    value={item.deadlineCountdownLabel}
+                    valueClassName={countdownClass[item.deadlineCountdownTone]}
+                  />
+                  <InfoCell
+                    label={t("cases-reminder-readiness")}
+                    value={[
+                      item.reminderReadiness.calendarExportReady ? t("cases-calendar-ready") : t("cases-calendar-pending"),
+                      item.reminderReadiness.evidenceComplete ? t("cases-evidence-complete") : t("cases-evidence-incomplete"),
+                    ].join(" · ")}
+                  />
+                </div>
+
                 {caseUpdateFeedback?.caseId === item.id && (
                   <div
                     role="alert"
