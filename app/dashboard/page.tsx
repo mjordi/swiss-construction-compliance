@@ -17,7 +17,7 @@ import { buildCaseVaultHref } from "@/lib/vault";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import type { Case } from "@/lib/database.types";
-import { toComplianceCaseViewModel } from "@/lib/case-timeline";
+import { toComplianceCaseViewModel, type CaseDeadlineStatus, type ComplianceCaseViewModel } from "@/lib/case-timeline";
 
 const PROJECT_DRAFT_STORAGE_KEY = "baucompliance:wizard-project-draft";
 
@@ -27,6 +27,41 @@ const clearPersistedWizardDraft = () => {
 
 const steps = [1, 2, 3];
 const INPUT_CLASS = "w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream placeholder-muted/40 focus:border-accent/40 outline-none transition-colors duration-200";
+
+const linkedCaseStatusLabelKey: Record<CaseDeadlineStatus, TranslationKey> = {
+  ok: "cases-status-on-track",
+  warning: "cases-status-attention",
+  urgent: "cases-status-urgent",
+  expired: "cases-status-expired",
+  "immediate-notice": "cases-status-immediate-notice",
+};
+
+const linkedCaseNextActionKey: Record<CaseDeadlineStatus, TranslationKey> = {
+  ok: "cases-next-action-ok",
+  warning: "cases-next-action-warning",
+  urgent: "cases-next-action-urgent",
+  expired: "cases-next-action-expired",
+  "immediate-notice": "cases-next-action-immediate-notice",
+};
+
+function getLinkedCaseCountdownLabel(
+  context: Pick<ComplianceCaseViewModel, "regime" | "daysToDeadline">,
+  t: (key: TranslationKey) => string
+): string {
+  if (context.regime === "old" || context.daysToDeadline === null) {
+    return t("cases-countdown-notify-immediately");
+  }
+
+  const days = context.daysToDeadline;
+  if (days < 0) {
+    return days === -1
+      ? t("cases-countdown-one-day-overdue")
+      : `${Math.abs(days)} ${t("cases-countdown-days-overdue-suffix")}`;
+  }
+  if (days === 0) return t("cases-countdown-due-today");
+  if (days === 1) return t("cases-countdown-one-day-left");
+  return `${days} ${t("cases-countdown-days-left-suffix")}`;
+}
 
 export default function Dashboard() {
   const [step, setStep] = useState(1);
@@ -619,7 +654,7 @@ export default function Dashboard() {
                                 : "text-emerald-200 border-emerald-200/30 bg-emerald-500/10"
                             }`}
                           >
-                            {selectedCaseContext.statusLabel}
+                            {t(linkedCaseStatusLabelKey[selectedCaseContext.status])}
                           </span>
                         </div>
                         <div className="mt-1 text-[11px] text-blue-200/80">
@@ -632,10 +667,10 @@ export default function Dashboard() {
                             {t("cases-next-legal-action")}
                           </div>
                           <div className="mt-1 text-[12px] text-blue-100 leading-relaxed">
-                            {selectedCaseContext.nextAction}
+                            {t(linkedCaseNextActionKey[selectedCaseContext.status])}
                           </div>
                           <div className="mt-1 text-[11px] text-blue-200/70">
-                            {selectedCaseContext.deadlineCountdownLabel}
+                            {getLinkedCaseCountdownLabel(selectedCaseContext, t)}
                           </div>
                         </div>
                       </div>

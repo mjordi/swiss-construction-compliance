@@ -271,8 +271,9 @@ describe("dashboard photo vault handoff", () => {
     fireEvent.change(selector, { target: { value: "case-1" } });
 
     expect(await screen.findByText("cases-next-legal-action")).toBeTruthy();
-    expect(screen.getByText("Send notice today via traceable channel.")).toBeTruthy();
-    expect(screen.getByText("7 days left")).toBeTruthy();
+    expect(screen.getByText("cases-status-urgent")).toBeTruthy();
+    expect(screen.getByText("cases-next-action-urgent")).toBeTruthy();
+    expect(screen.getByText("7 cases-countdown-days-left-suffix")).toBeTruthy();
     expect(screen.getByText("dashboard-linked-case-deadline-date: 30.06.2026")).toBeTruthy();
   });
 
