@@ -92,6 +92,8 @@ describe("deadlines share-link restoration", () => {
   it("exposes selected reminder presets with aria-pressed and updates when toggled", () => {
     render(<DeadlinesPage />);
 
+    const reminderGroup = screen.getByRole("group", { name: "deadlines-reminder-label" });
+    expect(reminderGroup).toBeTruthy();
     expect(screen.getByRole("button", { name: "14 deadlines-reminder-days" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "7 deadlines-reminder-days" }).getAttribute("aria-pressed")).toBe("true");
     expect(screen.getByRole("button", { name: "1 deadlines-reminder-days" }).getAttribute("aria-pressed")).toBe("true");

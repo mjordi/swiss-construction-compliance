@@ -403,10 +403,17 @@ export default function RuegefristCalculator() {
             )}
           </div>
           <div className="pt-4 border-t border-white/[0.06]">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-2">
+            <p
+              id="ruegefrist-reminder-presets-label"
+              className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-2"
+            >
               {t("deadlines-reminder-label")}
             </p>
-            <div className="flex flex-wrap gap-2">
+            <div
+              role="group"
+              aria-labelledby="ruegefrist-reminder-presets-label"
+              className="flex flex-wrap gap-2"
+            >
               {DEADLINE_REMINDER_OFFSET_OPTIONS.map((offset) => (
                 <button
                   key={offset}
