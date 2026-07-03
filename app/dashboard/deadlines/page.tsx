@@ -354,10 +354,17 @@ export default function DeadlinesPage() {
           )}
         </div>
         <div className="mt-4 pt-4 border-t border-white/[0.06]">
-          <p className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-2">
+          <p
+            id="deadlines-reminder-presets-label"
+            className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-2"
+          >
             {t("deadlines-reminder-label")}
           </p>
-          <div className="flex flex-wrap gap-2">
+          <div
+            role="group"
+            aria-labelledby="deadlines-reminder-presets-label"
+            className="flex flex-wrap gap-2"
+          >
             {reminderOptions.map((offset) => (
               <button
                 key={offset}
