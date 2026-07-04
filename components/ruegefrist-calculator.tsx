@@ -50,6 +50,21 @@ const statusConfig = {
   },
 };
 
+function formatReminderSummary(
+  reminderOffsets: number[],
+  t: (key: "deadlines-reminder-days" | "deadlines-reminder-none") => string
+) {
+  const selectedOffsets = DEADLINE_REMINDER_OFFSET_OPTIONS.filter((offset) =>
+    reminderOffsets.includes(offset)
+  );
+
+  if (selectedOffsets.length === 0) return t("deadlines-reminder-none");
+
+  return selectedOffsets
+    .map((offset) => `${offset} ${t("deadlines-reminder-days")}`)
+    .join(", ");
+}
+
 export default function RuegefristCalculator() {
   const { t } = useLanguage();
   const STORAGE_KEY = "baucompliance:ruegefrist-draft";
@@ -309,6 +324,7 @@ export default function RuegefristCalculator() {
   const trackCaseHref = calculatedDates
     ? `/dashboard/cases?contract=${encodeURIComponent(calculatedDates.contractDate)}&discovery=${encodeURIComponent(calculatedDates.discoveryDate)}`
     : null;
+  const reminderSummary = formatReminderSummary(reminderOffsets, t);
 
   function toggleReminder(offset: number) {
     clearShareLinkFeedback();
@@ -435,24 +451,29 @@ export default function RuegefristCalculator() {
       </div>
 
       {calculatedDates && (
-        <div className="mb-8 grid gap-3 sm:grid-cols-2">
-          <button
-            onClick={copyShareLink}
-            aria-label={shareLinkFeedback ? t(shareLinkFeedback) : t("calc-share-link")}
-            className="flex items-center justify-center gap-2 px-4 py-3 border border-white/[0.08] hover:border-accent/30 text-muted hover:text-accent font-medium rounded-lg transition-all duration-300 text-[13px]"
-          >
-            <Share2 className="w-4 h-4" />
-            {shareLinkFeedback ? t(shareLinkFeedback) : t("calc-share-link")}
-          </button>
-          {trackCaseHref && (
-            <Link
-              href={trackCaseHref}
-              className="flex items-center justify-center gap-2 px-4 py-3 border border-accent/30 bg-accent/[0.08] hover:bg-accent/[0.14] text-accent font-medium rounded-lg transition-all duration-300 text-[13px]"
+        <div className="mb-8 space-y-3">
+          <p className="text-[12px] text-muted">
+            {t("deadlines-reminder-label")}: {reminderSummary}
+          </p>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <button
+              onClick={copyShareLink}
+              aria-label={shareLinkFeedback ? t(shareLinkFeedback) : t("calc-share-link")}
+              className="flex items-center justify-center gap-2 px-4 py-3 border border-white/[0.08] hover:border-accent/30 text-muted hover:text-accent font-medium rounded-lg transition-all duration-300 text-[13px]"
             >
-              <Scale className="w-4 h-4" />
-              {t("cases-add-case")}
-            </Link>
-          )}
+              <Share2 className="w-4 h-4" />
+              {shareLinkFeedback ? t(shareLinkFeedback) : t("calc-share-link")}
+            </button>
+            {trackCaseHref && (
+              <Link
+                href={trackCaseHref}
+                className="flex items-center justify-center gap-2 px-4 py-3 border border-accent/30 bg-accent/[0.08] hover:bg-accent/[0.14] text-accent font-medium rounded-lg transition-all duration-300 text-[13px]"
+              >
+                <Scale className="w-4 h-4" />
+                {t("cases-add-case")}
+              </Link>
+            )}
+          </div>
         </div>
       )}
 

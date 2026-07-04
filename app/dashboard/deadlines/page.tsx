@@ -86,6 +86,21 @@ function formatLocalizedDate(date: Date, lang: string) {
   });
 }
 
+function formatReminderSummary(
+  reminderOffsets: number[],
+  t: (key: "deadlines-reminder-days" | "deadlines-reminder-none") => string
+) {
+  const selectedOffsets = DEADLINE_REMINDER_OFFSET_OPTIONS.filter((offset) =>
+    reminderOffsets.includes(offset)
+  );
+
+  if (selectedOffsets.length === 0) return t("deadlines-reminder-none");
+
+  return selectedOffsets
+    .map((offset) => `${offset} ${t("deadlines-reminder-days")}`)
+    .join(", ");
+}
+
 export default function DeadlinesPage() {
   const { lang, t } = useLanguage();
   const [acceptanceDate, setAcceptanceDate] = useState<string>("");
@@ -274,6 +289,7 @@ export default function DeadlinesPage() {
 
   const maxDays = 1825;
   const reminderOptions = DEADLINE_REMINDER_OFFSET_OPTIONS;
+  const reminderSummary = formatReminderSummary(reminderOffsets, t);
 
   useEffect(() => {
     if (!calculatedAcceptanceDate) return;
@@ -388,7 +404,12 @@ export default function DeadlinesPage() {
       {deadlines && (
         <div className="space-y-5">
           <div className="flex items-center justify-between mb-2">
-            <h2 className="text-lg font-semibold text-cream">{t("deadlines-result-title")}</h2>
+            <div>
+              <h2 className="text-lg font-semibold text-cream">{t("deadlines-result-title")}</h2>
+              <p className="text-[12px] text-muted">
+                {t("deadlines-reminder-label")}: {reminderSummary}
+              </p>
+            </div>
             <div className="flex items-center gap-2">
               <button
                 onClick={copyShareLink}

@@ -248,6 +248,39 @@ describe("RuegefristCalculator", () => {
     );
   });
 
+  it("shows the selected reminder summary beside result actions", () => {
+    render(<RuegefristCalculator />);
+
+    fireEvent.change(screen.getByLabelText("calc-contract-date"), {
+      target: { value: "2026-02-01" },
+    });
+    fireEvent.change(screen.getByLabelText("calc-discovery-date"), {
+      target: { value: "2026-03-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "30 deadlines-reminder-days" }));
+    fireEvent.click(screen.getByRole("button", { name: "14 deadlines-reminder-days" }));
+    fireEvent.click(screen.getByRole("button", { name: "calc-calculate" }));
+
+    expect(screen.getByText("deadlines-reminder-label: 30 deadlines-reminder-days, 7 deadlines-reminder-days, 1 deadlines-reminder-days")).toBeTruthy();
+  });
+
+  it("shows an explicit no-reminders summary beside result actions", () => {
+    render(<RuegefristCalculator />);
+
+    fireEvent.change(screen.getByLabelText("calc-contract-date"), {
+      target: { value: "2026-02-01" },
+    });
+    fireEvent.change(screen.getByLabelText("calc-discovery-date"), {
+      target: { value: "2026-03-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "14 deadlines-reminder-days" }));
+    fireEvent.click(screen.getByRole("button", { name: "7 deadlines-reminder-days" }));
+    fireEvent.click(screen.getByRole("button", { name: "1 deadlines-reminder-days" }));
+    fireEvent.click(screen.getByRole("button", { name: "calc-calculate" }));
+
+    expect(screen.getByText("deadlines-reminder-label: deadlines-reminder-none")).toBeTruthy();
+  });
+
   it("copies reminder changes made with the preset toggles", async () => {
     render(<RuegefristCalculator />);
 
