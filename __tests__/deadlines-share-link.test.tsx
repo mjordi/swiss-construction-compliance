@@ -273,6 +273,30 @@ describe("deadlines share-link restoration", () => {
     }, { timeout: 3000 });
   });
 
+  it("shows selected reminder summary beside deadline result actions", async () => {
+    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30&reminders=30,3");
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("deadlines-result-title")).toBeTruthy();
+    });
+
+    expect(screen.getByText("deadlines-reminder-label: 30 deadlines-reminder-days, 3 deadlines-reminder-days")).toBeTruthy();
+  });
+
+  it("shows an explicit no-reminders summary beside deadline result actions", async () => {
+    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30&reminders=none");
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("deadlines-result-title")).toBeTruthy();
+    });
+
+    expect(screen.getByText("deadlines-reminder-label: deadlines-reminder-none")).toBeTruthy();
+  });
+
   it("copies updated reminder presets after the user changes them", async () => {
     window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
 
