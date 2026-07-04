@@ -17,7 +17,7 @@ import { buildCaseVaultHref } from "@/lib/vault";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import type { Case } from "@/lib/database.types";
-import { calculateRuegefrist, determineLegalRegime, formatDateCH } from "@/lib/legal-utils";
+import { toComplianceCaseViewModel, type CaseDeadlineStatus, type ComplianceCaseViewModel } from "@/lib/case-timeline";
 
 const PROJECT_DRAFT_STORAGE_KEY = "baucompliance:wizard-project-draft";
 
@@ -27,6 +27,41 @@ const clearPersistedWizardDraft = () => {
 
 const steps = [1, 2, 3];
 const INPUT_CLASS = "w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream placeholder-muted/40 focus:border-accent/40 outline-none transition-colors duration-200";
+
+const linkedCaseStatusLabelKey: Record<CaseDeadlineStatus, TranslationKey> = {
+  ok: "cases-status-on-track",
+  warning: "cases-status-attention",
+  urgent: "cases-status-urgent",
+  expired: "cases-status-expired",
+  "immediate-notice": "cases-status-immediate-notice",
+};
+
+const linkedCaseNextActionKey: Record<CaseDeadlineStatus, TranslationKey> = {
+  ok: "cases-next-action-ok",
+  warning: "cases-next-action-warning",
+  urgent: "cases-next-action-urgent",
+  expired: "cases-next-action-expired",
+  "immediate-notice": "cases-next-action-immediate-notice",
+};
+
+function getLinkedCaseCountdownLabel(
+  context: Pick<ComplianceCaseViewModel, "regime" | "daysToDeadline">,
+  t: (key: TranslationKey) => string
+): string {
+  if (context.regime === "old" || context.daysToDeadline === null) {
+    return t("cases-countdown-notify-immediately");
+  }
+
+  const days = context.daysToDeadline;
+  if (days < 0) {
+    return days === -1
+      ? t("cases-countdown-one-day-overdue")
+      : `${Math.abs(days)} ${t("cases-countdown-days-overdue-suffix")}`;
+  }
+  if (days === 0) return t("cases-countdown-due-today");
+  if (days === 1) return t("cases-countdown-one-day-left");
+  return `${days} ${t("cases-countdown-days-left-suffix")}`;
+}
 
 export default function Dashboard() {
   const [step, setStep] = useState(1);
@@ -272,31 +307,20 @@ export default function Dashboard() {
     [projectData, step, sigPad, effectiveSelectedCaseId]
   );
 
-  const selectedCaseDeadline = useMemo(() => {
+  const selectedCaseContext = useMemo(() => {
     if (!selectedCase) return null;
 
-    const contractDate = new Date(selectedCase.contract_date);
-    const discoveryDate = new Date(selectedCase.discovery_date);
-    const regime = determineLegalRegime(contractDate);
-
-    if (regime === "old") {
-      return {
-        regime,
-        status: "urgent" as const,
-        dateLabel: null,
-      };
+    try {
+      return toComplianceCaseViewModel({
+        id: selectedCase.id,
+        projectName: selectedCase.project_name,
+        canton: selectedCase.canton,
+        contractDate: new Date(selectedCase.contract_date),
+        discoveryDate: new Date(selectedCase.discovery_date),
+      });
+    } catch {
+      return null;
     }
-
-    const result = calculateRuegefrist(contractDate, discoveryDate);
-    const deadline = result.ruegefrist60;
-
-    if (!deadline) return null;
-
-    return {
-      regime,
-      status: deadline.status,
-      dateLabel: formatDateCH(deadline.date),
-    };
   }, [selectedCase]);
 
   useEffect(() => {
@@ -613,7 +637,7 @@ export default function Dashboard() {
                       ))}
                     </select>
 
-                    {selectedCaseDeadline && (
+                    {selectedCaseContext && (
                       <div className="mt-2 rounded-lg border border-blue-500/20 bg-blue-500/[0.06] px-3 py-2.5">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-[11px] font-semibold uppercase tracking-[0.08em] text-blue-300">
@@ -621,28 +645,33 @@ export default function Dashboard() {
                           </span>
                           <span
                             className={`text-[10px] px-2 py-0.5 rounded-full border ${
-                              selectedCaseDeadline.status === "expired"
+                              selectedCaseContext.status === "expired"
                                 ? "text-rose-300 border-rose-300/30 bg-rose-500/10"
-                                : selectedCaseDeadline.status === "urgent"
+                                : selectedCaseContext.status === "urgent" || selectedCaseContext.status === "immediate-notice"
                                 ? "text-amber-200 border-amber-200/30 bg-amber-500/10"
-                                : selectedCaseDeadline.status === "warning"
+                                : selectedCaseContext.status === "warning"
                                 ? "text-yellow-200 border-yellow-200/30 bg-yellow-500/10"
                                 : "text-emerald-200 border-emerald-200/30 bg-emerald-500/10"
                             }`}
                           >
-                            {selectedCaseDeadline.status === "ok"
-                              ? t("cases-status-on-track")
-                              : selectedCaseDeadline.status === "warning"
-                              ? t("cases-status-attention")
-                              : selectedCaseDeadline.status === "urgent"
-                              ? t("cases-status-urgent")
-                              : t("cases-status-expired")}
+                            {t(linkedCaseStatusLabelKey[selectedCaseContext.status])}
                           </span>
                         </div>
                         <div className="mt-1 text-[11px] text-blue-200/80">
-                          {selectedCaseDeadline.regime === "old"
+                          {selectedCaseContext.regime === "old"
                             ? t("dashboard-linked-case-immediate-notice")
-                            : `${t("dashboard-linked-case-deadline-date")}: ${selectedCaseDeadline.dateLabel}`}
+                            : `${t("dashboard-linked-case-deadline-date")}: ${selectedCaseContext.noticeDeadlineLabel}`}
+                        </div>
+                        <div className="mt-2 rounded-md border border-blue-300/10 bg-black/10 px-2.5 py-2">
+                          <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-blue-200/70">
+                            {t("cases-next-legal-action")}
+                          </div>
+                          <div className="mt-1 text-[12px] text-blue-100 leading-relaxed">
+                            {t(linkedCaseNextActionKey[selectedCaseContext.status])}
+                          </div>
+                          <div className="mt-1 text-[11px] text-blue-200/70">
+                            {getLinkedCaseCountdownLabel(selectedCaseContext, t)}
+                          </div>
                         </div>
                       </div>
                     )}
