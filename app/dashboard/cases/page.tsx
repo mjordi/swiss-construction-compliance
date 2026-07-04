@@ -90,6 +90,19 @@ function buildCaseFormState(item: Pick<Case, "project_name" | "canton" | "contra
   };
 }
 
+function formatCaseReminderReadiness(item: ComplianceCaseViewModel, t: (key: TranslationKey) => string) {
+  const calendarReadiness = item.noticeApplies
+    ? item.reminderReadiness.calendarExportReady
+      ? t("cases-calendar-ready")
+      : t("cases-calendar-pending")
+    : t("cases-calendar-not-applicable");
+
+  return [
+    calendarReadiness,
+    item.reminderReadiness.evidenceComplete ? t("cases-evidence-complete") : t("cases-evidence-incomplete"),
+  ].join(" · ");
+}
+
 export default function CasesPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
@@ -1067,6 +1080,22 @@ export default function CasesPage() {
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
                   </div>
+                </div>
+
+                <div
+                  data-testid={`cases-action-snapshot-${item.id}`}
+                  className="mb-5 grid gap-3 rounded-xl border border-white/[0.06] bg-black/20 p-3 text-sm md:grid-cols-3"
+                >
+                  <InfoCell label={t("cases-next-legal-action")} value={item.nextAction} />
+                  <InfoCell
+                    label={t("cases-deadline-countdown")}
+                    value={item.deadlineCountdownLabel}
+                    valueClassName={countdownClass[item.deadlineCountdownTone]}
+                  />
+                  <InfoCell
+                    label={t("cases-reminder-readiness")}
+                    value={formatCaseReminderReadiness(item, t)}
+                  />
                 </div>
 
                 {caseUpdateFeedback?.caseId === item.id && (
