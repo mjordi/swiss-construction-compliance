@@ -29,6 +29,8 @@ interface VaultProjectCard {
   restoredPrefillTriage: boolean;
   docs: number;
   compliance: number;
+  checklistCompleted: number;
+  checklistTotal: number;
   updatedAt: number;
   archived: boolean;
   prefillTriage: boolean;
@@ -191,6 +193,8 @@ export default function TechVault() {
           restoredPrefillTriage,
           docs: docsByCase[c.id] ?? 0,
           compliance: Math.round((progress.completed / progress.total) * 100),
+          checklistCompleted: progress.completed,
+          checklistTotal: progress.total,
           updatedAt: new Date(c.updated_at).getTime(),
           archived,
           prefillTriage: !archived && restoredPrefillTriage,
@@ -600,6 +604,12 @@ export default function TechVault() {
                       <div className="flex items-center gap-2 text-emerald-400 bg-emerald-400/10 px-2 py-1 rounded-md w-fit">
                         <ShieldCheck className="w-3 h-3" />
                         <span className="font-bold">{project.compliance}%</span>
+                        <span className="text-xs text-emerald-200/90">
+                          {interpolateTranslation(t("vault-checklist-progress"), {
+                            completed: String(project.checklistCompleted),
+                            total: String(project.checklistTotal),
+                          })}
+                        </span>
                       </div>
 
                       <div className="mt-6 space-y-3">
