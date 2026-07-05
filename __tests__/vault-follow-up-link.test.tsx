@@ -77,7 +77,8 @@ vi.mock("next/navigation", () => ({
 vi.mock("@/context/LanguageContext", () => ({
   useLanguage: () => ({
     lang: "en",
-    t: (key: string) => key,
+    t: (key: string) =>
+      key === "vault-checklist-progress" ? "{completed}/{total} checklist items ready" : key,
   }),
 }));
 
@@ -227,7 +228,7 @@ describe("vault follow-up links", () => {
     expect(hrefs).toContain("/dashboard/cases?q=Lakeside+Annex&status=triage");
   });
 
-  it("derives compliance percentages from timeline defaults when persisted checklist data is sparse", async () => {
+  it("derives compliance percentages and checklist counts from timeline defaults when persisted checklist data is sparse", async () => {
     render(<TechVault />);
 
     await waitFor(() => {
@@ -235,6 +236,7 @@ describe("vault follow-up links", () => {
     });
 
     expect(screen.getAllByText("25%").length).toBeGreaterThan(0);
+    expect(within(getProjectCard("Alpine Tower")).getByText("1/4 checklist items ready")).toBeTruthy();
   });
 
   it("navigates to the cases handoff when a project card is clicked", async () => {
