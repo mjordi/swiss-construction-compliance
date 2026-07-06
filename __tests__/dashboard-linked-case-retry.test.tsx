@@ -641,8 +641,20 @@ describe("dashboard linked-case loading retry", () => {
       expect(replaceMock).toHaveBeenCalledWith("/dashboard?view=wizard", { scroll: false });
       expect(lastComplianceRecordCaseId).toBeNull();
     });
+    expect(screen.getByText("dashboard-linked-case-missing-title")).toBeTruthy();
+    expect(screen.getByText("dashboard-linked-case-missing-desc")).toBeTruthy();
     expect((screen.getByLabelText("wizard-case-selector") as HTMLSelectElement).value).toBe("");
     expect((screen.getByPlaceholderText("dashboard-project-placeholder") as HTMLInputElement).value).toBe("");
+
+    fireEvent.change(screen.getByLabelText("wizard-case-selector"), {
+      target: { value: "case-1" },
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText("dashboard-linked-case-missing-title")).toBeNull();
+      expect((screen.getByLabelText("wizard-case-selector") as HTMLSelectElement).value).toBe("case-1");
+      expect((screen.getByPlaceholderText("dashboard-project-placeholder") as HTMLInputElement).value).toBe("Alpine Tower");
+    });
   });
 
   it("hydrates a requested linked case from the dashboard URL handoff", async () => {
