@@ -100,6 +100,7 @@ export default function Dashboard() {
   });
   const requestedCaseId = searchParams.get("case")?.trim() || null;
   const [pendingRequestedCaseId, setPendingRequestedCaseId] = useState<string | null>(requestedCaseId);
+  const [missingRequestedCaseId, setMissingRequestedCaseId] = useState<string | null>(null);
   const selectedCase = useMemo(
     () => userCases.find((candidate) => candidate.id === selectedCaseId) ?? null,
     [userCases, selectedCaseId]
@@ -166,6 +167,7 @@ export default function Dashboard() {
   useEffect(() => {
     setPendingRequestedCaseId(requestedCaseId);
     if (requestedCaseId) {
+      setMissingRequestedCaseId(null);
       setSelectedCaseId(null);
     }
   }, [requestedCaseId]);
@@ -177,11 +179,14 @@ export default function Dashboard() {
 
     const requestedCase = userCases.find((candidate) => candidate.id === pendingRequestedCaseId);
     if (requestedCase) {
+      setMissingRequestedCaseId(null);
       setSelectedCaseId(requestedCase.id);
       setProjectData((current) => ({
         ...current,
         name: requestedCase.project_name,
       }));
+    } else {
+      setMissingRequestedCaseId(pendingRequestedCaseId);
     }
 
     const nextParams = new URLSearchParams(searchParams.toString());
@@ -621,6 +626,7 @@ export default function Dashboard() {
                       value={selectedCaseId ?? ""}
                       onChange={(e) => {
                         const caseId = e.target.value || null;
+                        setMissingRequestedCaseId(null);
                         setSelectedCaseId(caseId);
                         if (caseId) {
                           const c = userCases.find((uc) => uc.id === caseId);
@@ -678,7 +684,7 @@ export default function Dashboard() {
                   </div>
                 )}
 
-                {hasStaleLinkedCase && (
+                {(hasStaleLinkedCase || missingRequestedCaseId) && (
                   <div className="rounded-lg border border-amber-400/30 bg-amber-500/[0.08] px-3 py-2.5 flex items-center justify-between gap-3">
                     <div>
                       <div className="text-[11px] uppercase tracking-[0.08em] text-amber-200 font-semibold">{t("dashboard-linked-case-missing-title")}</div>
@@ -686,7 +692,10 @@ export default function Dashboard() {
                     </div>
                     <button
                       type="button"
-                      onClick={() => setSelectedCaseId(null)}
+                      onClick={() => {
+                        setMissingRequestedCaseId(null);
+                        setSelectedCaseId(null);
+                      }}
                       className="text-[11px] text-amber-100 hover:text-cream transition-colors duration-200"
                     >
                       {t("dashboard-linked-case-unlink")}
