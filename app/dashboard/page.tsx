@@ -332,11 +332,14 @@ export default function Dashboard() {
       return null;
     }
   }, [effectiveSelectedCase, selectedCase]);
+  const hasPendingLinkedCaseContext = Boolean(effectiveSelectedCaseId && !selectedCaseContext && linkedCaseLoading && !linkedCaseLoadError);
   const finalReviewCaseSummary = selectedCaseContext
     ? selectedCaseContext.regime === "old"
       ? `${selectedCaseContext.projectName} · ${t(linkedCaseStatusLabelKey[selectedCaseContext.status])} · ${t("dashboard-linked-case-immediate-notice")}`
       : `${selectedCaseContext.projectName} · ${t(linkedCaseStatusLabelKey[selectedCaseContext.status])} · ${t("dashboard-linked-case-deadline-date")}: ${selectedCaseContext.noticeDeadlineLabel}`
-    : t("dashboard-final-review-standalone");
+    : hasPendingLinkedCaseContext
+      ? t("dashboard-final-review-linked-case-pending")
+      : t("dashboard-final-review-standalone");
   const finalReviewDefectSummary = defectDescription.trim()
     ? t("dashboard-final-review-defects-recorded")
     : noDefectsConfirmed

@@ -360,6 +360,32 @@ describe("dashboard linked-case loading retry", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("dashboard-linked-case-load-error");
   });
 
+  it("does not summarize an in-flight restored linked case as standalone", async () => {
+    window.localStorage.setItem(
+      "baucompliance:wizard-project-draft",
+      JSON.stringify({
+        selectedCaseId: "case-1",
+        name: "Alpine Tower",
+        contractor: "Builder AG",
+        client: "Owner GmbH",
+        updatedAt: "2026-05-15T09:00:00.000Z",
+      })
+    );
+    caseResponseFactory = () => new Promise(() => {});
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(lastComplianceRecordCaseId).toBe("case-1");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "btn-next" }));
+
+    expect(await screen.findByText("dashboard-final-review-title")).toBeTruthy();
+    expect(screen.queryByText("dashboard-final-review-standalone")).toBeNull();
+    expect(screen.getByText("dashboard-final-review-linked-case-pending")).toBeTruthy();
+  });
+
   it("surfaces linked-case loading failures with a retry action while preserving standalone creation", async () => {
     window.localStorage.setItem(
       "baucompliance:wizard-project-draft",
