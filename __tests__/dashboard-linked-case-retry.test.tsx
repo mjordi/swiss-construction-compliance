@@ -275,6 +275,35 @@ describe("dashboard linked-case loading retry", () => {
     });
   });
 
+  it("shows a protocol final-review summary before standalone finalization", async () => {
+    render(<DashboardPage />);
+
+    fireEvent.change(screen.getByPlaceholderText("dashboard-project-placeholder"), {
+      target: { value: "Alpine Tower" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("dashboard-contractor-placeholder"), {
+      target: { value: "Builder AG" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("dashboard-client-placeholder"), {
+      target: { value: "Owner GmbH" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "btn-next" }));
+
+    expect(await screen.findByText("dashboard-final-review-title")).toBeTruthy();
+    expect(screen.getByText("dashboard-final-review-standalone")).toBeTruthy();
+    expect(screen.getByText("dashboard-final-review-defects-missing")).toBeTruthy();
+    expect(screen.getByText("dashboard-final-review-signature-missing")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("checkbox"));
+    signaturePadIsEmpty = false;
+    await act(async () => {
+      signaturePadEndStrokeHandler?.();
+    });
+
+    expect(screen.getByText("dashboard-final-review-no-defects")).toBeTruthy();
+    expect(screen.getByText("dashboard-final-review-signature-ready")).toBeTruthy();
+  });
+
   it("keeps the persisted wizard draft cleared after the user discards it", async () => {
     caseResponseFactory = () => ({ data: [], error: null });
 
