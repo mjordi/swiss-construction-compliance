@@ -8,7 +8,7 @@ import PageHeader from "@/components/dashboard/PageHeader";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
-import { normalizeFollowUpChecklistState, toggleFollowUpChecklistState } from "@/lib/cases-checklist";
+import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import type { Case } from "@/lib/database.types";
 import {
   applyComplianceCaseView,
@@ -533,13 +533,16 @@ export default function CasesPage() {
     calendarReminderExported: t("cases-checklist-calendar-exported"),
   };
 
-  async function toggleChecklistItem(caseId: string, key: FollowUpChecklistKey) {
+  async function setChecklistItem(caseId: string, key: FollowUpChecklistKey, value: boolean) {
     if (checklistSavingByCase[caseId]) {
       return;
     }
 
     const previous = normalizeFollowUpChecklistState(effectiveChecklists[caseId]);
-    const updated = toggleFollowUpChecklistState(previous, key);
+    const updated = normalizeFollowUpChecklistState({
+      ...previous,
+      [key]: value,
+    });
 
     setChecklistSaveErrorByCase((current) => {
       if (!(caseId in current)) return current;
@@ -587,6 +590,11 @@ export default function CasesPage() {
     }
   }
 
+  function toggleChecklistItem(caseId: string, key: FollowUpChecklistKey) {
+    const previous = normalizeFollowUpChecklistState(effectiveChecklists[caseId]);
+    void setChecklistItem(caseId, key, !previous[key]);
+  }
+
   function downloadCaseReminder(item: ComplianceCaseViewModel) {
     const content = buildCaseDeadlineReminderICS(item);
     if (!content) return;
@@ -598,7 +606,7 @@ export default function CasesPage() {
     a.download = `baucompliance-case-${item.id}-notice-deadline-${dateKey}.ics`;
     a.click();
     URL.revokeObjectURL(url);
-    toggleChecklistItem(item.id, "calendarReminderExported");
+    void setChecklistItem(item.id, "calendarReminderExported", true);
   }
 
   async function handleAddCase(e: React.FormEvent) {
