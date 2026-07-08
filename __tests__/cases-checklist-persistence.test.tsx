@@ -3,6 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const replaceMock = vi.fn();
 const updateEqMock = vi.fn();
+const createObjectURLMock = vi.fn(() => "blob:case-reminder");
+const revokeObjectURLMock = vi.fn();
+let updatePayloads: Array<{ checklist?: Record<string, boolean> }> = [];
 let caseChecklistData: Record<string, boolean> | null = {
   defectDocumented: false,
   evidenceAttached: false,
@@ -104,9 +107,12 @@ vi.mock("@/lib/supabase", () => ({
                 }),
             }),
           }),
-          update: () => ({
-            eq: updateEqMock,
-          }),
+          update: (payload: { checklist?: Record<string, boolean> }) => {
+            updatePayloads.push(payload);
+            return {
+              eq: updateEqMock,
+            };
+          },
         };
       }
 
@@ -131,6 +137,17 @@ describe("cases checklist persistence", () => {
   beforeEach(() => {
     replaceMock.mockReset();
     updateEqMock.mockReset();
+    updatePayloads = [];
+    createObjectURLMock.mockClear();
+    revokeObjectURLMock.mockClear();
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURLMock,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURLMock,
+    });
     caseChecklistData = {
       defectDocumented: false,
       evidenceAttached: false,
@@ -182,7 +199,7 @@ describe("cases checklist persistence", () => {
   });
 
   it("disables reminder export while checklist persistence is in flight", async () => {
-    let resolveUpdate: ((value: { error: null }) => void) | null = null;
+    let resolveUpdate: (value: { error: null }) => void = () => {};
     updateEqMock.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -199,15 +216,43 @@ describe("cases checklist persistence", () => {
       expect((screen.getByText("cases-export-ics").closest("button") as HTMLButtonElement).disabled).toBe(true);
     });
 
-    resolveUpdate?.({ error: null });
+    resolveUpdate({ error: null });
 
     await waitFor(() => {
       expect((screen.getByText("cases-export-ics").closest("button") as HTMLButtonElement).disabled).toBe(false);
     });
   });
 
+  it("keeps calendar reminder export complete when the reminder is downloaded again", async () => {
+    updateEqMock.mockResolvedValueOnce({ error: null });
+    caseChecklistData = {
+      defectDocumented: true,
+      evidenceAttached: true,
+      noticeDrafted: true,
+      calendarReminderExported: true,
+    };
+
+    render(<CasesPage />);
+
+    const calendarCheckbox = await screen.findByLabelText("cases-checklist-calendar-exported");
+    expect((calendarCheckbox as HTMLInputElement).checked).toBe(true);
+
+    fireEvent.click(screen.getByRole("button", { name: "cases-export-ics" }));
+
+    await waitFor(() => {
+      expect(updateEqMock).toHaveBeenCalledWith("id", "case-1");
+    });
+    expect(updatePayloads[0].checklist?.calendarReminderExported).toBe(true);
+
+    await waitFor(() => {
+      expect((screen.getByLabelText("cases-checklist-calendar-exported") as HTMLInputElement).checked).toBe(true);
+    });
+    expect(createObjectURLMock).toHaveBeenCalled();
+    expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:case-reminder");
+  });
+
   it("locks row edit, delete, and navigation actions while checklist persistence is in flight", async () => {
-    let resolveUpdate: ((value: { error: null }) => void) | null = null;
+    let resolveUpdate: (value: { error: null }) => void = () => {};
     updateEqMock.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -232,7 +277,7 @@ describe("cases checklist persistence", () => {
       expect(screen.getByText("cases-create-protocol").getAttribute("aria-disabled")).toBe("true");
     });
 
-    resolveUpdate?.({ error: null });
+    resolveUpdate({ error: null });
 
     await waitFor(() => {
       expect((screen.getByRole("button", { name: "cases-edit" }) as HTMLButtonElement).disabled).toBe(false);
@@ -243,7 +288,7 @@ describe("cases checklist persistence", () => {
   });
 
   it("temporarily disables checklist inputs while a save is in flight and re-enables them after success", async () => {
-    let resolveUpdate: ((value: { error: null }) => void) | null = null;
+    let resolveUpdate: (value: { error: null }) => void = () => {};
     updateEqMock.mockImplementationOnce(
       () =>
         new Promise((resolve) => {
@@ -261,7 +306,7 @@ describe("cases checklist persistence", () => {
       expect((checkbox as HTMLInputElement).checked).toBe(true);
     });
 
-    resolveUpdate?.({ error: null });
+    resolveUpdate({ error: null });
 
     await waitFor(() => {
       const refreshedCheckbox = screen.getByLabelText("cases-checklist-evidence-attached") as HTMLInputElement;
