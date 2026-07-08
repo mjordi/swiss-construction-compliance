@@ -128,6 +128,10 @@ export default function Dashboard() {
           : shouldPreserveCachedSelectedCaseDuringRefresh
             ? getEffectiveSelectedCaseId(selectedCaseId, userCases, true)
             : null;
+  const effectiveSelectedCase = useMemo(
+    () => userCases.find((candidate) => candidate.id === effectiveSelectedCaseId) ?? null,
+    [effectiveSelectedCaseId, userCases]
+  );
   const canProceedStep1 =
     projectData.name.trim().length > 0 &&
     projectData.contractor.trim().length > 0 &&
@@ -313,20 +317,37 @@ export default function Dashboard() {
   );
 
   const selectedCaseContext = useMemo(() => {
-    if (!selectedCase) return null;
+    const caseForContext = selectedCase ?? effectiveSelectedCase;
+    if (!caseForContext) return null;
 
     try {
       return toComplianceCaseViewModel({
-        id: selectedCase.id,
-        projectName: selectedCase.project_name,
-        canton: selectedCase.canton,
-        contractDate: new Date(selectedCase.contract_date),
-        discoveryDate: new Date(selectedCase.discovery_date),
+        id: caseForContext.id,
+        projectName: caseForContext.project_name,
+        canton: caseForContext.canton,
+        contractDate: new Date(caseForContext.contract_date),
+        discoveryDate: new Date(caseForContext.discovery_date),
       });
     } catch {
       return null;
     }
-  }, [selectedCase]);
+  }, [effectiveSelectedCase, selectedCase]);
+  const hasPendingLinkedCaseContext = Boolean(effectiveSelectedCaseId && !selectedCaseContext && linkedCaseLoading && !linkedCaseLoadError);
+  const finalReviewCaseSummary = selectedCaseContext
+    ? selectedCaseContext.regime === "old"
+      ? `${selectedCaseContext.projectName} · ${t(linkedCaseStatusLabelKey[selectedCaseContext.status])} · ${t("dashboard-linked-case-immediate-notice")}`
+      : `${selectedCaseContext.projectName} · ${t(linkedCaseStatusLabelKey[selectedCaseContext.status])} · ${t("dashboard-linked-case-deadline-date")}: ${selectedCaseContext.noticeDeadlineLabel}`
+    : hasPendingLinkedCaseContext
+      ? t("dashboard-final-review-linked-case-pending")
+      : t("dashboard-final-review-standalone");
+  const finalReviewDefectSummary = defectDescription.trim()
+    ? t("dashboard-final-review-defects-recorded")
+    : noDefectsConfirmed
+      ? t("dashboard-final-review-no-defects")
+      : t("dashboard-final-review-defects-missing");
+  const finalReviewSignatureSummary = hasSignature
+    ? t("dashboard-final-review-signature-ready")
+    : t("dashboard-final-review-signature-missing");
 
   useEffect(() => {
     if (step === 2 && sigCanvas.current) {
@@ -851,6 +872,33 @@ export default function Dashboard() {
                 {!hasSignature && (
                   <p className="mt-2 text-[11px] text-muted">{t("dashboard-signature-required")}</p>
                 )}
+              </div>
+
+              <div className="mb-6 rounded-xl border border-accent/20 bg-accent/[0.06] p-4" aria-labelledby="dashboard-final-review-title">
+                <div id="dashboard-final-review-title" className="text-[11px] font-semibold uppercase tracking-[0.1em] text-accent">
+                  {t("dashboard-final-review-title")}
+                </div>
+                <p className="mt-1 text-[12px] text-muted leading-relaxed">
+                  {t("dashboard-final-review-desc")}
+                </p>
+                <dl className="mt-3 grid gap-2 text-xs text-cream">
+                  <div className="flex items-start justify-between gap-3">
+                    <dt className="text-muted">{t("label-project")}</dt>
+                    <dd className="text-right">{projectData.name || t("dashboard-final-review-missing-project")}</dd>
+                  </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <dt className="text-muted">{t("dashboard-final-review-case")}</dt>
+                    <dd className="text-right">{finalReviewCaseSummary}</dd>
+                  </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <dt className="text-muted">{t("dashboard-final-review-defects")}</dt>
+                    <dd className="text-right">{finalReviewDefectSummary}</dd>
+                  </div>
+                  <div className="flex items-start justify-between gap-3">
+                    <dt className="text-muted">{t("dashboard-final-review-signature")}</dt>
+                    <dd className="text-right">{finalReviewSignatureSummary}</dd>
+                  </div>
+                </dl>
               </div>
 
               <div className="flex gap-3">

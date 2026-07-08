@@ -275,6 +275,35 @@ describe("dashboard linked-case loading retry", () => {
     });
   });
 
+  it("shows a protocol final-review summary before standalone finalization", async () => {
+    render(<DashboardPage />);
+
+    fireEvent.change(screen.getByPlaceholderText("dashboard-project-placeholder"), {
+      target: { value: "Alpine Tower" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("dashboard-contractor-placeholder"), {
+      target: { value: "Builder AG" },
+    });
+    fireEvent.change(screen.getByPlaceholderText("dashboard-client-placeholder"), {
+      target: { value: "Owner GmbH" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "btn-next" }));
+
+    expect(await screen.findByText("dashboard-final-review-title")).toBeTruthy();
+    expect(screen.getByText("dashboard-final-review-standalone")).toBeTruthy();
+    expect(screen.getByText("dashboard-final-review-defects-missing")).toBeTruthy();
+    expect(screen.getByText("dashboard-final-review-signature-missing")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("checkbox"));
+    signaturePadIsEmpty = false;
+    await act(async () => {
+      signaturePadEndStrokeHandler?.();
+    });
+
+    expect(screen.getByText("dashboard-final-review-no-defects")).toBeTruthy();
+    expect(screen.getByText("dashboard-final-review-signature-ready")).toBeTruthy();
+  });
+
   it("keeps the persisted wizard draft cleared after the user discards it", async () => {
     caseResponseFactory = () => ({ data: [], error: null });
 
@@ -329,6 +358,32 @@ describe("dashboard linked-case loading retry", () => {
 
     resolveCaseLoadPromise(resolveCaseLoad, { data: null, error: { message: "boom" } });
     expect((await screen.findByRole("alert")).textContent).toContain("dashboard-linked-case-load-error");
+  });
+
+  it("does not summarize an in-flight restored linked case as standalone", async () => {
+    window.localStorage.setItem(
+      "baucompliance:wizard-project-draft",
+      JSON.stringify({
+        selectedCaseId: "case-1",
+        name: "Alpine Tower",
+        contractor: "Builder AG",
+        client: "Owner GmbH",
+        updatedAt: "2026-05-15T09:00:00.000Z",
+      })
+    );
+    caseResponseFactory = () => new Promise(() => {});
+
+    render(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(lastComplianceRecordCaseId).toBe("case-1");
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "btn-next" }));
+
+    expect(await screen.findByText("dashboard-final-review-title")).toBeTruthy();
+    expect(screen.queryByText("dashboard-final-review-standalone")).toBeNull();
+    expect(screen.getByText("dashboard-final-review-linked-case-pending")).toBeTruthy();
   });
 
   it("surfaces linked-case loading failures with a retry action while preserving standalone creation", async () => {
