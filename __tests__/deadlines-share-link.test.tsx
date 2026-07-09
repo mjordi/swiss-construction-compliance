@@ -449,4 +449,64 @@ describe("deadlines share-link restoration", () => {
     const acceptanceDateLabel = legalUtilsMocks.generateDeadlineCalendarICS.mock.calls.at(-1)?.[1];
     expect(acceptanceDateLabel).toBe("30 April 2026");
   });
+
+  it("confirms when the dashboard deadline calendar file is prepared", async () => {
+    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("deadlines-result-title")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "deadlines-download-ics" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "deadlines-download-ready" })).toBeTruthy();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "deadlines-download-ics" })).toBeTruthy();
+    }, { timeout: 3000 });
+  });
+
+  it("shows retry feedback when preparing the deadline calendar file fails", async () => {
+    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+    createObjectURL.mockImplementationOnce(() => {
+      throw new Error("blob unavailable");
+    });
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("deadlines-result-title")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "deadlines-download-ics" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "deadlines-download-error" })).toBeTruthy();
+    });
+  });
+
+  it("clears stale calendar download feedback when reminder presets change", async () => {
+    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("deadlines-result-title")).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "deadlines-download-ics" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "deadlines-download-ready" })).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "30 deadlines-reminder-days" }));
+
+    expect(screen.getByRole("button", { name: "deadlines-download-ics" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "deadlines-download-ready" })).toBeNull();
+  });
 });

@@ -108,8 +108,11 @@ export default function DeadlinesPage() {
   const [calculatedAcceptanceDate, setCalculatedAcceptanceDate] = useState<string | null>(null);
   const [reminderOffsets, setReminderOffsets] = useState<number[]>([...DEFAULT_DEADLINE_REMINDER_OFFSETS]);
   const [shareLinkFeedback, setShareLinkFeedback] = useState<TranslationKey | null>(null);
+  const [downloadFeedback, setDownloadFeedback] = useState<TranslationKey | null>(null);
   const shareLinkResetTimerRef = useRef<number | null>(null);
   const shareLinkRequestIdRef = useRef(0);
+  const downloadFeedbackResetTimerRef = useRef<number | null>(null);
+  const downloadFeedbackRequestIdRef = useRef(0);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -155,11 +158,41 @@ export default function DeadlinesPage() {
   useEffect(() => {
     return () => {
       shareLinkRequestIdRef.current += 1;
+      downloadFeedbackRequestIdRef.current += 1;
       if (shareLinkResetTimerRef.current !== null) {
         window.clearTimeout(shareLinkResetTimerRef.current);
       }
+      if (downloadFeedbackResetTimerRef.current !== null) {
+        window.clearTimeout(downloadFeedbackResetTimerRef.current);
+      }
     };
   }, []);
+
+  function clearDownloadFeedback() {
+    downloadFeedbackRequestIdRef.current += 1;
+    if (downloadFeedbackResetTimerRef.current !== null) {
+      window.clearTimeout(downloadFeedbackResetTimerRef.current);
+      downloadFeedbackResetTimerRef.current = null;
+    }
+    setDownloadFeedback(null);
+  }
+
+  function showTemporaryDownloadFeedback(key: TranslationKey) {
+    if (downloadFeedbackResetTimerRef.current !== null) {
+      window.clearTimeout(downloadFeedbackResetTimerRef.current);
+      downloadFeedbackResetTimerRef.current = null;
+    }
+
+    const requestId = downloadFeedbackRequestIdRef.current + 1;
+    downloadFeedbackRequestIdRef.current = requestId;
+    setDownloadFeedback(key);
+
+    downloadFeedbackResetTimerRef.current = window.setTimeout(() => {
+      if (requestId !== downloadFeedbackRequestIdRef.current) return;
+      setDownloadFeedback(null);
+      downloadFeedbackResetTimerRef.current = null;
+    }, 2000);
+  }
 
   function clearShareLinkFeedback() {
     shareLinkRequestIdRef.current += 1;
@@ -172,6 +205,7 @@ export default function DeadlinesPage() {
 
   function calculate() {
     clearShareLinkFeedback();
+    clearDownloadFeedback();
     const parsedAcceptanceDate = parseDateInputAsUTC(acceptanceDate);
     if (!parsedAcceptanceDate) {
       setAcceptanceDate("");
@@ -199,6 +233,7 @@ export default function DeadlinesPage() {
     setCalculatedAcceptanceDate(null);
     setReminderOffsets([...DEFAULT_DEADLINE_REMINDER_OFFSETS]);
     clearShareLinkFeedback();
+    clearDownloadFeedback();
     setDeadlines(null);
     const params = new URLSearchParams(window.location.search);
     params.delete("acceptance");
@@ -241,19 +276,25 @@ export default function DeadlinesPage() {
     if (!deadlines || !calculatedAcceptanceDate) return;
     const parsedAcceptanceDate = parseDateInputAsUTC(calculatedAcceptanceDate);
     if (!parsedAcceptanceDate) return;
-    const acceptanceDateLabel = formatLocalizedDate(parsedAcceptanceDate, lang);
-    const content = generateDeadlineCalendarICS(
-      deadlines.map((d) => ({ key: d.key, date: d.date })),
-      acceptanceDateLabel,
-      reminderOffsets
-    );
-    const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `baucompliance-fristen-${calculatedAcceptanceDate}.ics`;
-    a.click();
-    URL.revokeObjectURL(url);
+
+    try {
+      const acceptanceDateLabel = formatLocalizedDate(parsedAcceptanceDate, lang);
+      const content = generateDeadlineCalendarICS(
+        deadlines.map((d) => ({ key: d.key, date: d.date })),
+        acceptanceDateLabel,
+        reminderOffsets
+      );
+      const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `baucompliance-fristen-${calculatedAcceptanceDate}.ics`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showTemporaryDownloadFeedback("deadlines-download-ready");
+    } catch {
+      showTemporaryDownloadFeedback("deadlines-download-error");
+    }
   }
 
   const statusConfig = {
@@ -308,6 +349,7 @@ export default function DeadlinesPage() {
 
   function toggleReminder(offset: number) {
     clearShareLinkFeedback();
+    clearDownloadFeedback();
     setReminderOffsets((current) =>
       current.includes(offset)
         ? current.filter((value) => value !== offset)
@@ -347,6 +389,7 @@ export default function DeadlinesPage() {
                 window.history.replaceState(null, "", query ? `?${query}` : window.location.pathname);
               }
               clearShareLinkFeedback();
+              clearDownloadFeedback();
             }}
             max={getTodayLocalDateInputValue()}
             className="flex-1 bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-3 text-cream focus:outline-none focus:border-accent/40 transition-colors duration-300 [color-scheme:dark]"
@@ -422,7 +465,7 @@ export default function DeadlinesPage() {
                 className="flex items-center gap-2 px-4 py-2 bg-white/[0.03] border border-white/[0.06] hover:border-accent/30 text-muted hover:text-accent text-[13px] font-medium rounded-lg transition-all duration-300"
               >
                 <Download className="w-4 h-4" />
-                {t("deadlines-download-ics")}
+                {downloadFeedback ? t(downloadFeedback) : t("deadlines-download-ics")}
               </button>
             </div>
           </div>
