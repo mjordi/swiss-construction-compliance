@@ -10,6 +10,7 @@ import { AuditReportPDF } from "@/components/dashboard/AuditReportPDF";
 import SignaturePad from 'signature_pad';
 import { useLanguage } from "@/context/LanguageContext";
 import type { TranslationKey } from "@/locales";
+import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { buildComplianceRecord } from "@/lib/compliance-record";
 import { getEffectiveSelectedCaseId, hasStaleLinkedCase as isStaleLinkedCase } from "@/lib/dashboard-linked-case";
 import { buildProtocolDefectDescription, buildWizardDraft, getProtocolFinalizeReadiness, type WizardDraft } from "@/lib/dashboard-protocol";
@@ -470,19 +471,17 @@ export default function Dashboard() {
 
             if (caseLoadError) throw caseLoadError;
 
-            if (caseData?.checklist) {
-              const checklist = caseData.checklist as Record<string, boolean>;
-              if (!checklist.defectDocumented) {
-                const { error: caseUpdateError } = await supabase
-                  .from("cases")
-                  .update({
-                    checklist: { ...checklist, defectDocumented: true },
-                    updated_at: new Date().toISOString(),
-                  })
-                  .eq("id", effectiveSelectedCaseId);
+            const checklist = normalizeFollowUpChecklistState(caseData?.checklist);
+            if (!checklist.defectDocumented) {
+              const { error: caseUpdateError } = await supabase
+                .from("cases")
+                .update({
+                  checklist: { ...checklist, defectDocumented: true },
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", effectiveSelectedCaseId);
 
-                if (caseUpdateError) throw caseUpdateError;
-              }
+              if (caseUpdateError) throw caseUpdateError;
             }
           } catch (caseSyncError) {
             console.warn("Protocol finalized but linked case checklist sync failed", caseSyncError);
