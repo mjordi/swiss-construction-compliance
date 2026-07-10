@@ -10,7 +10,6 @@ import { AuditReportPDF } from "@/components/dashboard/AuditReportPDF";
 import SignaturePad from 'signature_pad';
 import { useLanguage } from "@/context/LanguageContext";
 import type { TranslationKey } from "@/locales";
-import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { buildComplianceRecord } from "@/lib/compliance-record";
 import { getEffectiveSelectedCaseId, hasStaleLinkedCase as isStaleLinkedCase } from "@/lib/dashboard-linked-case";
 import { buildProtocolDefectDescription, buildWizardDraft, getProtocolFinalizeReadiness, type WizardDraft } from "@/lib/dashboard-protocol";
@@ -18,7 +17,7 @@ import { buildCaseVaultHref } from "@/lib/vault";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import type { Case } from "@/lib/database.types";
-import { toComplianceCaseViewModel, type CaseDeadlineStatus, type ComplianceCaseViewModel } from "@/lib/case-timeline";
+import { toComplianceCaseViewModel, type CaseDeadlineStatus, type ComplianceCaseViewModel, type FollowUpChecklistState } from "@/lib/case-timeline";
 
 const PROJECT_DRAFT_STORAGE_KEY = "baucompliance:wizard-project-draft";
 
@@ -471,12 +470,12 @@ export default function Dashboard() {
 
             if (caseLoadError) throw caseLoadError;
 
-            const checklist = normalizeFollowUpChecklistState(caseData?.checklist);
-            if (!checklist.defectDocumented) {
+            const checklist = (caseData?.checklist ?? null) as Partial<FollowUpChecklistState> | null;
+            if (!checklist?.defectDocumented) {
               const { error: caseUpdateError } = await supabase
                 .from("cases")
                 .update({
-                  checklist: { ...checklist, defectDocumented: true },
+                  checklist: { ...(checklist ?? {}), defectDocumented: true },
                   updated_at: new Date().toISOString(),
                 })
                 .eq("id", effectiveSelectedCaseId);

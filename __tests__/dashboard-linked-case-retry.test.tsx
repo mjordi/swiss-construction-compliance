@@ -534,11 +534,46 @@ describe("dashboard linked-case loading retry", () => {
       expect(insertedProtocols[0]?.case_id).toBe("case-1");
       expect(caseUpdatePayloads).toHaveLength(1);
     });
+    expect(caseUpdatePayloads[0]?.checklist).toEqual({ defectDocumented: true });
+  });
+
+  it("preserves sparse linked-case checklist values when marking defect documentation", async () => {
+    window.localStorage.setItem(
+      "baucompliance:wizard-project-draft",
+      JSON.stringify({
+        selectedCaseId: "case-1",
+        name: "Alpine Tower",
+        contractor: "Builder AG",
+        client: "Owner GmbH",
+        updatedAt: "2026-05-15T09:00:00.000Z",
+      })
+    );
+    caseChecklistResponse = { evidenceAttached: true };
+    caseResponseFactory = () => ({ data: [buildCase()], error: null });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole("option", { name: "Alpine Tower (ZH)" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "btn-next" }));
+    fireEvent.click(screen.getByRole("checkbox"));
+    signaturePadIsEmpty = false;
+    await act(async () => {
+      signaturePadEndStrokeHandler?.();
+    });
+
+    const finalizeButton = await screen.findByRole("button", { name: "btn-finalize" });
+    await waitFor(() => {
+      expect(finalizeButton.getAttribute("disabled")).toBeNull();
+    });
+    fireEvent.click(finalizeButton);
+
+    await waitFor(() => {
+      expect(insertedProtocols[0]?.case_id).toBe("case-1");
+      expect(caseUpdatePayloads).toHaveLength(1);
+    });
     expect(caseUpdatePayloads[0]?.checklist).toEqual({
+      evidenceAttached: true,
       defectDocumented: true,
-      evidenceAttached: false,
-      noticeDrafted: false,
-      calendarReminderExported: false,
     });
   });
 
