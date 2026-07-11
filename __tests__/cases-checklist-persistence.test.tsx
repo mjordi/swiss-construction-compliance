@@ -247,8 +247,28 @@ describe("cases checklist persistence", () => {
     await waitFor(() => {
       expect((screen.getByLabelText("cases-checklist-calendar-exported") as HTMLInputElement).checked).toBe(true);
     });
+    expect(screen.getByRole("status").textContent).toBe("cases-export-ics-ready");
     expect(createObjectURLMock).toHaveBeenCalled();
     expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:case-reminder");
+  });
+
+  it("shows a localized error and does not mark complete when case reminder export preparation fails", async () => {
+    createObjectURLMock.mockImplementationOnce(() => {
+      throw new Error("blob blocked");
+    });
+
+    render(<CasesPage />);
+
+    const calendarCheckbox = await screen.findByLabelText("cases-checklist-calendar-exported");
+    expect((calendarCheckbox as HTMLInputElement).checked).toBe(false);
+
+    fireEvent.click(screen.getByRole("button", { name: "cases-export-ics" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("status").textContent).toBe("cases-export-ics-error");
+    });
+    expect(updateEqMock).not.toHaveBeenCalled();
+    expect((screen.getByLabelText("cases-checklist-calendar-exported") as HTMLInputElement).checked).toBe(false);
   });
 
   it("locks row edit, delete, and navigation actions while checklist persistence is in flight", async () => {

@@ -134,6 +134,11 @@ export default function CasesPage() {
   const [initialLoadError, setInitialLoadError] = useState<TranslationKey | null>(null);
   const shareLinkResetTimerRef = useRef<number | null>(null);
   const shareLinkRequestIdRef = useRef(0);
+  const [reminderExportFeedbackByCase, setReminderExportFeedbackByCase] = useState<
+    Record<string, { key: TranslationKey; tone: "success" | "error" }>
+  >({});
+  const reminderExportResetTimersRef = useRef<Record<string, number>>({});
+  const reminderExportRequestIdsRef = useRef<Record<string, number>>({});
   const [checklistSaveErrorByCase, setChecklistSaveErrorByCase] = useState<Record<string, TranslationKey>>({});
   const [checklistSavingByCase, setChecklistSavingByCase] = useState<Record<string, boolean>>({});
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
@@ -334,6 +339,11 @@ export default function CasesPage() {
       if (shareLinkResetTimerRef.current !== null) {
         window.clearTimeout(shareLinkResetTimerRef.current);
       }
+      for (const timer of Object.values(reminderExportResetTimersRef.current)) {
+        window.clearTimeout(timer);
+      }
+      reminderExportResetTimersRef.current = {};
+      reminderExportRequestIdsRef.current = {};
     };
   }, []);
 
@@ -504,6 +514,56 @@ export default function CasesPage() {
     setShareLinkFeedback(null);
   }
 
+  function clearReminderExportFeedback(caseId: string) {
+    reminderExportRequestIdsRef.current[caseId] = (reminderExportRequestIdsRef.current[caseId] ?? 0) + 1;
+    const timer = reminderExportResetTimersRef.current[caseId];
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      const nextTimers = { ...reminderExportResetTimersRef.current };
+      delete nextTimers[caseId];
+      reminderExportResetTimersRef.current = nextTimers;
+    }
+    setReminderExportFeedbackByCase((current) => {
+      if (!(caseId in current)) return current;
+      const next = { ...current };
+      delete next[caseId];
+      return next;
+    });
+  }
+
+  function showTemporaryReminderExportFeedback(
+    caseId: string,
+    key: TranslationKey,
+    tone: "success" | "error",
+    requestId: number
+  ) {
+    const existingTimer = reminderExportResetTimersRef.current[caseId];
+    if (existingTimer !== undefined) {
+      window.clearTimeout(existingTimer);
+    }
+
+    setReminderExportFeedbackByCase((current) => ({
+      ...current,
+      [caseId]: { key, tone },
+    }));
+
+    reminderExportResetTimersRef.current = {
+      ...reminderExportResetTimersRef.current,
+      [caseId]: window.setTimeout(() => {
+        if (reminderExportRequestIdsRef.current[caseId] !== requestId) return;
+        setReminderExportFeedbackByCase((current) => {
+          if (!(caseId in current)) return current;
+          const next = { ...current };
+          delete next[caseId];
+          return next;
+        });
+        const nextTimers = { ...reminderExportResetTimersRef.current };
+        delete nextTimers[caseId];
+        reminderExportResetTimersRef.current = nextTimers;
+      }, 2000),
+    };
+  }
+
   useEffect(() => {
     clearShareLinkFeedback();
   }, [shareViewQuery]);
@@ -596,17 +656,25 @@ export default function CasesPage() {
   }
 
   function downloadCaseReminder(item: ComplianceCaseViewModel) {
-    const content = buildCaseDeadlineReminderICS(item);
-    if (!content) return;
-    const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    const dateKey = item.noticeDeadline?.toISOString().split("T")[0] ?? "deadline";
-    a.href = url;
-    a.download = `baucompliance-case-${item.id}-notice-deadline-${dateKey}.ics`;
-    a.click();
-    URL.revokeObjectURL(url);
-    void setChecklistItem(item.id, "calendarReminderExported", true);
+    clearReminderExportFeedback(item.id);
+    const requestId = reminderExportRequestIdsRef.current[item.id] ?? 0;
+
+    try {
+      const content = buildCaseDeadlineReminderICS(item);
+      if (!content) return;
+      const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      const dateKey = item.noticeDeadline?.toISOString().split("T")[0] ?? "deadline";
+      a.href = url;
+      a.download = `baucompliance-case-${item.id}-notice-deadline-${dateKey}.ics`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showTemporaryReminderExportFeedback(item.id, "cases-export-ics-ready", "success", requestId);
+      void setChecklistItem(item.id, "calendarReminderExported", true);
+    } catch {
+      showTemporaryReminderExportFeedback(item.id, "cases-export-ics-error", "error", requestId);
+    }
   }
 
   async function handleAddCase(e: React.FormEvent) {
@@ -1256,15 +1324,29 @@ export default function CasesPage() {
                   </div>
 
                   {isDeadlineReminderIcsExportEligible(item) && (
-                    <div className="mt-4 flex justify-end">
-                      <button
-                        type="button"
-                        onClick={() => downloadCaseReminder(item)}
-                        disabled={isChecklistSaving}
-                        className="rounded-lg border border-white/[0.14] px-3 py-2 text-sm text-cream hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
-                      >
-                        {t("cases-export-ics")}
-                      </button>
+                    <div className="mt-4 flex flex-col items-end gap-2">
+                      <div className="flex justify-end">
+                        <button
+                          type="button"
+                          onClick={() => downloadCaseReminder(item)}
+                          disabled={isChecklistSaving}
+                          className="rounded-lg border border-white/[0.14] px-3 py-2 text-sm text-cream hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {t("cases-export-ics")}
+                        </button>
+                      </div>
+                      {reminderExportFeedbackByCase[item.id] && (
+                        <p
+                          role="status"
+                          className={`text-xs ${
+                            reminderExportFeedbackByCase[item.id].tone === "success"
+                              ? "text-emerald-300"
+                              : "text-rose-300"
+                          }`}
+                        >
+                          {t(reminderExportFeedbackByCase[item.id].key)}
+                        </p>
+                      )}
                     </div>
                   )}
                 </details>
