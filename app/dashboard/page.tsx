@@ -17,7 +17,7 @@ import { buildCaseVaultHref } from "@/lib/vault";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import type { Case } from "@/lib/database.types";
-import { toComplianceCaseViewModel, type CaseDeadlineStatus, type ComplianceCaseViewModel } from "@/lib/case-timeline";
+import { toComplianceCaseViewModel, type CaseDeadlineStatus, type ComplianceCaseViewModel, type FollowUpChecklistState } from "@/lib/case-timeline";
 
 const PROJECT_DRAFT_STORAGE_KEY = "baucompliance:wizard-project-draft";
 
@@ -470,19 +470,17 @@ export default function Dashboard() {
 
             if (caseLoadError) throw caseLoadError;
 
-            if (caseData?.checklist) {
-              const checklist = caseData.checklist as Record<string, boolean>;
-              if (!checklist.defectDocumented) {
-                const { error: caseUpdateError } = await supabase
-                  .from("cases")
-                  .update({
-                    checklist: { ...checklist, defectDocumented: true },
-                    updated_at: new Date().toISOString(),
-                  })
-                  .eq("id", effectiveSelectedCaseId);
+            const checklist = (caseData?.checklist ?? null) as Partial<FollowUpChecklistState> | null;
+            if (!checklist?.defectDocumented) {
+              const { error: caseUpdateError } = await supabase
+                .from("cases")
+                .update({
+                  checklist: { ...(checklist ?? {}), defectDocumented: true },
+                  updated_at: new Date().toISOString(),
+                })
+                .eq("id", effectiveSelectedCaseId);
 
-                if (caseUpdateError) throw caseUpdateError;
-              }
+              if (caseUpdateError) throw caseUpdateError;
             }
           } catch (caseSyncError) {
             console.warn("Protocol finalized but linked case checklist sync failed", caseSyncError);

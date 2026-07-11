@@ -11,6 +11,8 @@ let caseResponsesQueue: Array<{ data: Array<Record<string, unknown>> | null; err
 let allowRecovery = false;
 let lastComplianceRecordCaseId: string | null | undefined;
 let insertedProtocols: Array<Record<string, unknown>>;
+let caseChecklistResponse: Record<string, boolean> | null;
+let caseUpdatePayloads: Array<Record<string, unknown>>;
 let protocolInsertFactory: (payload: Record<string, unknown>) => Promise<{ error: null }> | { error: null };
 let signaturePadIsEmpty = true;
 let signaturePadEndStrokeHandler: (() => void) | null = null;
@@ -61,7 +63,7 @@ const supabaseMock = {
           eq: () => {
             if (columns === "checklist") {
               return {
-                single: () => Promise.resolve({ data: { checklist: null }, error: null }),
+                single: () => Promise.resolve({ data: { checklist: caseChecklistResponse }, error: null }),
               };
             }
 
@@ -76,9 +78,12 @@ const supabaseMock = {
             };
           },
         }),
-        update: () => ({
-          eq: () => Promise.resolve({ error: null }),
-        }),
+        update: (payload: Record<string, unknown>) => {
+          caseUpdatePayloads.push(payload);
+          return {
+            eq: () => Promise.resolve({ error: null }),
+          };
+        },
       };
     }
 
@@ -240,6 +245,8 @@ describe("dashboard linked-case loading retry", () => {
     allowRecovery = false;
     lastComplianceRecordCaseId = undefined;
     insertedProtocols = [];
+    caseChecklistResponse = null;
+    caseUpdatePayloads = [];
     protocolInsertFactory = () => Promise.resolve({ error: null });
     signaturePadIsEmpty = true;
     signaturePadEndStrokeHandler = null;
@@ -490,6 +497,83 @@ describe("dashboard linked-case loading retry", () => {
     await waitFor(() => {
       expect(screen.queryByRole("alert")).toBeNull();
       expect(lastComplianceRecordCaseId).toBe("case-1");
+    });
+  });
+
+  it("marks linked-case defect documentation when finalizing against an empty checklist", async () => {
+    window.localStorage.setItem(
+      "baucompliance:wizard-project-draft",
+      JSON.stringify({
+        selectedCaseId: "case-1",
+        name: "Alpine Tower",
+        contractor: "Builder AG",
+        client: "Owner GmbH",
+        updatedAt: "2026-05-15T09:00:00.000Z",
+      })
+    );
+    caseChecklistResponse = null;
+    caseResponseFactory = () => ({ data: [buildCase()], error: null });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole("option", { name: "Alpine Tower (ZH)" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "btn-next" }));
+    fireEvent.click(screen.getByRole("checkbox"));
+    signaturePadIsEmpty = false;
+    await act(async () => {
+      signaturePadEndStrokeHandler?.();
+    });
+
+    const finalizeButton = await screen.findByRole("button", { name: "btn-finalize" });
+    await waitFor(() => {
+      expect(finalizeButton.getAttribute("disabled")).toBeNull();
+    });
+    fireEvent.click(finalizeButton);
+
+    await waitFor(() => {
+      expect(insertedProtocols[0]?.case_id).toBe("case-1");
+      expect(caseUpdatePayloads).toHaveLength(1);
+    });
+    expect(caseUpdatePayloads[0]?.checklist).toEqual({ defectDocumented: true });
+  });
+
+  it("preserves sparse linked-case checklist values when marking defect documentation", async () => {
+    window.localStorage.setItem(
+      "baucompliance:wizard-project-draft",
+      JSON.stringify({
+        selectedCaseId: "case-1",
+        name: "Alpine Tower",
+        contractor: "Builder AG",
+        client: "Owner GmbH",
+        updatedAt: "2026-05-15T09:00:00.000Z",
+      })
+    );
+    caseChecklistResponse = { evidenceAttached: true };
+    caseResponseFactory = () => ({ data: [buildCase()], error: null });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole("option", { name: "Alpine Tower (ZH)" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "btn-next" }));
+    fireEvent.click(screen.getByRole("checkbox"));
+    signaturePadIsEmpty = false;
+    await act(async () => {
+      signaturePadEndStrokeHandler?.();
+    });
+
+    const finalizeButton = await screen.findByRole("button", { name: "btn-finalize" });
+    await waitFor(() => {
+      expect(finalizeButton.getAttribute("disabled")).toBeNull();
+    });
+    fireEvent.click(finalizeButton);
+
+    await waitFor(() => {
+      expect(insertedProtocols[0]?.case_id).toBe("case-1");
+      expect(caseUpdatePayloads).toHaveLength(1);
+    });
+    expect(caseUpdatePayloads[0]?.checklist).toEqual({
+      evidenceAttached: true,
+      defectDocumented: true,
     });
   });
 
