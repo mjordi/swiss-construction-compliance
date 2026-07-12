@@ -82,8 +82,13 @@ export default function RuegefristCalculator() {
   const [shareLinkFeedback, setShareLinkFeedback] = useState<
     "calc-share-link-copied" | "calc-share-link-error" | null
   >(null);
+  const [downloadFeedback, setDownloadFeedback] = useState<
+    "calc-download-ics-ready" | "calc-download-ics-error" | null
+  >(null);
   const shareLinkResetTimerRef = useRef<number | null>(null);
   const shareLinkRequestIdRef = useRef(0);
+  const downloadResetTimerRef = useRef<number | null>(null);
+  const downloadRequestIdRef = useRef(0);
 
   function clearShareLinkFeedback() {
     shareLinkRequestIdRef.current += 1;
@@ -92,6 +97,15 @@ export default function RuegefristCalculator() {
       shareLinkResetTimerRef.current = null;
     }
     setShareLinkFeedback(null);
+  }
+
+  function clearDownloadFeedback() {
+    downloadRequestIdRef.current += 1;
+    if (downloadResetTimerRef.current !== null) {
+      window.clearTimeout(downloadResetTimerRef.current);
+      downloadResetTimerRef.current = null;
+    }
+    setDownloadFeedback(null);
   }
 
   useEffect(() => {
@@ -199,6 +213,10 @@ export default function RuegefristCalculator() {
       if (shareLinkResetTimerRef.current !== null) {
         window.clearTimeout(shareLinkResetTimerRef.current);
       }
+      downloadRequestIdRef.current += 1;
+      if (downloadResetTimerRef.current !== null) {
+        window.clearTimeout(downloadResetTimerRef.current);
+      }
     };
   }, []);
 
@@ -228,6 +246,7 @@ export default function RuegefristCalculator() {
 
   function updateContractDate(value: string) {
     clearShareLinkFeedback();
+    clearDownloadFeedback();
     setContractDate(value);
     setResult(null);
     setCalculatedDates(null);
@@ -235,6 +254,7 @@ export default function RuegefristCalculator() {
 
   function updateDiscoveryDate(value: string) {
     clearShareLinkFeedback();
+    clearDownloadFeedback();
     setDiscoveryDate(value);
     setResult(null);
     setCalculatedDates(null);
@@ -242,6 +262,7 @@ export default function RuegefristCalculator() {
 
   function calculate() {
     clearShareLinkFeedback();
+    clearDownloadFeedback();
     if (!contractDate || !discoveryDate || validationError) return;
     const parsedContractDate = parseDateInput(contractDate);
     const parsedDiscoveryDate = parseDateInput(discoveryDate);
@@ -259,6 +280,7 @@ export default function RuegefristCalculator() {
 
   function reset() {
     clearShareLinkFeedback();
+    clearDownloadFeedback();
     setContractDate("");
     setDiscoveryDate("");
     setResult(null);
@@ -306,19 +328,41 @@ export default function RuegefristCalculator() {
 
   function downloadICS() {
     if (!result?.ruegefrist60) return;
-    const content = generateDeadlineICS(
-      result.ruegefrist60.date,
-      "BauCompliance: 60-Tage-Rügefrist (Art. 370 OR 2026)",
-      `Rügefrist Ablauf\nVertragsdatum: ${formatDateCH(result.contractDate)}\nMängel entdeckt: ${formatDateCH(result.discoveryDate)}`,
-      reminderOffsets
-    );
-    const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `ruegefrist-${discoveryDate}.ics`;
-    a.click();
-    URL.revokeObjectURL(url);
+
+    if (downloadResetTimerRef.current !== null) {
+      window.clearTimeout(downloadResetTimerRef.current);
+      downloadResetTimerRef.current = null;
+    }
+
+    const requestId = downloadRequestIdRef.current + 1;
+    downloadRequestIdRef.current = requestId;
+
+    try {
+      const content = generateDeadlineICS(
+        result.ruegefrist60.date,
+        "BauCompliance: 60-Tage-Rügefrist (Art. 370 OR 2026)",
+        `Rügefrist Ablauf\nVertragsdatum: ${formatDateCH(result.contractDate)}\nMängel entdeckt: ${formatDateCH(result.discoveryDate)}`,
+        reminderOffsets
+      );
+      const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `ruegefrist-${calculatedDates?.discoveryDate ?? discoveryDate}.ics`;
+      a.click();
+      URL.revokeObjectURL(url);
+      if (requestId !== downloadRequestIdRef.current) return;
+      setDownloadFeedback("calc-download-ics-ready");
+    } catch {
+      if (requestId !== downloadRequestIdRef.current) return;
+      setDownloadFeedback("calc-download-ics-error");
+    }
+
+    downloadResetTimerRef.current = window.setTimeout(() => {
+      if (requestId !== downloadRequestIdRef.current) return;
+      setDownloadFeedback(null);
+      downloadResetTimerRef.current = null;
+    }, 2000);
   }
 
   const trackCaseHref = calculatedDates
@@ -328,6 +372,7 @@ export default function RuegefristCalculator() {
 
   function toggleReminder(offset: number) {
     clearShareLinkFeedback();
+    clearDownloadFeedback();
     setReminderOffsets((current) =>
       current.includes(offset)
         ? current.filter((value) => value !== offset)
@@ -608,11 +653,11 @@ export default function RuegefristCalculator() {
               {/* Download ICS */}
               <button
                 onClick={downloadICS}
-                aria-label={t("calc-download-ics")}
+                aria-label={downloadFeedback ? t(downloadFeedback) : t("calc-download-ics")}
                 className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-white/[0.08] hover:border-accent/30 text-muted hover:text-accent font-medium rounded-lg transition-all duration-300 text-[13px]"
               >
                 <Download className="w-4 h-4" />
-                {t("calc-download-ics")}
+                {downloadFeedback ? t(downloadFeedback) : t("calc-download-ics")}
               </button>
             </>
           )}

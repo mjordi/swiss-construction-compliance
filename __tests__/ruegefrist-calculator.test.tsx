@@ -10,14 +10,27 @@ vi.mock("@/context/LanguageContext", () => ({
 
 describe("RuegefristCalculator", () => {
   const writeText = vi.fn<() => Promise<void>>();
+  const createObjectURL = vi.fn(() => "blob:ruegefrist-ics");
+  const revokeObjectURL = vi.fn();
 
   beforeEach(() => {
     vi.useRealTimers();
     writeText.mockReset();
     writeText.mockResolvedValue(undefined);
+    createObjectURL.mockReset();
+    createObjectURL.mockReturnValue("blob:ruegefrist-ics");
+    revokeObjectURL.mockReset();
     Object.defineProperty(navigator, "clipboard", {
       configurable: true,
       value: { writeText },
+    });
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURL,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURL,
     });
     window.localStorage.clear();
     window.history.replaceState(null, "", "/tools/ruegefrist-rechner");
@@ -379,5 +392,69 @@ describe("RuegefristCalculator", () => {
     expect(screen.queryByRole("button", { name: "calc-share-link" })).toBeNull();
     expect(screen.queryByRole("button", { name: "calc-share-link-copied" })).toBeNull();
     expect(screen.queryByRole("button", { name: "calc-share-link-error" })).toBeNull();
+  });
+
+  it("confirms when the public calculator calendar file is prepared", async () => {
+    render(<RuegefristCalculator />);
+
+    fireEvent.change(screen.getByLabelText("calc-contract-date"), {
+      target: { value: "2026-02-01" },
+    });
+    fireEvent.change(screen.getByLabelText("calc-discovery-date"), {
+      target: { value: "2026-03-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "calc-calculate" }));
+    fireEvent.click(screen.getByRole("button", { name: "calc-download-ics" }));
+
+    await waitFor(() => {
+      expect(createObjectURL).toHaveBeenCalled();
+      expect(screen.getByRole("button", { name: "calc-download-ics-ready" })).toBeTruthy();
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "calc-download-ics" })).toBeTruthy();
+    }, { timeout: 3000 });
+  });
+
+  it("shows retry feedback when preparing the public calendar file fails", async () => {
+    createObjectURL.mockImplementationOnce(() => {
+      throw new Error("blob unavailable");
+    });
+    render(<RuegefristCalculator />);
+
+    fireEvent.change(screen.getByLabelText("calc-contract-date"), {
+      target: { value: "2026-02-01" },
+    });
+    fireEvent.change(screen.getByLabelText("calc-discovery-date"), {
+      target: { value: "2026-03-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "calc-calculate" }));
+    fireEvent.click(screen.getByRole("button", { name: "calc-download-ics" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "calc-download-ics-error" })).toBeTruthy();
+    });
+  });
+
+  it("clears stale calendar download feedback when reminder presets change", async () => {
+    render(<RuegefristCalculator />);
+
+    fireEvent.change(screen.getByLabelText("calc-contract-date"), {
+      target: { value: "2026-02-01" },
+    });
+    fireEvent.change(screen.getByLabelText("calc-discovery-date"), {
+      target: { value: "2026-03-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "calc-calculate" }));
+    fireEvent.click(screen.getByRole("button", { name: "calc-download-ics" }));
+
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "calc-download-ics-ready" })).toBeTruthy();
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "30 deadlines-reminder-days" }));
+
+    expect(screen.getByRole("button", { name: "calc-download-ics" })).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "calc-download-ics-ready" })).toBeNull();
   });
 });
