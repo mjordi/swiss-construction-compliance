@@ -658,22 +658,24 @@ export default function TechVault() {
                         </span>
                       </div>
 
-                      <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/20 p-3 text-sm text-slate-200">
-                        <div className="mb-2 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.08em] text-slate-500">
-                          <span>{t("vault-audit-snapshot-label")}</span>
-                          <span className="rounded-md border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 normal-case tracking-normal text-blue-200">
-                            {project.legalStatus ? t(legalStatusLabelKey[project.legalStatus]) : t("vault-status-review")}
-                          </span>
+                      {project.legalStatus ? (
+                        <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/20 p-3 text-sm text-slate-200">
+                          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.08em] text-slate-500">
+                            <span>{t("vault-audit-snapshot-label")}</span>
+                            <span className="rounded-md border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 normal-case tracking-normal text-blue-200">
+                              {t(legalStatusLabelKey[project.legalStatus])}
+                            </span>
+                          </div>
+                          <p className="font-medium text-white">
+                            {t(legalNextActionKey[project.legalStatus])}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-400">
+                            {interpolateTranslation(t("vault-audit-deadline-context"), {
+                              context: getLocalizedCountdownLabel(project, t),
+                            })}
+                          </p>
                         </div>
-                        <p className="font-medium text-white">
-                          {project.legalStatus ? t(legalNextActionKey[project.legalStatus]) : t("vault-open-in-cases")}
-                        </p>
-                        <p className="mt-1 text-xs text-slate-400">
-                          {interpolateTranslation(t("vault-audit-deadline-context"), {
-                            context: getLocalizedCountdownLabel(project, t),
-                          })}
-                        </p>
-                      </div>
+                      ) : null}
 
                       <div className="mt-6 space-y-3">
                         <div className="flex flex-wrap items-center gap-3">

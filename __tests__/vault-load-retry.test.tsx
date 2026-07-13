@@ -232,6 +232,21 @@ describe("vault aggregate load retry", () => {
     expect(screen.queryByText("Send notice today via traceable channel.")).toBeNull();
   });
 
+  it("hides audit snapshot legal advice when no timeline can be computed", async () => {
+    caseResponsesQueue = [{ data: [buildCase()], error: null }];
+    protocolResponsesQueue = [{ data: [], error: null }];
+    buildComplianceCaseTimelineMock.mockReturnValue([]);
+
+    render(<TechVault />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Alpine Tower")).toBeTruthy();
+    });
+    expect(screen.queryByText("vault-audit-snapshot-label")).toBeNull();
+    expect(screen.queryByText("cases-countdown-notify-immediately")).toBeNull();
+    expect(screen.queryByText("cases-next-action-immediate-notice")).toBeNull();
+  });
+
   it("keeps the last successful vault data visible if a later same-user refresh fails", async () => {
     caseResponsesQueue = [{ data: [buildCase()], error: null }];
     protocolResponsesQueue = [{ data: [], error: null }];
