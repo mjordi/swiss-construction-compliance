@@ -31,6 +31,9 @@ interface VaultProjectCard {
   compliance: number;
   checklistCompleted: number;
   checklistTotal: number;
+  legalStatusLabel: string;
+  deadlineContext: string;
+  nextAction: string;
   updatedAt: number;
   archived: boolean;
   prefillTriage: boolean;
@@ -195,6 +198,9 @@ export default function TechVault() {
           compliance: Math.round((progress.completed / progress.total) * 100),
           checklistCompleted: progress.completed,
           checklistTotal: progress.total,
+          legalStatusLabel: timelineItem?.statusLabel ?? "Review needed",
+          deadlineContext: timelineItem?.deadlineCountdownLabel ?? "Review case timeline",
+          nextAction: timelineItem?.nextAction ?? "Review the case timeline before archiving evidence.",
           updatedAt: new Date(c.updated_at).getTime(),
           archived,
           prefillTriage: !archived && restoredPrefillTriage,
@@ -610,6 +616,21 @@ export default function TechVault() {
                             total: String(project.checklistTotal),
                           })}
                         </span>
+                      </div>
+
+                      <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/20 p-3 text-sm text-slate-200">
+                        <div className="mb-2 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.08em] text-slate-500">
+                          <span>{t("vault-audit-snapshot-label")}</span>
+                          <span className="rounded-md border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 normal-case tracking-normal text-blue-200">
+                            {project.legalStatusLabel}
+                          </span>
+                        </div>
+                        <p className="font-medium text-white">{project.nextAction}</p>
+                        <p className="mt-1 text-xs text-slate-400">
+                          {interpolateTranslation(t("vault-audit-deadline-context"), {
+                            context: project.deadlineContext,
+                          })}
+                        </p>
                       </div>
 
                       <div className="mt-6 space-y-3">
