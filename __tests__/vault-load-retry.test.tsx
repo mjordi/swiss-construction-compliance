@@ -26,7 +26,7 @@ let protocolFetchCount = 0;
 
 const languageState = {
   lang: "en",
-  t: (key: string) => key,
+  t: (key: string) => (key === "vault-audit-deadline-context" ? "Deadline: {context}" : key),
 };
 
 const authState = {
@@ -47,8 +47,12 @@ vi.mock("framer-motion", () => ({
   },
 }));
 
+const { buildComplianceCaseTimelineMock } = vi.hoisted(() => ({
+  buildComplianceCaseTimelineMock: vi.fn(() => []),
+}));
+
 vi.mock("@/lib/case-timeline", () => ({
-  buildComplianceCaseTimeline: vi.fn(() => []),
+  buildComplianceCaseTimeline: buildComplianceCaseTimelineMock,
   deriveChecklistProgress: (checklist: Record<string, boolean>) => ({
     completed: Object.values(checklist).filter(Boolean).length,
     total: Object.keys(checklist).length,
@@ -122,6 +126,8 @@ describe("vault aggregate load retry", () => {
     protocolResponsesQueue = [];
     caseFetchCount = 0;
     protocolFetchCount = 0;
+    buildComplianceCaseTimelineMock.mockReset();
+    buildComplianceCaseTimelineMock.mockReturnValue([]);
     languageState.lang = "en";
     authState.user = { id: "user-1" };
     caseResponseFactory = () => ({ data: [], error: null });
@@ -190,6 +196,40 @@ describe("vault aggregate load retry", () => {
     });
     expect(caseFetchCount).toBe(1);
     expect(protocolFetchCount).toBe(1);
+  });
+
+  it("renders localized audit snapshot labels from timeline status instead of raw English timeline text", async () => {
+    languageState.lang = "de";
+    caseResponsesQueue = [{ data: [buildCase()], error: null }];
+    protocolResponsesQueue = [{ data: [], error: null }];
+    buildComplianceCaseTimelineMock.mockReturnValue([
+      {
+        id: "case-1",
+        status: "urgent",
+        regime: "new",
+        daysToDeadline: 2,
+        statusLabel: "Urgent",
+        deadlineCountdownLabel: "2 days left",
+        nextAction: "Send notice today via traceable channel.",
+        checklistDefaults: {
+          defectDocumented: true,
+          evidenceAttached: true,
+          noticeDrafted: false,
+          calendarReminderExported: false,
+        },
+      },
+    ]);
+
+    render(<TechVault />);
+
+    await waitFor(() => {
+      expect(screen.getByText("Alpine Tower")).toBeTruthy();
+    });
+    expect(screen.getByText("cases-status-urgent")).toBeTruthy();
+    expect(screen.getByText("cases-next-action-urgent")).toBeTruthy();
+    expect(screen.getByText(/2 cases-countdown-days-left-suffix/)).toBeTruthy();
+    expect(screen.queryByText("Urgent")).toBeNull();
+    expect(screen.queryByText("Send notice today via traceable channel.")).toBeNull();
   });
 
   it("keeps the last successful vault data visible if a later same-user refresh fails", async () => {

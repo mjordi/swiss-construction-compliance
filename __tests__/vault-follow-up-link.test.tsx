@@ -112,6 +112,8 @@ vi.mock("@/lib/case-timeline", () => ({
               : input.id === "case-warning"
                 ? "warning"
                 : "ok",
+      regime: input.id === "case-immediate" ? "old" : "new",
+      daysToDeadline: input.id === "case-review" ? 12 : input.id === "case-immediate" ? null : 45,
       checklistDefaults: {
         defectDocumented: true,
         evidenceAttached: false,
@@ -258,9 +260,9 @@ describe("vault follow-up links", () => {
 
     const card = getProjectCard("Riverside Bridge");
     expect(within(card).getByText("vault-audit-snapshot-label")).toBeTruthy();
-    expect(within(card).getByText("Urgent")).toBeTruthy();
-    expect(within(card).getByText("Send defect notice and confirm protocol evidence.")).toBeTruthy();
-    expect(within(card).getByText("Deadline context: 12 days remaining")).toBeTruthy();
+    expect(within(card).getByText("cases-status-urgent")).toBeTruthy();
+    expect(within(card).getByText("cases-next-action-urgent")).toBeTruthy();
+    expect(within(card).getByText("Deadline context: 12 cases-countdown-days-left-suffix")).toBeTruthy();
   });
 
   it("navigates to the cases handoff when a project card is clicked", async () => {
