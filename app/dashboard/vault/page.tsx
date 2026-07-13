@@ -10,7 +10,12 @@ import { useLanguage } from "@/context/LanguageContext";
 import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { getSupabase } from "@/lib/supabase";
 import type { Case, Protocol } from "@/lib/database.types";
-import { buildComplianceCaseTimeline, deriveChecklistProgress } from "@/lib/case-timeline";
+import {
+  buildComplianceCaseTimeline,
+  deriveChecklistProgress,
+  type CaseDeadlineStatus,
+  type ComplianceCaseViewModel,
+} from "@/lib/case-timeline";
 import {
   buildVaultCreateProjectHref,
   buildVaultProjectCasesHref,
@@ -31,6 +36,9 @@ interface VaultProjectCard {
   compliance: number;
   checklistCompleted: number;
   checklistTotal: number;
+  legalStatus: CaseDeadlineStatus | null;
+  legalRegime: ComplianceCaseViewModel["regime"] | null;
+  daysToDeadline: number | null;
   updatedAt: number;
   archived: boolean;
   prefillTriage: boolean;
@@ -46,6 +54,22 @@ const statusClass: Record<VaultProjectCard["status"], string> = {
   active: "text-emerald-300 bg-emerald-400/10",
   review: "text-yellow-300 bg-yellow-400/10",
   archived: "text-slate-300 bg-white/10",
+};
+
+const legalStatusLabelKey: Record<CaseDeadlineStatus, TranslationKey> = {
+  ok: "cases-status-on-track",
+  warning: "cases-status-attention",
+  urgent: "cases-status-urgent",
+  expired: "cases-status-expired",
+  "immediate-notice": "cases-status-immediate-notice",
+};
+
+const legalNextActionKey: Record<CaseDeadlineStatus, TranslationKey> = {
+  ok: "cases-next-action-ok",
+  warning: "cases-next-action-warning",
+  urgent: "cases-next-action-urgent",
+  expired: "cases-next-action-expired",
+  "immediate-notice": "cases-next-action-immediate-notice",
 };
 
 function interpolateTranslation(template: string, params?: Record<string, string>) {
@@ -80,6 +104,25 @@ function formatRelativeUpdate(timestamp: number, lang: string): string {
   }
 
   return relativeTime.format(-Math.max(1, Math.floor(diffMs / weekMs)), "week");
+}
+
+function getLocalizedCountdownLabel(
+  context: Pick<VaultProjectCard, "legalRegime" | "daysToDeadline">,
+  t: (key: TranslationKey) => string
+): string {
+  if (context.legalRegime === "old" || context.daysToDeadline === null) {
+    return t("cases-countdown-notify-immediately");
+  }
+
+  const days = context.daysToDeadline;
+  if (days < 0) {
+    return days === -1
+      ? t("cases-countdown-one-day-overdue")
+      : `${Math.abs(days)} ${t("cases-countdown-days-overdue-suffix")}`;
+  }
+  if (days === 0) return t("cases-countdown-due-today");
+  if (days === 1) return t("cases-countdown-one-day-left");
+  return `${days} ${t("cases-countdown-days-left-suffix")}`;
 }
 
 export default function TechVault() {
@@ -195,6 +238,9 @@ export default function TechVault() {
           compliance: Math.round((progress.completed / progress.total) * 100),
           checklistCompleted: progress.completed,
           checklistTotal: progress.total,
+          legalStatus: timelineItem?.status ?? null,
+          legalRegime: timelineItem?.regime ?? null,
+          daysToDeadline: timelineItem?.daysToDeadline ?? null,
           updatedAt: new Date(c.updated_at).getTime(),
           archived,
           prefillTriage: !archived && restoredPrefillTriage,
@@ -611,6 +657,25 @@ export default function TechVault() {
                           })}
                         </span>
                       </div>
+
+                      {project.legalStatus ? (
+                        <div className="mt-3 rounded-xl border border-white/[0.06] bg-black/20 p-3 text-sm text-slate-200">
+                          <div className="mb-2 flex flex-wrap items-center gap-2 text-xs uppercase tracking-[0.08em] text-slate-500">
+                            <span>{t("vault-audit-snapshot-label")}</span>
+                            <span className="rounded-md border border-blue-400/20 bg-blue-400/10 px-2 py-0.5 normal-case tracking-normal text-blue-200">
+                              {t(legalStatusLabelKey[project.legalStatus])}
+                            </span>
+                          </div>
+                          <p className="font-medium text-white">
+                            {t(legalNextActionKey[project.legalStatus])}
+                          </p>
+                          <p className="mt-1 text-xs text-slate-400">
+                            {interpolateTranslation(t("vault-audit-deadline-context"), {
+                              context: getLocalizedCountdownLabel(project, t),
+                            })}
+                          </p>
+                        </div>
+                      ) : null}
 
                       <div className="mt-6 space-y-3">
                         <div className="flex flex-wrap items-center gap-3">

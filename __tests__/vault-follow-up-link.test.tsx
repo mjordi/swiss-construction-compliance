@@ -78,7 +78,11 @@ vi.mock("@/context/LanguageContext", () => ({
   useLanguage: () => ({
     lang: "en",
     t: (key: string) =>
-      key === "vault-checklist-progress" ? "{completed}/{total} checklist items ready" : key,
+      key === "vault-checklist-progress"
+        ? "{completed}/{total} checklist items ready"
+        : key === "vault-audit-deadline-context"
+          ? "Deadline context: {context}"
+          : key,
   }),
 }));
 
@@ -108,12 +112,22 @@ vi.mock("@/lib/case-timeline", () => ({
               : input.id === "case-warning"
                 ? "warning"
                 : "ok",
+      regime: input.id === "case-immediate" ? "old" : "new",
+      daysToDeadline: input.id === "case-review" ? 12 : input.id === "case-immediate" ? null : 45,
       checklistDefaults: {
         defectDocumented: true,
         evidenceAttached: false,
         noticeDrafted: false,
         calendarReminderExported: false,
       },
+      statusLabel: input.id === "case-review" ? "Urgent" : input.id === "case-immediate" ? "Immediate notice" : "On track",
+      deadlineCountdownLabel: input.id === "case-review" ? "12 days remaining" : input.id === "case-immediate" ? "Notify immediately" : "45 days remaining",
+      nextAction:
+        input.id === "case-review"
+          ? "Send defect notice and confirm protocol evidence."
+          : input.id === "case-immediate"
+            ? "Send defect notice immediately and document delivery."
+            : "Keep evidence ready and monitor the deadline.",
     })),
   deriveChecklistProgress: (checklist: Record<string, boolean>) => ({
     completed: Object.values(checklist).filter(Boolean).length,
@@ -237,6 +251,18 @@ describe("vault follow-up links", () => {
 
     expect(screen.getAllByText("25%").length).toBeGreaterThan(0);
     expect(within(getProjectCard("Alpine Tower")).getByText("1/4 checklist items ready")).toBeTruthy();
+  });
+
+  it("shows the next legal action and deadline context on vault project cards", async () => {
+    render(<TechVault />);
+
+    await screen.findByText("Riverside Bridge");
+
+    const card = getProjectCard("Riverside Bridge");
+    expect(within(card).getByText("vault-audit-snapshot-label")).toBeTruthy();
+    expect(within(card).getByText("cases-status-urgent")).toBeTruthy();
+    expect(within(card).getByText("cases-next-action-urgent")).toBeTruthy();
+    expect(within(card).getByText("Deadline context: 12 cases-countdown-days-left-suffix")).toBeTruthy();
   });
 
   it("navigates to the cases handoff when a project card is clicked", async () => {
