@@ -577,6 +577,50 @@ describe("dashboard linked-case loading retry", () => {
     });
   });
 
+  it("shows a linked-case follow-up action after finalizing a linked protocol", async () => {
+    window.localStorage.setItem(
+      "baucompliance:wizard-project-draft",
+      JSON.stringify({
+        selectedCaseId: "case-1",
+        name: "Alpine Tower",
+        contractor: "Builder AG",
+        client: "Owner GmbH",
+        updatedAt: "2026-05-15T09:00:00.000Z",
+      })
+    );
+    caseResponseFactory = () => ({ data: [buildCase()], error: null });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole("option", { name: "Alpine Tower (ZH)" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "btn-next" }));
+    fireEvent.click(screen.getByRole("checkbox"));
+    signaturePadIsEmpty = false;
+    await act(async () => {
+      signaturePadEndStrokeHandler?.();
+    });
+
+    const finalizeButton = await screen.findByRole("button", { name: "btn-finalize" });
+    await waitFor(() => {
+      expect(finalizeButton.getAttribute("disabled")).toBeNull();
+    });
+    fireEvent.click(finalizeButton);
+
+    const followUpLink = await screen.findByRole("link", { name: "dashboard-linked-case-follow-up-action" });
+    expect(screen.getByText("dashboard-linked-case-follow-up-title")).toBeTruthy();
+    expect(screen.getByText("dashboard-linked-case-follow-up-desc")).toBeTruthy();
+    expect(followUpLink.getAttribute("href")).toBe("/dashboard/cases?q=Alpine+Tower");
+  });
+
+  it("does not show linked-case follow-up after standalone protocol finalization", async () => {
+    render(<DashboardPage />);
+
+    await completeProtocolToDownload();
+
+    expect(screen.queryByText("dashboard-linked-case-follow-up-title")).toBeNull();
+    expect(screen.queryByRole("link", { name: "dashboard-linked-case-follow-up-action" })).toBeNull();
+  });
+
   it("locks protocol finalization controls and ignores duplicate finalize clicks while saving", async () => {
     let resolveProtocolInsert: ((value: { error: null }) => void) | null = null;
     protocolInsertFactory = () =>

@@ -13,7 +13,7 @@ import type { TranslationKey } from "@/locales";
 import { buildComplianceRecord } from "@/lib/compliance-record";
 import { getEffectiveSelectedCaseId, hasStaleLinkedCase as isStaleLinkedCase } from "@/lib/dashboard-linked-case";
 import { buildProtocolDefectDescription, buildWizardDraft, getProtocolFinalizeReadiness, type WizardDraft } from "@/lib/dashboard-protocol";
-import { buildCaseVaultHref } from "@/lib/vault";
+import { buildCaseVaultHref, buildVaultProjectCasesHref } from "@/lib/vault";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import type { Case } from "@/lib/database.types";
@@ -348,6 +348,9 @@ export default function Dashboard() {
   const finalReviewSignatureSummary = hasSignature
     ? t("dashboard-final-review-signature-ready")
     : t("dashboard-final-review-signature-missing");
+  const linkedCaseFollowUpHref = effectiveSelectedCase
+    ? buildVaultProjectCasesHref({ projectName: effectiveSelectedCase.project_name })
+    : null;
 
   useEffect(() => {
     if (step === 2 && sigCanvas.current) {
@@ -938,6 +941,23 @@ export default function Dashboard() {
               <p className="text-muted text-sm mb-8 max-w-sm mx-auto">
                 {t("success-desc")}
               </p>
+
+              {linkedCaseFollowUpHref && (
+                <div className="mx-auto mb-6 max-w-md rounded-xl border border-blue-500/20 bg-blue-500/[0.06] p-4 text-left">
+                  <div className="text-[11px] font-semibold uppercase tracking-[0.1em] text-blue-300">
+                    {t("dashboard-linked-case-follow-up-title")}
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-blue-100/80">
+                    {t("dashboard-linked-case-follow-up-desc")}
+                  </p>
+                  <Link
+                    href={linkedCaseFollowUpHref}
+                    className="mt-3 inline-flex items-center rounded-lg border border-blue-300/20 bg-blue-300/10 px-3 py-2 text-xs font-semibold text-blue-100 transition-colors duration-200 hover:bg-blue-300/15"
+                  >
+                    {t("dashboard-linked-case-follow-up-action")}
+                  </Link>
+                </div>
+              )}
 
               <div className="flex gap-3 justify-center">
                 <button
