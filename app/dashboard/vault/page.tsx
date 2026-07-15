@@ -254,8 +254,12 @@ export default function TechVault() {
         };
       });
 
+      const isDifferentUserRefresh = lastSuccessfulUserIdRef.current !== user.id;
       hasLoadedProjectsRef.current = true;
       lastSuccessfulUserIdRef.current = user.id;
+      if (isDifferentUserRefresh) {
+        setStatusMutationFeedback(null);
+      }
       setProjects(nextProjects);
       setLoading(false);
     } catch {
