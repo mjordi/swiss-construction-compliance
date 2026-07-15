@@ -137,6 +137,11 @@ export default function TechVault() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<TranslationKey | null>(null);
   const [statusMutationErrors, setStatusMutationErrors] = useState<Record<string, TranslationKey>>({});
+  const [statusMutationFeedback, setStatusMutationFeedback] = useState<{
+    projectId: string;
+    projectName: string;
+    key: TranslationKey;
+  } | null>(null);
   const [statusMutationProjectIds, setStatusMutationProjectIds] = useState<string[]>([]);
   const [projects, setProjects] = useState<VaultProjectCard[]>([]);
   const latestFetchIdRef = useRef(0);
@@ -412,6 +417,9 @@ export default function TechVault() {
       delete next[projectId];
       return next;
     });
+    setStatusMutationFeedback((current) =>
+      current?.projectId === projectId ? null : current
+    );
     setProjects((current) =>
       current.map((project) =>
         project.id === projectId
@@ -447,6 +455,11 @@ export default function TechVault() {
         delete next[projectId];
         return next;
       });
+      setStatusMutationFeedback({
+        projectId,
+        projectName: currentProject.name,
+        key: archived ? "vault-restore-success" : "vault-archive-success",
+      });
     } catch {
       setProjects((current) =>
         current.map((project) =>
@@ -459,6 +472,9 @@ export default function TechVault() {
         ...current,
         [projectId]: "vault-update-status-error",
       }));
+      setStatusMutationFeedback((current) =>
+        current?.projectId === projectId ? null : current
+      );
     } finally {
       pendingStatusMutationProjectIdsRef.current.delete(projectId);
       setStatusMutationProjectIds((current) => current.filter((currentProjectId) => currentProjectId !== projectId));
@@ -514,6 +530,14 @@ export default function TechVault() {
             />
           </div>
         </div>
+
+        {statusMutationFeedback && (
+          <div role="status" className="border-b border-emerald-500/20 bg-emerald-500/[0.08] px-5 py-3 text-sm text-emerald-100">
+            {interpolateTranslation(t(statusMutationFeedback.key), {
+              projectName: statusMutationFeedback.projectName,
+            })}
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (

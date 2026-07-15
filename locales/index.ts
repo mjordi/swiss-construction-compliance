@@ -479,6 +479,8 @@ export const de = {
   "vault-open-in-cases": "In Fälle öffnen",
   "vault-archive-project": "Archivieren",
   "vault-restore-project": "Wiederherstellen",
+  "vault-archive-success": "„{projectName}“ wurde archiviert.",
+  "vault-restore-success": "„{projectName}“ wurde wiederhergestellt.",
   "vault-update-status-error": "Der Projektstatus konnte nicht aktualisiert werden. Bitte erneut versuchen.",
 };
 
@@ -961,6 +963,8 @@ export const fr = {
   "vault-open-in-cases": "Ouvrir dans les dossiers",
   "vault-archive-project": "Archiver",
   "vault-restore-project": "Restaurer",
+  "vault-archive-success": "« {projectName} » a été archivé.",
+  "vault-restore-success": "« {projectName} » a été restauré.",
   "vault-update-status-error": "Impossible de mettre à jour le statut du projet. Veuillez réessayer.",
 };
 
@@ -1443,6 +1447,8 @@ export const it = {
   "vault-open-in-cases": "Apri nei casi",
   "vault-archive-project": "Archivia",
   "vault-restore-project": "Ripristina",
+  "vault-archive-success": "«{projectName}» è stato archiviato.",
+  "vault-restore-success": "«{projectName}» è stato ripristinato.",
   "vault-update-status-error": "Impossibile aggiornare lo stato del progetto. Riprova.",
 };
 
@@ -1931,6 +1937,8 @@ export const en = {
   "vault-open-in-cases": "Open in Cases",
   "vault-archive-project": "Archive",
   "vault-restore-project": "Restore",
+  "vault-archive-success": "{projectName} was archived.",
+  "vault-restore-success": "{projectName} was restored.",
   "vault-update-status-error": "Could not update the project status. Please try again.",
 };
 

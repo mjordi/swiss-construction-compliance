@@ -82,7 +82,11 @@ vi.mock("@/context/LanguageContext", () => ({
         ? "{completed}/{total} checklist items ready"
         : key === "vault-audit-deadline-context"
           ? "Deadline context: {context}"
-          : key,
+          : key === "vault-archive-success"
+            ? "{projectName} was archived."
+            : key === "vault-restore-success"
+              ? "{projectName} was restored."
+              : key,
   }),
 }));
 
@@ -329,6 +333,7 @@ describe("vault follow-up links", () => {
     });
 
     expect(alpineCard).toBeTruthy();
+    expect((await screen.findByRole("status")).textContent).toContain("Alpine Tower was archived.");
 
     fireEvent.click(screen.getByRole("tab", { name: "vault-tab-archived" }));
 
@@ -351,6 +356,7 @@ describe("vault follow-up links", () => {
     await waitFor(() => {
       expect(screen.queryByText("Summit Depot")).toBeNull();
     });
+    expect((await screen.findByRole("status")).textContent).toContain("Summit Depot was restored.");
 
     fireEvent.click(screen.getByRole("tab", { name: "vault-tab-projects" }));
 
