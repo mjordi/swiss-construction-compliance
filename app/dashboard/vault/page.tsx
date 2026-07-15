@@ -148,6 +148,7 @@ export default function TechVault() {
   const pendingStatusMutationProjectIdsRef = useRef<Set<string>>(new Set());
   const hasLoadedProjectsRef = useRef(false);
   const lastSuccessfulUserIdRef = useRef<string | null>(null);
+  const currentUserIdRef = useRef<string | null>(user?.id ?? null);
   const activeTabRef = useRef(activeTab);
   const queryRef = useRef(query);
   const skipNextUrlWriteRef = useRef(false);
@@ -285,6 +286,10 @@ export default function TechVault() {
       triggerRefresh();
     });
   }, [triggerRefresh]);
+
+  useEffect(() => {
+    currentUserIdRef.current = user?.id ?? null;
+  }, [user?.id]);
 
   useEffect(() => {
     activeTabRef.current = activeTab;
@@ -462,11 +467,13 @@ export default function TechVault() {
         delete next[projectId];
         return next;
       });
-      setStatusMutationFeedback({
-        projectId,
-        projectName: currentProject.name,
-        key: archived ? "vault-restore-success" : "vault-archive-success",
-      });
+      if (currentUserIdRef.current === user.id) {
+        setStatusMutationFeedback({
+          projectId,
+          projectName: currentProject.name,
+          key: archived ? "vault-restore-success" : "vault-archive-success",
+        });
+      }
     } catch {
       setProjects((current) =>
         current.map((project) =>

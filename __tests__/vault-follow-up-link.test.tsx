@@ -62,8 +62,11 @@ const baseCases = [
 ];
 
 let mockCases = structuredClone(baseCases);
-let updateResponses: Array<{ error: { message: string } | null }> = [];
+type UpdateResponse = { error: { message: string } | null };
+
+let updateResponses: UpdateResponse[] = [];
 let deferNextUpdate = false;
+let resolveDeferredUpdate: ((response: UpdateResponse) => void) | null = null;
 let casesSelectError: { message: string } | null = null;
 let protocolsSelectError: { message: string } | null = null;
 
@@ -167,7 +170,21 @@ vi.mock("@/lib/supabase", () => ({
 
                   if (deferNextUpdate) {
                     deferNextUpdate = false;
-                    return new Promise<{ error: { message: string } | null }>(() => {});
+                    return new Promise<UpdateResponse>((resolve) => {
+                      resolveDeferredUpdate = (response) => {
+                        if (!response.error) {
+                          mockCases = mockCases.map((item) =>
+                            item.id === id
+                              ? {
+                                  ...item,
+                                  ...payload,
+                                }
+                              : item
+                          );
+                        }
+                        resolve(response);
+                      };
+                    });
                   }
 
                   const response = updateResponses.shift() ?? { error: null };
@@ -229,6 +246,7 @@ describe("vault follow-up links", () => {
     mockCases = structuredClone(baseCases);
     updateResponses = [];
     deferNextUpdate = false;
+    resolveDeferredUpdate = null;
     casesSelectError = null;
     protocolsSelectError = null;
     mockUser = { id: "user-1" };
@@ -394,6 +412,46 @@ describe("vault follow-up links", () => {
     rerender(<TechVault />);
 
     await screen.findByText("Beta Residence");
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByText("Alpine Tower was archived.")).toBeNull();
+  });
+
+  it("does not show stale archive success feedback when an in-flight mutation finishes after an account change", async () => {
+    deferNextUpdate = true;
+    const { rerender } = render(<TechVault />);
+
+    await screen.findByText("Alpine Tower");
+    const archiveButton = within(getProjectCard("Alpine Tower")).getByRole("button", { name: "vault-archive-project" });
+
+    act(() => {
+      fireEvent.click(archiveButton);
+    });
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ status: "archived" }));
+    });
+
+    mockCases = [
+      {
+        id: "case-user-2",
+        project_name: "Beta Residence",
+        canton: "ZH",
+        contract_date: "2026-02-01",
+        discovery_date: "2026-04-20",
+        updated_at: "2026-05-15T10:00:00.000Z",
+        status: "active",
+        checklist: {},
+      },
+    ];
+    mockUser = { id: "user-2" };
+    rerender(<TechVault />);
+
+    await screen.findByText("Beta Residence");
+
+    await act(async () => {
+      resolveDeferredUpdate?.({ error: null });
+    });
+
     expect(screen.queryByRole("status")).toBeNull();
     expect(screen.queryByText("Alpine Tower was archived.")).toBeNull();
   });
