@@ -158,6 +158,7 @@ export default function TechVault() {
       lastSuccessfulUserIdRef.current = null;
       setError(null);
       setProjects([]);
+      setStatusMutationFeedback(null);
       setLoading(false);
       return;
     }
@@ -182,6 +183,7 @@ export default function TechVault() {
         if (!hasLoadedProjectsRef.current || lastSuccessfulUserIdRef.current !== user.id) {
           setError("vault-error-load");
           setProjects([]);
+          setStatusMutationFeedback(null);
         }
         setLoading(false);
         return;
@@ -261,6 +263,7 @@ export default function TechVault() {
       if (!hasLoadedProjectsRef.current || lastSuccessfulUserIdRef.current !== user.id) {
         setError("vault-error-load");
         setProjects([]);
+        setStatusMutationFeedback(null);
       }
       setLoading(false);
     }
