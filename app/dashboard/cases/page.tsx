@@ -90,17 +90,27 @@ function buildCaseFormState(item: Pick<Case, "project_name" | "canton" | "contra
   };
 }
 
-function formatCaseReminderReadiness(item: ComplianceCaseViewModel, t: (key: TranslationKey) => string) {
+function formatCaseReminderReadiness(
+  item: ComplianceCaseViewModel,
+  checklist: FollowUpChecklistState,
+  t: (key: TranslationKey) => string,
+  options: { includeEmailReadiness?: boolean } = {}
+) {
   const calendarReadiness = item.noticeApplies
-    ? item.reminderReadiness.calendarExportReady
+    ? checklist.calendarReminderExported
       ? t("cases-calendar-ready")
       : t("cases-calendar-pending")
     : t("cases-calendar-not-applicable");
 
-  return [
+  const readinessParts = [
     calendarReadiness,
-    item.reminderReadiness.evidenceComplete ? t("cases-evidence-complete") : t("cases-evidence-incomplete"),
-  ].join(" · ");
+    ...(options.includeEmailReadiness
+      ? [item.reminderReadiness.emailReminderPlanned ? t("cases-email-planned") : t("cases-email-not-planned")]
+      : []),
+    checklist.evidenceAttached ? t("cases-evidence-complete") : t("cases-evidence-incomplete"),
+  ];
+
+  return readinessParts.join(" · ");
 }
 
 export default function CasesPage() {
@@ -1099,6 +1109,9 @@ export default function CasesPage() {
                     <span className="px-2.5 py-1 rounded-md border border-white/[0.12] text-muted">{item.regimeLabel}</span>
                     <span className={`px-2.5 py-1 rounded-md border font-medium ${statusClass[item.status]}`}>{item.statusLabel}</span>
                     <span className="px-2.5 py-1 rounded-md border border-emerald-500/30 text-emerald-300 bg-emerald-500/[0.08]">{progress.label}</span>
+                    <span className="px-2.5 py-1 rounded-md border border-amber-500/30 text-amber-200 bg-amber-500/[0.08]">
+                      {formatCaseReminderReadiness(item, checklist, t)}
+                    </span>
                     {(protocolCounts[item.id] ?? 0) > 0 && (
                       <span className="px-2.5 py-1 rounded-md border border-blue-500/30 text-blue-300 bg-blue-500/[0.08]">
                         {protocolCounts[item.id]} {t("cases-protocols")}
@@ -1170,7 +1183,7 @@ export default function CasesPage() {
                   />
                   <InfoCell
                     label={t("cases-reminder-readiness")}
-                    value={formatCaseReminderReadiness(item, t)}
+                    value={formatCaseReminderReadiness(item, checklist, t)}
                   />
                 </div>
 
@@ -1294,11 +1307,7 @@ export default function CasesPage() {
                     <InfoCell label={t("cases-deadline-countdown")} value={item.deadlineCountdownLabel} valueClassName={countdownClass[item.deadlineCountdownTone]} />
                     <InfoCell
                       label={t("cases-reminder-readiness")}
-                      value={[
-                        item.reminderReadiness.calendarExportReady ? t("cases-calendar-ready") : t("cases-calendar-pending"),
-                        item.reminderReadiness.emailReminderPlanned ? t("cases-email-planned") : t("cases-email-not-planned"),
-                        item.reminderReadiness.evidenceComplete ? t("cases-evidence-complete") : t("cases-evidence-incomplete"),
-                      ].join(" · ")}
+                      value={formatCaseReminderReadiness(item, checklist, t, { includeEmailReadiness: true })}
                     />
                   </div>
 

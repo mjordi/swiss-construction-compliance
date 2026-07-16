@@ -167,6 +167,19 @@ describe("cases checklist persistence", () => {
     expect((defaultChecked as HTMLInputElement).checked).toBe(true);
   });
 
+  it("surfaces calendar reminder readiness on the case card before details are opened", async () => {
+    render(<CasesPage />);
+
+    const heading = await screen.findByText("Alpine Tower");
+    const article = heading.closest("article");
+    const scanBadge = Array.from(article?.querySelectorAll("span") ?? []).find((node) =>
+      node.textContent?.includes("cases-calendar-pending")
+    );
+
+    expect(scanBadge).toBeTruthy();
+    expect(scanBadge?.className).toContain("border-amber-500/30");
+  });
+
   it("rolls back an optimistic checklist toggle and shows inline feedback when persistence fails", async () => {
     updateEqMock.mockResolvedValueOnce({ error: { message: "boom" } });
 
