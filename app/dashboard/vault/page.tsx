@@ -153,6 +153,8 @@ export default function TechVault() {
   const queryRef = useRef(query);
   const skipNextUrlWriteRef = useRef(false);
 
+  currentUserIdRef.current = user?.id ?? null;
+
   const runRefresh = useCallback(async (fetchId: number) => {
     if (!user) {
       hasLoadedProjectsRef.current = false;
@@ -286,10 +288,6 @@ export default function TechVault() {
       triggerRefresh();
     });
   }, [triggerRefresh]);
-
-  useEffect(() => {
-    currentUserIdRef.current = user?.id ?? null;
-  }, [user?.id]);
 
   useEffect(() => {
     activeTabRef.current = activeTab;
