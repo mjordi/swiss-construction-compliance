@@ -358,6 +358,30 @@ describe("cases filter URL synchronization", () => {
     expect(snapshot.textContent).not.toContain("cases-calendar-pending");
   });
 
+  it("derives reminder readiness from the persisted checklist state", async () => {
+    caseResponseFactory = () => ({
+      data: [
+        successCase("case-exported", "Exported Reminder", {
+          checklist: {
+            defectDocumented: true,
+            evidenceAttached: true,
+            noticeDrafted: true,
+            calendarReminderExported: true,
+          },
+        }),
+      ],
+      error: null,
+    });
+    protocolResponseFactory = () => ({ data: [], error: null });
+
+    render(<CasesPage />);
+
+    const snapshot = await screen.findByTestId("cases-action-snapshot-case-exported");
+    expect(snapshot.textContent).toContain("cases-calendar-ready");
+    expect(snapshot.textContent).toContain("cases-evidence-complete");
+    expect(snapshot.textContent).not.toContain("cases-calendar-pending");
+  });
+
   it("renders a per-case vault handoff scoped to the case project name", async () => {
     caseResponseFactory = () => ({ data: [successCase()], error: null });
     protocolResponseFactory = () => ({ data: [], error: null });
