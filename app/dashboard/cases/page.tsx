@@ -1099,6 +1099,9 @@ export default function CasesPage() {
                     <span className="px-2.5 py-1 rounded-md border border-white/[0.12] text-muted">{item.regimeLabel}</span>
                     <span className={`px-2.5 py-1 rounded-md border font-medium ${statusClass[item.status]}`}>{item.statusLabel}</span>
                     <span className="px-2.5 py-1 rounded-md border border-emerald-500/30 text-emerald-300 bg-emerald-500/[0.08]">{progress.label}</span>
+                    <span className="px-2.5 py-1 rounded-md border border-amber-500/30 text-amber-200 bg-amber-500/[0.08]">
+                      {formatCaseReminderReadiness(item, t)}
+                    </span>
                     {(protocolCounts[item.id] ?? 0) > 0 && (
                       <span className="px-2.5 py-1 rounded-md border border-blue-500/30 text-blue-300 bg-blue-500/[0.08]">
                         {protocolCounts[item.id]} {t("cases-protocols")}
