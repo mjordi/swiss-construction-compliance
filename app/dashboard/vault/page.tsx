@@ -137,15 +137,23 @@ export default function TechVault() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<TranslationKey | null>(null);
   const [statusMutationErrors, setStatusMutationErrors] = useState<Record<string, TranslationKey>>({});
+  const [statusMutationFeedback, setStatusMutationFeedback] = useState<{
+    projectId: string;
+    projectName: string;
+    key: TranslationKey;
+  } | null>(null);
   const [statusMutationProjectIds, setStatusMutationProjectIds] = useState<string[]>([]);
   const [projects, setProjects] = useState<VaultProjectCard[]>([]);
   const latestFetchIdRef = useRef(0);
   const pendingStatusMutationProjectIdsRef = useRef<Set<string>>(new Set());
   const hasLoadedProjectsRef = useRef(false);
   const lastSuccessfulUserIdRef = useRef<string | null>(null);
+  const currentUserIdRef = useRef<string | null>(user?.id ?? null);
   const activeTabRef = useRef(activeTab);
   const queryRef = useRef(query);
   const skipNextUrlWriteRef = useRef(false);
+
+  currentUserIdRef.current = user?.id ?? null;
 
   const runRefresh = useCallback(async (fetchId: number) => {
     if (!user) {
@@ -153,6 +161,7 @@ export default function TechVault() {
       lastSuccessfulUserIdRef.current = null;
       setError(null);
       setProjects([]);
+      setStatusMutationFeedback(null);
       setLoading(false);
       return;
     }
@@ -177,6 +186,7 @@ export default function TechVault() {
         if (!hasLoadedProjectsRef.current || lastSuccessfulUserIdRef.current !== user.id) {
           setError("vault-error-load");
           setProjects([]);
+          setStatusMutationFeedback(null);
         }
         setLoading(false);
         return;
@@ -247,8 +257,12 @@ export default function TechVault() {
         };
       });
 
+      const isDifferentUserRefresh = lastSuccessfulUserIdRef.current !== user.id;
       hasLoadedProjectsRef.current = true;
       lastSuccessfulUserIdRef.current = user.id;
+      if (isDifferentUserRefresh) {
+        setStatusMutationFeedback(null);
+      }
       setProjects(nextProjects);
       setLoading(false);
     } catch {
@@ -256,6 +270,7 @@ export default function TechVault() {
       if (!hasLoadedProjectsRef.current || lastSuccessfulUserIdRef.current !== user.id) {
         setError("vault-error-load");
         setProjects([]);
+        setStatusMutationFeedback(null);
       }
       setLoading(false);
     }
@@ -412,6 +427,9 @@ export default function TechVault() {
       delete next[projectId];
       return next;
     });
+    setStatusMutationFeedback((current) =>
+      current?.projectId === projectId ? null : current
+    );
     setProjects((current) =>
       current.map((project) =>
         project.id === projectId
@@ -447,6 +465,13 @@ export default function TechVault() {
         delete next[projectId];
         return next;
       });
+      if (currentUserIdRef.current === user.id) {
+        setStatusMutationFeedback({
+          projectId,
+          projectName: currentProject.name,
+          key: archived ? "vault-restore-success" : "vault-archive-success",
+        });
+      }
     } catch {
       setProjects((current) =>
         current.map((project) =>
@@ -459,6 +484,9 @@ export default function TechVault() {
         ...current,
         [projectId]: "vault-update-status-error",
       }));
+      setStatusMutationFeedback((current) =>
+        current?.projectId === projectId ? null : current
+      );
     } finally {
       pendingStatusMutationProjectIdsRef.current.delete(projectId);
       setStatusMutationProjectIds((current) => current.filter((currentProjectId) => currentProjectId !== projectId));
@@ -514,6 +542,14 @@ export default function TechVault() {
             />
           </div>
         </div>
+
+        {statusMutationFeedback && (
+          <div role="status" className="border-b border-emerald-500/20 bg-emerald-500/[0.08] px-5 py-3 text-sm text-emerald-100">
+            {interpolateTranslation(t(statusMutationFeedback.key), {
+              projectName: statusMutationFeedback.projectName,
+            })}
+          </div>
+        )}
 
         <div className="flex-1 overflow-y-auto p-6">
           {loading ? (

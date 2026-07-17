@@ -6,7 +6,7 @@ const replaceMock = vi.fn();
 const pushMock = vi.fn();
 const routerMock = { replace: replaceMock, push: pushMock };
 const updateMock = vi.fn();
-const mockUser = { id: "user-1" };
+let mockUser = { id: "user-1" };
 
 const baseCases = [
   {
@@ -62,8 +62,13 @@ const baseCases = [
 ];
 
 let mockCases = structuredClone(baseCases);
-let updateResponses: Array<{ error: { message: string } | null }> = [];
+type UpdateResponse = { error: { message: string } | null };
+
+let updateResponses: UpdateResponse[] = [];
 let deferNextUpdate = false;
+let resolveDeferredUpdate: ((response: UpdateResponse) => void) | null = null;
+let casesSelectError: { message: string } | null = null;
+let protocolsSelectError: { message: string } | null = null;
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/vault",
@@ -82,7 +87,11 @@ vi.mock("@/context/LanguageContext", () => ({
         ? "{completed}/{total} checklist items ready"
         : key === "vault-audit-deadline-context"
           ? "Deadline context: {context}"
-          : key,
+          : key === "vault-archive-success"
+            ? "{projectName} was archived."
+            : key === "vault-restore-success"
+              ? "{projectName} was restored."
+              : key,
   }),
 }));
 
@@ -145,8 +154,8 @@ vi.mock("@/lib/supabase", () => ({
             eq: () => ({
               order: () =>
                 Promise.resolve({
-                  data: mockCases,
-                  error: null,
+                  data: casesSelectError ? null : mockCases,
+                  error: casesSelectError,
                 }),
             }),
           }),
@@ -161,7 +170,21 @@ vi.mock("@/lib/supabase", () => ({
 
                   if (deferNextUpdate) {
                     deferNextUpdate = false;
-                    return new Promise<{ error: { message: string } | null }>(() => {});
+                    return new Promise<UpdateResponse>((resolve) => {
+                      resolveDeferredUpdate = (response) => {
+                        if (!response.error) {
+                          mockCases = mockCases.map((item) =>
+                            item.id === id
+                              ? {
+                                  ...item,
+                                  ...payload,
+                                }
+                              : item
+                          );
+                        }
+                        resolve(response);
+                      };
+                    });
                   }
 
                   const response = updateResponses.shift() ?? { error: null };
@@ -190,8 +213,8 @@ vi.mock("@/lib/supabase", () => ({
           select: () => ({
             eq: () =>
               Promise.resolve({
-                data: [{ id: "protocol-1", case_id: "case-review", project_name: "Riverside Bridge" }],
-                error: null,
+                data: protocolsSelectError ? null : [{ id: "protocol-1", case_id: "case-review", project_name: "Riverside Bridge" }],
+                error: protocolsSelectError,
               }),
           }),
         };
@@ -223,6 +246,10 @@ describe("vault follow-up links", () => {
     mockCases = structuredClone(baseCases);
     updateResponses = [];
     deferNextUpdate = false;
+    resolveDeferredUpdate = null;
+    casesSelectError = null;
+    protocolsSelectError = null;
+    mockUser = { id: "user-1" };
   });
 
   it("routes only triage-eligible review projects into triage while keeping warning review cards scoped to project search", async () => {
@@ -329,10 +356,104 @@ describe("vault follow-up links", () => {
     });
 
     expect(alpineCard).toBeTruthy();
+    expect((await screen.findByRole("status")).textContent).toContain("Alpine Tower was archived.");
 
     fireEvent.click(screen.getByRole("tab", { name: "vault-tab-archived" }));
 
     expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+  });
+
+  it("clears archive success feedback when a different user's refresh fails", async () => {
+    const { rerender } = render(<TechVault />);
+
+    await screen.findByText("Alpine Tower");
+    const archiveButton = within(getProjectCard("Alpine Tower")).getByRole("button", { name: "vault-archive-project" });
+
+    act(() => {
+      fireEvent.click(archiveButton);
+    });
+
+    expect((await screen.findByRole("status")).textContent).toContain("Alpine Tower was archived.");
+
+    casesSelectError = { message: "new user failed" };
+    mockUser = { id: "user-2" };
+    rerender(<TechVault />);
+
+    expect((await screen.findByRole("alert")).textContent).toContain("vault-error-load");
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByText("Alpine Tower was archived.")).toBeNull();
+  });
+
+  it("clears archive success feedback when a different user's refresh succeeds", async () => {
+    const { rerender } = render(<TechVault />);
+
+    await screen.findByText("Alpine Tower");
+    const archiveButton = within(getProjectCard("Alpine Tower")).getByRole("button", { name: "vault-archive-project" });
+
+    act(() => {
+      fireEvent.click(archiveButton);
+    });
+
+    expect((await screen.findByRole("status")).textContent).toContain("Alpine Tower was archived.");
+
+    mockCases = [
+      {
+        id: "case-user-2",
+        project_name: "Beta Residence",
+        canton: "ZH",
+        contract_date: "2026-02-01",
+        discovery_date: "2026-04-20",
+        updated_at: "2026-05-15T10:00:00.000Z",
+        status: "active",
+        checklist: {},
+      },
+    ];
+    mockUser = { id: "user-2" };
+    rerender(<TechVault />);
+
+    await screen.findByText("Beta Residence");
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByText("Alpine Tower was archived.")).toBeNull();
+  });
+
+  it("does not show stale archive success feedback when an in-flight mutation finishes after an account change", async () => {
+    deferNextUpdate = true;
+    const { rerender } = render(<TechVault />);
+
+    await screen.findByText("Alpine Tower");
+    const archiveButton = within(getProjectCard("Alpine Tower")).getByRole("button", { name: "vault-archive-project" });
+
+    act(() => {
+      fireEvent.click(archiveButton);
+    });
+
+    await waitFor(() => {
+      expect(updateMock).toHaveBeenCalledWith(expect.objectContaining({ status: "archived" }));
+    });
+
+    mockCases = [
+      {
+        id: "case-user-2",
+        project_name: "Beta Residence",
+        canton: "ZH",
+        contract_date: "2026-02-01",
+        discovery_date: "2026-04-20",
+        updated_at: "2026-05-15T10:00:00.000Z",
+        status: "active",
+        checklist: {},
+      },
+    ];
+    mockUser = { id: "user-2" };
+    rerender(<TechVault />);
+
+    await screen.findByText("Beta Residence");
+
+    await act(async () => {
+      resolveDeferredUpdate?.({ error: null });
+    });
+
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(screen.queryByText("Alpine Tower was archived.")).toBeNull();
   });
 
   it("restores an archived project through Supabase and returns it to active projects immediately", async () => {
@@ -351,6 +472,7 @@ describe("vault follow-up links", () => {
     await waitFor(() => {
       expect(screen.queryByText("Summit Depot")).toBeNull();
     });
+    expect((await screen.findByRole("status")).textContent).toContain("Summit Depot was restored.");
 
     fireEvent.click(screen.getByRole("tab", { name: "vault-tab-projects" }));
 
