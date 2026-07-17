@@ -1173,13 +1173,21 @@ export default function CasesPage() {
 
                 <div
                   data-testid={`cases-action-snapshot-${item.id}`}
-                  className="mb-5 grid gap-3 rounded-xl border border-white/[0.06] bg-black/20 p-3 text-sm md:grid-cols-3"
+                  className="mb-5 grid gap-3 rounded-xl border border-white/[0.06] bg-black/20 p-3 text-sm md:grid-cols-4"
                 >
                   <InfoCell label={t("cases-next-legal-action")} value={item.nextAction} />
                   <InfoCell
                     label={t("cases-deadline-countdown")}
                     value={item.deadlineCountdownLabel}
                     valueClassName={countdownClass[item.deadlineCountdownTone]}
+                  />
+                  <InfoCell
+                    label={t("cases-linked-protocols")}
+                    value={
+                      (protocolCounts[item.id] ?? 0) > 0
+                        ? String(protocolCounts[item.id])
+                        : t("cases-linked-protocols-none")
+                    }
                   />
                   <InfoCell
                     label={t("cases-reminder-readiness")}

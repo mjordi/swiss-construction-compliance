@@ -12,6 +12,7 @@ let caseChecklistData: Record<string, boolean> | null = {
   noticeDrafted: false,
   calendarReminderExported: false,
 };
+let protocolRows: Array<{ case_id: string }> = [];
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/cases",
@@ -57,6 +58,7 @@ vi.mock("@/lib/case-timeline", () => ({
       regimeLabel: "New law",
       regime: "new",
       noticeApplies: true,
+      nextAction: "cases-next-action-warning",
       noticeDeadlineLabel: "2026-05-20",
       discoveredOnLabel: "2026-03-21",
       checklistDefaults: {
@@ -120,7 +122,7 @@ vi.mock("@/lib/supabase", () => ({
         return {
           select: () => ({
             eq: () => ({
-              not: () => Promise.resolve({ data: [], error: null }),
+              not: () => Promise.resolve({ data: protocolRows, error: null }),
             }),
           }),
         };
@@ -154,6 +156,7 @@ describe("cases checklist persistence", () => {
       noticeDrafted: false,
       calendarReminderExported: false,
     };
+    protocolRows = [];
   });
 
   it("keeps timeline-derived checklist defaults when persisted checklist data is partial", async () => {
@@ -178,6 +181,16 @@ describe("cases checklist persistence", () => {
 
     expect(scanBadge).toBeTruthy();
     expect(scanBadge?.className).toContain("border-amber-500/30");
+  });
+
+  it("includes linked protocol count in the scan-level action snapshot", async () => {
+    protocolRows = [{ case_id: "case-1" }, { case_id: "case-1" }];
+
+    render(<CasesPage />);
+
+    const snapshot = await screen.findByTestId("cases-action-snapshot-case-1");
+    expect(snapshot.textContent).toContain("cases-linked-protocols");
+    expect(snapshot.textContent).toContain("2");
   });
 
   it("rolls back an optimistic checklist toggle and shows inline feedback when persistence fails", async () => {
