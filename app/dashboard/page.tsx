@@ -475,13 +475,16 @@ export default function Dashboard() {
             if (caseLoadError) throw caseLoadError;
 
             const persistedChecklist = (caseData?.checklist ?? null) as Partial<FollowUpChecklistState> | null;
-            const persistedChecklistState = normalizeFollowUpChecklistState(persistedChecklist);
+            const checklist = normalizeFollowUpChecklistState({
+              ...selectedCaseContext?.checklistDefaults,
+              ...(persistedChecklist ?? {}),
+            });
 
-            if (!persistedChecklistState.defectDocumented) {
+            if (!persistedChecklist?.defectDocumented) {
               const { error: caseUpdateError } = await supabase
                 .from("cases")
                 .update({
-                  checklist: { ...persistedChecklistState, defectDocumented: true },
+                  checklist: { ...checklist, defectDocumented: true },
                   updated_at: new Date().toISOString(),
                 })
                 .eq("id", effectiveSelectedCaseId);
