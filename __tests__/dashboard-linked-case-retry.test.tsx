@@ -534,7 +534,12 @@ describe("dashboard linked-case loading retry", () => {
       expect(insertedProtocols[0]?.case_id).toBe("case-1");
       expect(caseUpdatePayloads).toHaveLength(1);
     });
-    expect(caseUpdatePayloads[0]?.checklist).toEqual({ defectDocumented: true });
+    expect(caseUpdatePayloads[0]?.checklist).toEqual({
+      defectDocumented: true,
+      evidenceAttached: false,
+      noticeDrafted: false,
+      calendarReminderExported: false,
+    });
   });
 
   it("preserves sparse linked-case checklist values when marking defect documentation", async () => {
@@ -572,8 +577,10 @@ describe("dashboard linked-case loading retry", () => {
       expect(caseUpdatePayloads).toHaveLength(1);
     });
     expect(caseUpdatePayloads[0]?.checklist).toEqual({
-      evidenceAttached: true,
       defectDocumented: true,
+      evidenceAttached: true,
+      noticeDrafted: false,
+      calendarReminderExported: false,
     });
   });
 

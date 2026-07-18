@@ -10,6 +10,7 @@ import { AuditReportPDF } from "@/components/dashboard/AuditReportPDF";
 import SignaturePad from 'signature_pad';
 import { useLanguage } from "@/context/LanguageContext";
 import type { TranslationKey } from "@/locales";
+import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { buildComplianceRecord } from "@/lib/compliance-record";
 import { getEffectiveSelectedCaseId, hasStaleLinkedCase as isStaleLinkedCase } from "@/lib/dashboard-linked-case";
 import { buildProtocolDefectDescription, buildWizardDraft, getProtocolFinalizeReadiness, type WizardDraft } from "@/lib/dashboard-protocol";
@@ -473,12 +474,17 @@ export default function Dashboard() {
 
             if (caseLoadError) throw caseLoadError;
 
-            const checklist = (caseData?.checklist ?? null) as Partial<FollowUpChecklistState> | null;
-            if (!checklist?.defectDocumented) {
+            const persistedChecklist = (caseData?.checklist ?? null) as Partial<FollowUpChecklistState> | null;
+            const checklist = normalizeFollowUpChecklistState({
+              ...selectedCaseContext?.checklistDefaults,
+              ...(persistedChecklist ?? {}),
+            });
+
+            if (!persistedChecklist?.defectDocumented) {
               const { error: caseUpdateError } = await supabase
                 .from("cases")
                 .update({
-                  checklist: { ...(checklist ?? {}), defectDocumented: true },
+                  checklist: { ...checklist, defectDocumented: true },
                   updated_at: new Date().toISOString(),
                 })
                 .eq("id", effectiveSelectedCaseId);
