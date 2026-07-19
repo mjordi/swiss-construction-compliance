@@ -193,6 +193,21 @@ describe("cases checklist persistence", () => {
     expect(snapshot.textContent).toContain("2");
   });
 
+  it("shows evidence readiness in the scan-level action snapshot", async () => {
+    caseChecklistData = {
+      defectDocumented: true,
+      evidenceAttached: false,
+      noticeDrafted: false,
+      calendarReminderExported: false,
+    };
+
+    render(<CasesPage />);
+
+    const snapshot = await screen.findByTestId("cases-action-snapshot-case-1");
+    expect(snapshot.textContent).toContain("cases-evidence-readiness");
+    expect(snapshot.textContent).toContain("cases-evidence-incomplete");
+  });
+
   it("rolls back an optimistic checklist toggle and shows inline feedback when persistence fails", async () => {
     updateEqMock.mockResolvedValueOnce({ error: { message: "boom" } });
 
