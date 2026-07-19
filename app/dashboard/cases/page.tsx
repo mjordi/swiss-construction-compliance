@@ -1173,7 +1173,7 @@ export default function CasesPage() {
 
                 <div
                   data-testid={`cases-action-snapshot-${item.id}`}
-                  className="mb-5 grid gap-3 rounded-xl border border-white/[0.06] bg-black/20 p-3 text-sm md:grid-cols-4"
+                  className="mb-5 grid gap-3 rounded-xl border border-white/[0.06] bg-black/20 p-3 text-sm md:grid-cols-5"
                 >
                   <InfoCell label={t("cases-next-legal-action")} value={item.nextAction} />
                   <InfoCell
@@ -1188,6 +1188,10 @@ export default function CasesPage() {
                         ? String(protocolCounts[item.id])
                         : t("cases-linked-protocols-none")
                     }
+                  />
+                  <InfoCell
+                    label={t("cases-evidence-readiness")}
+                    value={checklist.evidenceAttached ? t("cases-evidence-complete") : t("cases-evidence-incomplete")}
                   />
                   <InfoCell
                     label={t("cases-reminder-readiness")}
