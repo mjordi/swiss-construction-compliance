@@ -1173,7 +1173,7 @@ export default function CasesPage() {
 
                 <div
                   data-testid={`cases-action-snapshot-${item.id}`}
-                  className="mb-5 grid gap-3 rounded-xl border border-white/[0.06] bg-black/20 p-3 text-sm md:grid-cols-5"
+                  className="mb-5 grid gap-3 rounded-xl border border-white/[0.06] bg-black/20 p-3 text-sm md:grid-cols-2 lg:grid-cols-6"
                 >
                   <InfoCell label={t("cases-next-legal-action")} value={item.nextAction} />
                   <InfoCell
@@ -1192,6 +1192,10 @@ export default function CasesPage() {
                   <InfoCell
                     label={t("cases-evidence-readiness")}
                     value={checklist.evidenceAttached ? t("cases-evidence-complete") : t("cases-evidence-incomplete")}
+                  />
+                  <InfoCell
+                    label={t("cases-notice-readiness")}
+                    value={checklist.noticeDrafted ? t("cases-notice-ready") : t("cases-notice-pending")}
                   />
                   <InfoCell
                     label={t("cases-reminder-readiness")}
