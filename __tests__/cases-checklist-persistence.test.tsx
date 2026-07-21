@@ -223,6 +223,26 @@ describe("cases checklist persistence", () => {
     expect(snapshot.textContent).toContain("cases-notice-pending");
   });
 
+  it("summarizes audit readiness and missing package items in the scan-level action snapshot", async () => {
+    caseChecklistData = {
+      defectDocumented: true,
+      evidenceAttached: true,
+      noticeDrafted: false,
+      calendarReminderExported: false,
+    };
+    protocolRows = [];
+
+    render(<CasesPage />);
+
+    const snapshot = await screen.findByTestId("cases-action-snapshot-case-1");
+    expect(snapshot.textContent).toContain("cases-audit-readiness");
+    expect(snapshot.textContent).toContain("2/5 cases-audit-ready");
+    expect(snapshot.textContent).toContain("cases-audit-missing");
+    expect(snapshot.textContent).toContain("cases-checklist-notice-drafted");
+    expect(snapshot.textContent).toContain("cases-checklist-calendar-exported");
+    expect(snapshot.textContent).toContain("cases-linked-protocols");
+  });
+
   it("rolls back an optimistic checklist toggle and shows inline feedback when persistence fails", async () => {
     updateEqMock.mockResolvedValueOnce({ error: { message: "boom" } });
 
