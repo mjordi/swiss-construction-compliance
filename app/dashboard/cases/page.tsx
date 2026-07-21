@@ -113,6 +113,45 @@ function formatCaseReminderReadiness(
   return readinessParts.join(" · ");
 }
 
+function formatCaseAuditReadinessSummary(
+  item: ComplianceCaseViewModel,
+  checklist: FollowUpChecklistState,
+  protocolCount: number,
+  t: (key: TranslationKey) => string
+) {
+  const readinessItems = [
+    {
+      ready: checklist.defectDocumented,
+      missingLabel: t("cases-checklist-defect-documented"),
+    },
+    {
+      ready: checklist.evidenceAttached,
+      missingLabel: t("cases-checklist-evidence-attached"),
+    },
+    {
+      ready: checklist.noticeDrafted,
+      missingLabel: t("cases-checklist-notice-drafted"),
+    },
+    {
+      ready: !item.noticeApplies || checklist.calendarReminderExported,
+      missingLabel: t("cases-checklist-calendar-exported"),
+    },
+    {
+      ready: protocolCount > 0,
+      missingLabel: t("cases-linked-protocols"),
+    },
+  ];
+  const completed = readinessItems.filter((entry) => entry.ready).length;
+  const missing = readinessItems.filter((entry) => !entry.ready).map((entry) => entry.missingLabel);
+  const summary = `${completed}/${readinessItems.length} ${t("cases-audit-ready")}`;
+
+  if (missing.length === 0) {
+    return `${summary} · ${t("cases-audit-complete")}`;
+  }
+
+  return `${summary} · ${t("cases-audit-missing")}: ${missing.join(", ")}`;
+}
+
 export default function CasesPage() {
   const { t } = useLanguage();
   const { user } = useAuth();
@@ -1175,6 +1214,14 @@ export default function CasesPage() {
                   data-testid={`cases-action-snapshot-${item.id}`}
                   className="mb-5 grid gap-3 rounded-xl border border-white/[0.06] bg-black/20 p-3 text-sm md:grid-cols-2 lg:grid-cols-6"
                 >
+                  <div className="rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] p-3 md:col-span-2 lg:col-span-6">
+                    <div className="text-[11px] uppercase tracking-[0.1em] text-emerald-200/80">
+                      {t("cases-audit-readiness")}
+                    </div>
+                    <div className="mt-1 font-medium text-emerald-100">
+                      {formatCaseAuditReadinessSummary(item, checklist, protocolCounts[item.id] ?? 0, t)}
+                    </div>
+                  </div>
                   <InfoCell label={t("cases-next-legal-action")} value={item.nextAction} />
                   <InfoCell
                     label={t("cases-deadline-countdown")}
