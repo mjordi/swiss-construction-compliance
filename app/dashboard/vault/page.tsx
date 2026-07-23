@@ -36,6 +36,7 @@ interface VaultProjectCard {
   compliance: number;
   checklistCompleted: number;
   checklistTotal: number;
+  auditMissingLabelKeys: TranslationKey[];
   legalStatus: CaseDeadlineStatus | null;
   legalRegime: ComplianceCaseViewModel["regime"] | null;
   daysToDeadline: number | null;
@@ -232,12 +233,20 @@ export default function TechVault() {
         const restoredStatus = timelineState?.status ?? "active";
         const restoredPrefillTriage = Boolean(timelineState?.prefillTriage);
         const timelineItem = timelineByCaseId.get(c.id);
-        const progress = deriveChecklistProgress(
-          normalizeFollowUpChecklistState({
-            ...timelineItem?.checklistDefaults,
-            ...(c.checklist ?? {}),
-          })
-        );
+        const effectiveChecklist = normalizeFollowUpChecklistState({
+          ...timelineItem?.checklistDefaults,
+          ...(c.checklist ?? {}),
+        });
+        const progress = deriveChecklistProgress(effectiveChecklist);
+        const auditMissingLabelKeys: TranslationKey[] = [
+          ...(effectiveChecklist.defectDocumented ? [] : ["cases-checklist-defect-documented" as const]),
+          ...(effectiveChecklist.evidenceAttached ? [] : ["cases-checklist-evidence-attached" as const]),
+          ...(effectiveChecklist.noticeDrafted ? [] : ["cases-checklist-notice-drafted" as const]),
+          ...(!timelineItem?.noticeApplies || effectiveChecklist.calendarReminderExported
+            ? []
+            : ["cases-checklist-calendar-exported" as const]),
+          ...(docsByCase[c.id] > 0 ? [] : ["cases-linked-protocols" as const]),
+        ];
         return {
           id: c.id,
           name: c.project_name,
@@ -248,6 +257,7 @@ export default function TechVault() {
           compliance: Math.round((progress.completed / progress.total) * 100),
           checklistCompleted: progress.completed,
           checklistTotal: progress.total,
+          auditMissingLabelKeys,
           legalStatus: timelineItem?.status ?? null,
           legalRegime: timelineItem?.regime ?? null,
           daysToDeadline: timelineItem?.daysToDeadline ?? null,
@@ -709,6 +719,11 @@ export default function TechVault() {
                             {interpolateTranslation(t("vault-audit-deadline-context"), {
                               context: getLocalizedCountdownLabel(project, t),
                             })}
+                          </p>
+                          <p className="mt-2 text-xs text-slate-300">
+                            {project.auditMissingLabelKeys.length === 0
+                              ? t("cases-audit-complete")
+                              : `${t("cases-audit-missing")}: ${project.auditMissingLabelKeys.map((key) => t(key)).join(", ")}`}
                           </p>
                         </div>
                       ) : null}

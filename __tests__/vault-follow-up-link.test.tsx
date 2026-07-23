@@ -122,6 +122,7 @@ vi.mock("@/lib/case-timeline", () => ({
                 ? "warning"
                 : "ok",
       regime: input.id === "case-immediate" ? "old" : "new",
+      noticeApplies: input.id !== "case-immediate",
       daysToDeadline: input.id === "case-review" ? 12 : input.id === "case-immediate" ? null : 45,
       checklistDefaults: {
         defectDocumented: true,
@@ -290,6 +291,19 @@ describe("vault follow-up links", () => {
     expect(within(card).getByText("cases-status-urgent")).toBeTruthy();
     expect(within(card).getByText("cases-next-action-urgent")).toBeTruthy();
     expect(within(card).getByText("Deadline context: 12 cases-countdown-days-left-suffix")).toBeTruthy();
+  });
+
+  it("explains missing audit blockers on vault project cards", async () => {
+    render(<TechVault />);
+
+    await screen.findByText("Riverside Bridge");
+
+    const card = getProjectCard("Riverside Bridge");
+    expect(
+      within(card).getByText(
+        "cases-audit-missing: cases-checklist-evidence-attached, cases-checklist-notice-drafted, cases-checklist-calendar-exported"
+      )
+    ).toBeTruthy();
   });
 
   it("navigates to the cases handoff when a project card is clicked", async () => {
