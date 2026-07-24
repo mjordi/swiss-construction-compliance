@@ -90,6 +90,14 @@ export interface ComplianceCaseViewModel {
   checklistDefaults: FollowUpChecklistState;
 }
 
+export type CaseLegalMilestoneKind = "contract" | "discovery" | "notice-deadline";
+
+export interface CaseLegalMilestone {
+  kind: CaseLegalMilestoneKind;
+  date: Date;
+  dateLabel: string;
+}
+
 export function toComplianceCaseViewModel(
   input: ComplianceCaseInput
 ): ComplianceCaseViewModel {
@@ -192,6 +200,43 @@ export function buildComplianceCaseTimeline(
       return [];
     }
   });
+}
+
+export function deriveCaseLegalMilestones(
+  item: ComplianceCaseViewModel
+): CaseLegalMilestone[] {
+  const milestones: CaseLegalMilestone[] = [
+    {
+      kind: "contract",
+      date: item.contractDate,
+      dateLabel: item.contractDateLabel,
+    },
+    {
+      kind: "discovery",
+      date: item.discoveryDate,
+      dateLabel: item.discoveryDateLabel,
+    },
+  ];
+
+  if (item.noticeDeadline) {
+    milestones.push({
+      kind: "notice-deadline",
+      date: item.noticeDeadline,
+      dateLabel: item.noticeDeadlineLabel,
+    });
+  }
+
+  const milestoneOrder: Record<CaseLegalMilestoneKind, number> = {
+    contract: 0,
+    discovery: 1,
+    "notice-deadline": 2,
+  };
+
+  return milestones.sort(
+    (a, b) =>
+      a.date.getTime() - b.date.getTime() ||
+      milestoneOrder[a.kind] - milestoneOrder[b.kind]
+  );
 }
 
 export function filterComplianceCases(

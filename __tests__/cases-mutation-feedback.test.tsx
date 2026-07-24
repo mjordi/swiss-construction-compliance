@@ -86,6 +86,11 @@ vi.mock("@/lib/case-timeline", () => ({
       },
     })),
   buildCaseDeadlineReminderICS: () => "BEGIN:VCALENDAR\nEND:VCALENDAR",
+  deriveCaseLegalMilestones: (item: { contractDateLabel: string; discoveryDateLabel: string; noticeDeadlineLabel: string }) => [
+    { kind: "contract", date: new Date("2026-03-01"), dateLabel: item.contractDateLabel },
+    { kind: "discovery", date: new Date("2026-03-21"), dateLabel: item.discoveryDateLabel },
+    { kind: "notice-deadline", date: new Date("2026-05-20"), dateLabel: item.noticeDeadlineLabel },
+  ],
   deriveChecklistProgress: (checklist: Record<string, boolean>) => ({
     completed: Object.values(checklist).filter(Boolean).length,
     total: Object.keys(checklist).length,
