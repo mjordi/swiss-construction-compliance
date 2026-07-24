@@ -74,6 +74,11 @@ vi.mock("@/lib/case-timeline", () => ({
       },
     })),
   buildCaseDeadlineReminderICS: () => "BEGIN:VCALENDAR\nEND:VCALENDAR",
+  deriveCaseLegalMilestones: () => [
+    { kind: "contract", date: new Date("2026-03-01"), dateLabel: "01.03.2026" },
+    { kind: "discovery", date: new Date("2026-03-21"), dateLabel: "21.03.2026" },
+    { kind: "notice-deadline", date: new Date("2026-05-20"), dateLabel: "20.05.2026" },
+  ],
   deriveChecklistProgress: (checklist: Record<string, boolean>) => ({
     completed: Object.values(checklist).filter(Boolean).length,
     total: Object.keys(checklist).length,
@@ -241,6 +246,19 @@ describe("cases checklist persistence", () => {
     expect(snapshot.textContent).toContain("cases-checklist-notice-drafted");
     expect(snapshot.textContent).toContain("cases-checklist-calendar-exported");
     expect(snapshot.textContent).toContain("cases-linked-protocols");
+  });
+
+  it("shows an ordered legal milestone timeline in expanded case details", async () => {
+    render(<CasesPage />);
+
+    const timeline = await screen.findByTestId("cases-legal-timeline-case-1");
+    const milestones = Array.from(timeline.querySelectorAll("li")).map((item) => item.textContent);
+
+    expect(milestones).toEqual([
+      "cases-legal-milestone-contract01.03.2026",
+      "cases-legal-milestone-discovery21.03.2026",
+      "cases-legal-milestone-notice-deadline20.05.2026",
+    ]);
   });
 
   it("rolls back an optimistic checklist toggle and shows inline feedback when persistence fails", async () => {

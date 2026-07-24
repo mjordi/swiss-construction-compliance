@@ -14,12 +14,14 @@ import {
   applyComplianceCaseView,
   buildCaseDeadlineReminderICS,
   buildComplianceCaseTimeline,
+  deriveCaseLegalMilestones,
   deriveChecklistProgress,
   isDeadlineReminderIcsExportEligible,
   type ComplianceCaseInput,
   type ComplianceCaseViewModel,
   type FollowUpChecklistKey,
   type FollowUpChecklistState,
+  type CaseLegalMilestoneKind,
   type CaseRegimeFilter,
   type CaseSortMode,
   type CaseStatusFilter,
@@ -48,6 +50,12 @@ const countdownClass: Record<ComplianceCaseViewModel["deadlineCountdownTone"], s
   warning: "text-yellow-300",
   urgent: "text-orange-300 font-semibold",
   expired: "text-red-300 font-semibold",
+};
+
+const legalMilestoneLabelKey: Record<CaseLegalMilestoneKind, TranslationKey> = {
+  contract: "cases-legal-milestone-contract",
+  discovery: "cases-legal-milestone-discovery",
+  "notice-deadline": "cases-legal-milestone-notice-deadline",
 };
 
 function parseRegimeFilter(value: string | null): CaseRegimeFilter {
@@ -1373,6 +1381,35 @@ export default function CasesPage() {
                       value={formatCaseReminderReadiness(item, checklist, t, { includeEmailReadiness: true })}
                     />
                   </div>
+
+                  <section
+                    data-testid={`cases-legal-timeline-${item.id}`}
+                    aria-labelledby={`cases-legal-timeline-title-${item.id}`}
+                    className="mb-4 rounded-lg border border-blue-500/20 bg-blue-500/[0.05] p-4"
+                  >
+                    <h3
+                      id={`cases-legal-timeline-title-${item.id}`}
+                      className="text-xs font-semibold uppercase tracking-[0.08em] text-blue-200"
+                    >
+                      {t("cases-legal-timeline-title")}
+                    </h3>
+                    <p className="mt-1 text-xs text-muted">
+                      {t("cases-legal-timeline-desc")}
+                    </p>
+                    <ol className="mt-3 space-y-2 border-l border-blue-400/30 pl-4">
+                      {deriveCaseLegalMilestones(item).map((milestone) => (
+                        <li
+                          key={milestone.kind}
+                          className="flex items-center justify-between gap-4 text-sm"
+                        >
+                          <span className="text-cream">{t(legalMilestoneLabelKey[milestone.kind])}</span>
+                          <time dateTime={milestone.date.toISOString().slice(0, 10)} className="text-blue-100">
+                            {milestone.dateLabel}
+                          </time>
+                        </li>
+                      ))}
+                    </ol>
+                  </section>
 
                   <div className="rounded-lg border border-white/[0.06] bg-black/20 p-3 space-y-2">
                     <div className="text-xs uppercase tracking-[0.08em] text-muted/70">{t("cases-followup-checklist")}</div>

@@ -3,6 +3,7 @@ import {
   applyComplianceCaseView,
   buildCaseDeadlineReminderICS,
   buildComplianceCaseTimeline,
+  deriveCaseLegalMilestones,
   deriveChecklistProgress,
   filterComplianceCases,
   isDeadlineReminderIcsExportEligible,
@@ -20,6 +21,37 @@ function daysFromToday(days: number): Date {
 }
 
 describe("case timeline view model", () => {
+  it("derives an ordered legal milestone sequence for new-law cases", () => {
+    const vm = toComplianceCaseViewModel({
+      id: "timeline-new",
+      projectName: "Milestone Project",
+      canton: "ZH",
+      contractDate: new Date("2026-01-10"),
+      discoveryDate: new Date("2026-03-01"),
+    });
+
+    expect(deriveCaseLegalMilestones(vm)).toEqual([
+      { kind: "contract", date: new Date("2026-01-10"), dateLabel: vm.contractDateLabel },
+      { kind: "discovery", date: new Date("2026-03-01"), dateLabel: vm.discoveryDateLabel },
+      { kind: "notice-deadline", date: vm.noticeDeadline, dateLabel: vm.noticeDeadlineLabel },
+    ]);
+  });
+
+  it("omits a fixed notice deadline from old-law case milestones", () => {
+    const vm = toComplianceCaseViewModel({
+      id: "timeline-old",
+      projectName: "Legacy Milestone Project",
+      canton: "BE",
+      contractDate: new Date("2025-12-20"),
+      discoveryDate: new Date("2026-03-01"),
+    });
+
+    expect(deriveCaseLegalMilestones(vm).map((milestone) => milestone.kind)).toEqual([
+      "contract",
+      "discovery",
+    ]);
+  });
+
   it("rejects impossible timelines where discovery is before contract", () => {
     const input = {
       id: "invalid-1",

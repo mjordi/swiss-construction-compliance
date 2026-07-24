@@ -72,6 +72,7 @@ vi.mock("@/lib/case-timeline", () => ({
   applyComplianceCaseView: (cases: unknown[]) => cases,
   buildComplianceCaseTimeline: () => [],
   buildCaseDeadlineReminderICS: () => "BEGIN:VCALENDAR\nEND:VCALENDAR",
+  deriveCaseLegalMilestones: () => [],
   deriveChecklistProgress: (checklist: Record<string, boolean>) => ({
     completed: Object.values(checklist).filter(Boolean).length,
     total: Object.keys(checklist).length,
