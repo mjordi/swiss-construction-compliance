@@ -12,7 +12,12 @@ let caseChecklistData: Record<string, boolean> | null = {
   noticeDrafted: false,
   calendarReminderExported: false,
 };
-let protocolRows: Array<{ case_id: string }> = [];
+let protocolRows: Array<{
+  id?: string;
+  case_id: string;
+  status?: "draft" | "awaiting-signature" | "finalized";
+  created_at?: string;
+}> = [];
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/cases",
@@ -74,11 +79,22 @@ vi.mock("@/lib/case-timeline", () => ({
       },
     })),
   buildCaseDeadlineReminderICS: () => "BEGIN:VCALENDAR\nEND:VCALENDAR",
-  deriveCaseLegalMilestones: () => [
+  deriveCaseLegalMilestones: (
+    _item: unknown,
+    protocols: Array<{ id: string; status: string; createdAt: string }> = []
+  ) => [
     { kind: "contract", date: new Date("2026-03-01"), dateLabel: "01.03.2026" },
     { kind: "discovery", date: new Date("2026-03-21"), dateLabel: "21.03.2026" },
+    ...protocols
+      .filter((protocol) => protocol.status === "finalized")
+      .map((protocol) => ({
+        id: `protocol-finalized-${protocol.id}`,
+        kind: "protocol-finalized",
+        date: new Date(protocol.createdAt),
+        dateLabel: "25.03.2026",
+      })),
     { kind: "notice-deadline", date: new Date("2026-05-20"), dateLabel: "20.05.2026" },
-  ],
+  ].sort((a, b) => a.date.getTime() - b.date.getTime()),
   deriveChecklistProgress: (checklist: Record<string, boolean>) => ({
     completed: Object.values(checklist).filter(Boolean).length,
     total: Object.keys(checklist).length,
@@ -257,6 +273,35 @@ describe("cases checklist persistence", () => {
     expect(milestones).toEqual([
       "cases-legal-milestone-contract01.03.2026",
       "cases-legal-milestone-discovery21.03.2026",
+      "cases-legal-milestone-notice-deadline20.05.2026",
+    ]);
+  });
+
+  it("shows finalized linked protocol events in the ordered legal timeline", async () => {
+    protocolRows = [
+      {
+        id: "protocol-finalized-1",
+        case_id: "case-1",
+        status: "finalized",
+        created_at: "2026-03-25T10:00:00.000Z",
+      },
+      {
+        id: "protocol-draft-1",
+        case_id: "case-1",
+        status: "draft",
+        created_at: "2026-03-24T10:00:00.000Z",
+      },
+    ];
+
+    render(<CasesPage />);
+
+    const timeline = await screen.findByTestId("cases-legal-timeline-case-1");
+    const milestones = Array.from(timeline.querySelectorAll("li")).map((item) => item.textContent);
+
+    expect(milestones).toEqual([
+      "cases-legal-milestone-contract01.03.2026",
+      "cases-legal-milestone-discovery21.03.2026",
+      "cases-legal-milestone-protocol-finalized25.03.2026",
       "cases-legal-milestone-notice-deadline20.05.2026",
     ]);
   });

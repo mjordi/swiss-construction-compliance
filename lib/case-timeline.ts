@@ -90,9 +90,20 @@ export interface ComplianceCaseViewModel {
   checklistDefaults: FollowUpChecklistState;
 }
 
-export type CaseLegalMilestoneKind = "contract" | "discovery" | "notice-deadline";
+export type CaseLegalMilestoneKind =
+  | "contract"
+  | "discovery"
+  | "protocol-finalized"
+  | "notice-deadline";
+
+export interface LinkedCaseProtocolEvent {
+  id: string;
+  status: "draft" | "awaiting-signature" | "finalized";
+  createdAt: string | Date;
+}
 
 export interface CaseLegalMilestone {
+  id?: string;
   kind: CaseLegalMilestoneKind;
   date: Date;
   dateLabel: string;
@@ -203,7 +214,8 @@ export function buildComplianceCaseTimeline(
 }
 
 export function deriveCaseLegalMilestones(
-  item: ComplianceCaseViewModel
+  item: ComplianceCaseViewModel,
+  linkedProtocols: LinkedCaseProtocolEvent[] = []
 ): CaseLegalMilestone[] {
   const milestones: CaseLegalMilestone[] = [
     {
@@ -226,16 +238,32 @@ export function deriveCaseLegalMilestones(
     });
   }
 
+  for (const protocol of linkedProtocols) {
+    if (protocol.status !== "finalized") continue;
+
+    const finalizedAt = new Date(protocol.createdAt);
+    if (Number.isNaN(finalizedAt.getTime())) continue;
+
+    milestones.push({
+      id: `protocol-finalized-${protocol.id}`,
+      kind: "protocol-finalized",
+      date: finalizedAt,
+      dateLabel: formatDateCH(finalizedAt),
+    });
+  }
+
   const milestoneOrder: Record<CaseLegalMilestoneKind, number> = {
     contract: 0,
     discovery: 1,
-    "notice-deadline": 2,
+    "protocol-finalized": 2,
+    "notice-deadline": 3,
   };
 
   return milestones.sort(
     (a, b) =>
       a.date.getTime() - b.date.getTime() ||
-      milestoneOrder[a.kind] - milestoneOrder[b.kind]
+      milestoneOrder[a.kind] - milestoneOrder[b.kind] ||
+      (a.id ?? a.kind).localeCompare(b.id ?? b.kind)
   );
 }
 
