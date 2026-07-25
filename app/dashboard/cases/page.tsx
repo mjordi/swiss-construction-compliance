@@ -9,7 +9,7 @@ import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
-import type { Case } from "@/lib/database.types";
+import type { Case, Protocol } from "@/lib/database.types";
 import {
   applyComplianceCaseView,
   buildCaseDeadlineReminderICS,
@@ -22,6 +22,7 @@ import {
   type FollowUpChecklistKey,
   type FollowUpChecklistState,
   type CaseLegalMilestoneKind,
+  type LinkedCaseProtocolEvent,
   type CaseRegimeFilter,
   type CaseSortMode,
   type CaseStatusFilter,
@@ -30,6 +31,8 @@ import { buildDashboardProtocolHref } from "@/lib/dashboard-linked-case";
 import { buildCaseVaultHref } from "@/lib/vault";
 import { sanitizeDateQueryParam, validateRuegefristInput } from "@/lib/legal-utils";
 import type { TranslationKey } from "@/locales";
+
+type LinkedProtocolRow = Pick<Protocol, "id" | "case_id" | "status" | "created_at">;
 
 const SWISS_CANTONS = [
   "AG","AI","AR","BE","BL","BS","FR","GE","GL","GR",
@@ -55,6 +58,7 @@ const countdownClass: Record<ComplianceCaseViewModel["deadlineCountdownTone"], s
 const legalMilestoneLabelKey: Record<CaseLegalMilestoneKind, TranslationKey> = {
   contract: "cases-legal-milestone-contract",
   discovery: "cases-legal-milestone-discovery",
+  "protocol-finalized": "cases-legal-milestone-protocol-finalized",
   "notice-deadline": "cases-legal-milestone-notice-deadline",
 };
 
@@ -199,10 +203,12 @@ export default function CasesPage() {
   const [checklistSaveErrorByCase, setChecklistSaveErrorByCase] = useState<Record<string, TranslationKey>>({});
   const [checklistSavingByCase, setChecklistSavingByCase] = useState<Record<string, boolean>>({});
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
+  const [linkedProtocols, setLinkedProtocols] = useState<LinkedProtocolRow[]>([]);
   const latestFetchIdRef = useRef(0);
   const hasLoadedInitialCasesRef = useRef(false);
   const lastSuccessfulCasesRef = useRef<Case[]>([]);
   const lastSuccessfulProtocolCountsRef = useRef<Record<string, number>>({});
+  const lastSuccessfulLinkedProtocolsRef = useRef<LinkedProtocolRow[]>([]);
   const filterStateRef = useRef({
     regimeFilter,
     statusFilter,
@@ -216,8 +222,10 @@ export default function CasesPage() {
       hasLoadedInitialCasesRef.current = false;
       lastSuccessfulCasesRef.current = [];
       lastSuccessfulProtocolCountsRef.current = {};
+      lastSuccessfulLinkedProtocolsRef.current = [];
       setDbCases([]);
       setProtocolCounts({});
+      setLinkedProtocols([]);
       setInitialLoadError(null);
       setLoading(false);
       return;
@@ -232,7 +240,7 @@ export default function CasesPage() {
           .order("created_at", { ascending: false }),
         supabase
           .from("protocols")
-          .select("case_id")
+          .select("id, case_id, status, created_at")
           .eq("user_id", user.id)
           .not("case_id", "is", null),
       ]);
@@ -243,10 +251,12 @@ export default function CasesPage() {
         if (!hasLoadedInitialCasesRef.current) {
           setDbCases([]);
           setProtocolCounts({});
+          setLinkedProtocols([]);
           setInitialLoadError("cases-load-error");
         } else {
           setDbCases(lastSuccessfulCasesRef.current);
           setProtocolCounts(lastSuccessfulProtocolCountsRef.current);
+          setLinkedProtocols(lastSuccessfulLinkedProtocolsRef.current);
         }
         setLoading(false);
         return;
@@ -256,15 +266,20 @@ export default function CasesPage() {
       setInitialLoadError(null);
       setDbCases((casesResult.data as Case[]) ?? []);
       if (protocolsResult.data) {
+        const protocolRows = protocolsResult.data as LinkedProtocolRow[];
         const counts: Record<string, number> = {};
-        for (const p of protocolsResult.data) {
+        for (const p of protocolRows) {
           if (p.case_id) counts[p.case_id] = (counts[p.case_id] || 0) + 1;
         }
         lastSuccessfulProtocolCountsRef.current = counts;
+        lastSuccessfulLinkedProtocolsRef.current = protocolRows;
         setProtocolCounts(counts);
+        setLinkedProtocols(protocolRows);
       } else {
         lastSuccessfulProtocolCountsRef.current = {};
+        lastSuccessfulLinkedProtocolsRef.current = [];
         setProtocolCounts({});
+        setLinkedProtocols([]);
       }
       lastSuccessfulCasesRef.current = (casesResult.data as Case[]) ?? [];
       setLoading(false);
@@ -273,10 +288,12 @@ export default function CasesPage() {
       if (!hasLoadedInitialCasesRef.current) {
         setDbCases([]);
         setProtocolCounts({});
+        setLinkedProtocols([]);
         setInitialLoadError("cases-load-error");
       } else {
         setDbCases(lastSuccessfulCasesRef.current);
         setProtocolCounts(lastSuccessfulProtocolCountsRef.current);
+        setLinkedProtocols(lastSuccessfulLinkedProtocolsRef.current);
       }
       setLoading(false);
     }
@@ -456,6 +473,24 @@ export default function CasesPage() {
   );
 
   const cases = useMemo(() => buildComplianceCaseTimeline(caseInputs), [caseInputs]);
+
+  const linkedProtocolEventsByCase = useMemo(() => {
+    const result: Record<string, LinkedCaseProtocolEvent[]> = {};
+
+    for (const protocol of linkedProtocols) {
+      if (!protocol.case_id || !protocol.id || !protocol.status || !protocol.created_at) continue;
+
+      const events = result[protocol.case_id] ?? [];
+      events.push({
+        id: protocol.id,
+        status: protocol.status,
+        createdAt: protocol.created_at,
+      });
+      result[protocol.case_id] = events;
+    }
+
+    return result;
+  }, [linkedProtocols]);
 
   // Derive effective checklists by layering persisted checklist state over timeline defaults.
   const effectiveChecklists = useMemo(() => {
@@ -1397,9 +1432,9 @@ export default function CasesPage() {
                       {t("cases-legal-timeline-desc")}
                     </p>
                     <ol className="mt-3 space-y-2 border-l border-blue-400/30 pl-4">
-                      {deriveCaseLegalMilestones(item).map((milestone) => (
+                      {deriveCaseLegalMilestones(item, linkedProtocolEventsByCase[item.id] ?? []).map((milestone) => (
                         <li
-                          key={milestone.kind}
+                          key={milestone.id ?? milestone.kind}
                           className="flex items-center justify-between gap-4 text-sm"
                         >
                           <span className="text-cream">{t(legalMilestoneLabelKey[milestone.kind])}</span>

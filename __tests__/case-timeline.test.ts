@@ -52,6 +52,45 @@ describe("case timeline view model", () => {
     ]);
   });
 
+  it("orders valid finalized linked protocol events with legal milestones", () => {
+    const vm = toComplianceCaseViewModel({
+      id: "timeline-protocols",
+      projectName: "Protocol Timeline Project",
+      canton: "ZH",
+      contractDate: new Date("2026-01-10"),
+      discoveryDate: new Date("2026-03-01"),
+    });
+
+    const milestones = deriveCaseLegalMilestones(vm, [
+      { id: "protocol-later", status: "finalized", createdAt: "2026-03-20T10:00:00.000Z" },
+      { id: "protocol-draft", status: "draft", createdAt: "2026-03-10T10:00:00.000Z" },
+      { id: "protocol-invalid", status: "finalized", createdAt: "not-a-date" },
+      { id: "protocol-earlier", status: "finalized", createdAt: "2026-03-05T10:00:00.000Z" },
+    ]);
+
+    expect(milestones.map((milestone) => milestone.kind)).toEqual([
+      "contract",
+      "discovery",
+      "protocol-finalized",
+      "protocol-finalized",
+      "notice-deadline",
+    ]);
+    expect(milestones.filter((milestone) => milestone.kind === "protocol-finalized")).toEqual([
+      {
+        id: "protocol-finalized-protocol-earlier",
+        kind: "protocol-finalized",
+        date: new Date("2026-03-05T10:00:00.000Z"),
+        dateLabel: "5. März 2026",
+      },
+      {
+        id: "protocol-finalized-protocol-later",
+        kind: "protocol-finalized",
+        date: new Date("2026-03-20T10:00:00.000Z"),
+        dateLabel: "20. März 2026",
+      },
+    ]);
+  });
+
   it("rejects impossible timelines where discovery is before contract", () => {
     const input = {
       id: "invalid-1",
