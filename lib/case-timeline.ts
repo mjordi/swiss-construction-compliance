@@ -297,13 +297,30 @@ export function buildCaseLegalChronologyCsv(
     [""],
     [labels.date, labels.milestone, labels.sourceId],
     ...deriveCaseLegalMilestones(item, linkedProtocols).map((milestone) => [
-      milestone.date.toISOString().slice(0, 10),
+      formatSwissCalendarDate(milestone.date),
       labels.milestones[milestone.kind],
       milestone.id ? (protocolSourceIds.get(milestone.id) ?? "") : "",
     ]),
   ];
 
   return `\ufeff${rows.map((row) => row.map(quoteCsvField).join(",")).join("\r\n")}`;
+}
+
+const swissCalendarDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Zurich",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function formatSwissCalendarDate(date: Date): string {
+  const parts = Object.fromEntries(
+    swissCalendarDateFormatter
+      .formatToParts(date)
+      .filter((part) => part.type === "year" || part.type === "month" || part.type === "day")
+      .map((part) => [part.type, part.value])
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
 }
 
 function quoteCsvField(value: string): string {

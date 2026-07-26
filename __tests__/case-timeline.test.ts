@@ -219,6 +219,25 @@ describe("case legal chronology CSV", () => {
     expect(csv).not.toContain('"\'2026-01-10"');
     expect(csv).toContain('"Generated at","2026-07-26T12:34:56.000Z"');
   });
+
+  it("exports protocol milestones on their Swiss calendar day", () => {
+    const vm = toComplianceCaseViewModel({
+      id: "case-midnight-export",
+      projectName: "Late protocol",
+      canton: "ZH",
+      contractDate: new Date("2026-01-10T00:00:00.000Z"),
+      discoveryDate: new Date("2026-03-01T00:00:00.000Z"),
+    });
+    const csv = buildCaseLegalChronologyCsv(
+      vm,
+      [{ id: "protocol-late", status: "finalized", createdAt: "2026-07-15T22:30:00.000Z" }],
+      labels,
+      new Date("2026-07-26T12:34:56.000Z")
+    );
+
+    expect(csv).toContain('"2026-07-16","Protocol finalized","protocol-late"');
+    expect(csv).not.toContain('"2026-07-15","Protocol finalized","protocol-late"');
+  });
 });
 
 describe("case timeline filtering and sorting", () => {
