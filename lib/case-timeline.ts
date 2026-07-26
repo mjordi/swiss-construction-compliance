@@ -109,6 +109,18 @@ export interface CaseLegalMilestone {
   dateLabel: string;
 }
 
+export interface CaseLegalChronologyCsvLabels {
+  title: string;
+  generatedAt: string;
+  caseId: string;
+  projectName: string;
+  canton: string;
+  date: string;
+  milestone: string;
+  sourceId: string;
+  milestones: Record<CaseLegalMilestoneKind, string>;
+}
+
 export function toComplianceCaseViewModel(
   input: ComplianceCaseInput
 ): ComplianceCaseViewModel {
@@ -265,6 +277,55 @@ export function deriveCaseLegalMilestones(
       milestoneOrder[a.kind] - milestoneOrder[b.kind] ||
       (a.id ?? a.kind).localeCompare(b.id ?? b.kind)
   );
+}
+
+export function buildCaseLegalChronologyCsv(
+  item: ComplianceCaseViewModel,
+  linkedProtocols: LinkedCaseProtocolEvent[],
+  labels: CaseLegalChronologyCsvLabels,
+  generatedAt: Date
+): string {
+  const protocolSourceIds = new Map(
+    linkedProtocols.map((protocol) => [`protocol-finalized-${protocol.id}`, protocol.id])
+  );
+  const rows: string[][] = [
+    [labels.title],
+    [labels.generatedAt, generatedAt.toISOString()],
+    [labels.caseId, item.id],
+    [labels.projectName, item.projectName],
+    [labels.canton, item.canton],
+    [""],
+    [labels.date, labels.milestone, labels.sourceId],
+    ...deriveCaseLegalMilestones(item, linkedProtocols).map((milestone) => [
+      formatSwissCalendarDate(milestone.date),
+      labels.milestones[milestone.kind],
+      milestone.id ? (protocolSourceIds.get(milestone.id) ?? "") : "",
+    ]),
+  ];
+
+  return `\ufeff${rows.map((row) => row.map(quoteCsvField).join(",")).join("\r\n")}`;
+}
+
+const swissCalendarDateFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Zurich",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function formatSwissCalendarDate(date: Date): string {
+  const parts = Object.fromEntries(
+    swissCalendarDateFormatter
+      .formatToParts(date)
+      .filter((part) => part.type === "year" || part.type === "month" || part.type === "day")
+      .map((part) => [part.type, part.value])
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function quoteCsvField(value: string): string {
+  const spreadsheetSafeValue = /^[=+\-@\t\r]/.test(value) ? `'${value}` : value;
+  return `"${spreadsheetSafeValue.replaceAll('"', '""')}"`;
 }
 
 export function filterComplianceCases(

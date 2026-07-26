@@ -1,9 +1,12 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const { buildCaseLegalChronologyCsvMock } = vi.hoisted(() => ({
+  buildCaseLegalChronologyCsvMock: vi.fn(() => '\ufeff"Case chronology"'),
+}));
 const replaceMock = vi.fn();
 const updateEqMock = vi.fn();
-const createObjectURLMock = vi.fn(() => "blob:case-reminder");
+const createObjectURLMock = vi.fn<(blob: Blob) => string>(() => "blob:case-reminder");
 const revokeObjectURLMock = vi.fn();
 let updatePayloads: Array<{ checklist?: Record<string, boolean> }> = [];
 let caseChecklistData: Record<string, boolean> | null = {
@@ -79,6 +82,7 @@ vi.mock("@/lib/case-timeline", () => ({
       },
     })),
   buildCaseDeadlineReminderICS: () => "BEGIN:VCALENDAR\nEND:VCALENDAR",
+  buildCaseLegalChronologyCsv: buildCaseLegalChronologyCsvMock,
   deriveCaseLegalMilestones: (
     _item: unknown,
     protocols: Array<{ id: string; status: string; createdAt: string }> = []
@@ -163,6 +167,7 @@ describe("cases checklist persistence", () => {
     updatePayloads = [];
     createObjectURLMock.mockClear();
     revokeObjectURLMock.mockClear();
+    buildCaseLegalChronologyCsvMock.mockClear();
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
       value: createObjectURLMock,
@@ -304,6 +309,73 @@ describe("cases checklist persistence", () => {
       "cases-legal-milestone-protocol-finalized25.03.2026",
       "cases-legal-milestone-notice-deadline20.05.2026",
     ]);
+  });
+
+  it("downloads the case legal chronology CSV without persisting state", async () => {
+    protocolRows = [
+      {
+        id: "protocol-finalized-1",
+        case_id: "case-1",
+        status: "finalized",
+        created_at: "2026-03-25T10:00:00.000Z",
+      },
+    ];
+    const anchorClickMock = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+
+    try {
+      render(<CasesPage />);
+
+      fireEvent.click(
+        await screen.findByRole("button", { name: "cases-export-chronology-csv" })
+      );
+
+      expect(buildCaseLegalChronologyCsvMock).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "case-1",
+          projectName: "Alpine Tower",
+          canton: "ZH",
+        }),
+        [
+          {
+            id: "protocol-finalized-1",
+            status: "finalized",
+            createdAt: "2026-03-25T10:00:00.000Z",
+          },
+        ],
+        {
+          title: "cases-chronology-title",
+          generatedAt: "cases-chronology-generated-at",
+          caseId: "cases-chronology-case-id",
+          projectName: "cases-chronology-project",
+          canton: "cases-chronology-canton",
+          date: "cases-chronology-date",
+          milestone: "cases-chronology-milestone",
+          sourceId: "cases-chronology-source-id",
+          milestones: {
+            contract: "cases-legal-milestone-contract",
+            discovery: "cases-legal-milestone-discovery",
+            "protocol-finalized": "cases-legal-milestone-protocol-finalized",
+            "notice-deadline": "cases-legal-milestone-notice-deadline",
+          },
+        },
+        expect.any(Date)
+      );
+      expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+      const blob = createObjectURLMock.mock.calls[0][0] as Blob;
+      expect(blob).toBeInstanceOf(Blob);
+      expect(blob.type).toBe("text/csv;charset=utf-8");
+      expect(anchorClickMock).toHaveBeenCalledTimes(1);
+      const clickedAnchor = anchorClickMock.mock.instances[0] as HTMLAnchorElement;
+      expect(clickedAnchor.download).toBe(
+        "baucompliance-case-case-1-chronology.csv"
+      );
+      expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:case-reminder");
+      expect(updateEqMock).not.toHaveBeenCalled();
+    } finally {
+      anchorClickMock.mockRestore();
+    }
   });
 
   it("rolls back an optimistic checklist toggle and shows inline feedback when persistence fails", async () => {

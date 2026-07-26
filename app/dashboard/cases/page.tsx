@@ -13,6 +13,7 @@ import type { Case, Protocol } from "@/lib/database.types";
 import {
   applyComplianceCaseView,
   buildCaseDeadlineReminderICS,
+  buildCaseLegalChronologyCsv,
   buildComplianceCaseTimeline,
   deriveCaseLegalMilestones,
   deriveChecklistProgress,
@@ -769,6 +770,42 @@ export default function CasesPage() {
     }
   }
 
+  function downloadCaseChronology(item: ComplianceCaseViewModel) {
+    const content = buildCaseLegalChronologyCsv(
+      item,
+      linkedProtocolEventsByCase[item.id] ?? [],
+      {
+        title: t("cases-chronology-title"),
+        generatedAt: t("cases-chronology-generated-at"),
+        caseId: t("cases-chronology-case-id"),
+        projectName: t("cases-chronology-project"),
+        canton: t("cases-chronology-canton"),
+        date: t("cases-chronology-date"),
+        milestone: t("cases-chronology-milestone"),
+        sourceId: t("cases-chronology-source-id"),
+        milestones: {
+          contract: t("cases-legal-milestone-contract"),
+          discovery: t("cases-legal-milestone-discovery"),
+          "protocol-finalized": t("cases-legal-milestone-protocol-finalized"),
+          "notice-deadline": t("cases-legal-milestone-notice-deadline"),
+        },
+      },
+      new Date()
+    );
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+
+    try {
+      anchor.href = url;
+      anchor.download = `baucompliance-case-${item.id}-chronology.csv`;
+      anchor.click();
+    } finally {
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    }
+  }
+
   async function handleAddCase(e: React.FormEvent) {
     e.preventDefault();
     if (
@@ -1444,6 +1481,15 @@ export default function CasesPage() {
                         </li>
                       ))}
                     </ol>
+                    <div className="mt-4 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => downloadCaseChronology(item)}
+                        className="rounded-lg border border-blue-400/30 px-3 py-2 text-sm text-blue-100 hover:bg-blue-500/[0.1]"
+                      >
+                        {t("cases-export-chronology-csv")}
+                      </button>
+                    </div>
                   </section>
 
                   <div className="rounded-lg border border-white/[0.06] bg-black/20 p-3 space-y-2">

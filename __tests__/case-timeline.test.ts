@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   applyComplianceCaseView,
   buildCaseDeadlineReminderICS,
+  buildCaseLegalChronologyCsv,
   buildComplianceCaseTimeline,
   deriveCaseLegalMilestones,
   deriveChecklistProgress,
@@ -138,6 +139,104 @@ describe("case timeline view model", () => {
     expect(vm.noticeApplies).toBe(true);
     expect(vm.reminderReadiness.calendarExportReady).toBe(true);
     expect(vm.exportCapability.deadlineReminderIcsEligible).toBe(true);
+  });
+});
+
+describe("case legal chronology CSV", () => {
+  const labels = {
+    title: "Case chronology",
+    generatedAt: "Generated at",
+    caseId: "Case ID",
+    projectName: "Project",
+    canton: "Canton",
+    date: "Date",
+    milestone: "Milestone",
+    sourceId: "Protocol source ID",
+    milestones: {
+      contract: "Contract concluded",
+      discovery: "Defect discovered",
+      "protocol-finalized": "Protocol finalized",
+      "notice-deadline": "Notice deadline",
+    },
+  };
+
+  it("serializes a deterministic, localized, escaped chronology snapshot", () => {
+    const vm = toComplianceCaseViewModel({
+      id: "case-42",
+      projectName: 'Tower, "West"',
+      canton: "ZH",
+      contractDate: new Date("2026-01-10T00:00:00.000Z"),
+      discoveryDate: new Date("2026-03-01T00:00:00.000Z"),
+    });
+    const csv = buildCaseLegalChronologyCsv(
+      vm,
+      [{ id: "protocol-7", status: "finalized", createdAt: "2026-03-15T10:30:00.000Z" }],
+      labels,
+      new Date("2026-07-26T12:34:56.000Z")
+    );
+
+    expect(csv.charCodeAt(0)).toBe(0xfeff);
+    expect(csv).toBe(
+      '\ufeff"Case chronology"\r\n' +
+        '"Generated at","2026-07-26T12:34:56.000Z"\r\n' +
+        '"Case ID","case-42"\r\n' +
+        '"Project","Tower, ""West"""\r\n' +
+        '"Canton","ZH"\r\n' +
+        '""\r\n' +
+        '"Date","Milestone","Protocol source ID"\r\n' +
+        '"2026-01-10","Contract concluded",""\r\n' +
+        '"2026-03-01","Defect discovered",""\r\n' +
+        '"2026-03-15","Protocol finalized","protocol-7"\r\n' +
+        '"2026-04-30","Notice deadline",""'
+    );
+  });
+
+  it("neutralizes spreadsheet formulas in project and protocol fields without changing ISO dates", () => {
+    const vm = toComplianceCaseViewModel({
+      id: "case-safe-export",
+      projectName: "=HYPERLINK(\"https://example.test\")",
+      canton: "ZH",
+      contractDate: new Date("2026-01-10T00:00:00.000Z"),
+      discoveryDate: new Date("2026-03-01T00:00:00.000Z"),
+    });
+    const unsafeProtocolIds = ["+SUM(A1:A2)", "-10", "@command", "\tcommand", "\rcommand"];
+    const csv = buildCaseLegalChronologyCsv(
+      vm,
+      unsafeProtocolIds.map((id, index) => ({
+        id,
+        status: "finalized" as const,
+        createdAt: `2026-03-${String(index + 10).padStart(2, "0")}T10:30:00.000Z`,
+      })),
+      labels,
+      new Date("2026-07-26T12:34:56.000Z")
+    );
+
+    expect(csv).toContain('"\'=HYPERLINK(""https://example.test"")"');
+    for (const id of unsafeProtocolIds) {
+      expect(csv).toContain(`"'${id}"`);
+    }
+    expect(csv).toContain('"2026-01-10","Contract concluded"');
+    expect(csv).not.toContain('"\'2026-01-10"');
+    expect(csv).toContain('"Generated at","2026-07-26T12:34:56.000Z"');
+  });
+
+  it("exports protocol milestones on their Swiss calendar day", () => {
+    const vm = toComplianceCaseViewModel({
+      id: "case-midnight-export",
+      projectName: "Late protocol",
+      canton: "ZH",
+      contractDate: new Date("2026-01-10T00:00:00.000Z"),
+      discoveryDate: new Date("2026-03-01T00:00:00.000Z"),
+    });
+    const csv = buildCaseLegalChronologyCsv(
+      vm,
+      [{ id: "protocol-late", status: "finalized", createdAt: "2026-07-15T22:30:00.000Z" }],
+      labels,
+      new Date("2026-07-26T12:34:56.000Z")
+    );
+
+    expect(csv).toContain('"2026-07-16","Protocol finalized","protocol-late"');
+    expect(csv).not.toContain('"2026-07-15","Protocol finalized","protocol-late"');
   });
 });
 
