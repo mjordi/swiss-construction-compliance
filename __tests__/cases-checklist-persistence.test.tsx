@@ -455,6 +455,34 @@ describe("cases checklist persistence", () => {
     }
   });
 
+  it("disables the audit register export while a visible checklist save is pending", async () => {
+    let resolveUpdate!: (result: { error: null }) => void;
+    updateEqMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveUpdate = resolve;
+      })
+    );
+
+    render(<CasesPage />);
+
+    const checkbox = await screen.findByLabelText("cases-checklist-evidence-attached");
+    const exportButton = screen.getByRole("button", { name: "cases-export-audit-register" });
+
+    fireEvent.click(checkbox);
+
+    await waitFor(() => {
+      expect((exportButton as HTMLButtonElement).disabled).toBe(true);
+    });
+    fireEvent.click(exportButton);
+    expect(buildCaseAuditRegisterCsvMock).not.toHaveBeenCalled();
+
+    resolveUpdate({ error: null });
+
+    await waitFor(() => {
+      expect((exportButton as HTMLButtonElement).disabled).toBe(false);
+    });
+  });
+
   it("rolls back an optimistic checklist toggle and shows inline feedback when persistence fails", async () => {
     updateEqMock.mockResolvedValueOnce({ error: { message: "boom" } });
 

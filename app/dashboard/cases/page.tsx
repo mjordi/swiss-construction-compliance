@@ -679,6 +679,9 @@ export default function CasesPage() {
   }, [editFormData.contractDate, editFormData.discoveryDate]);
 
   const hasDeletingCases = Object.keys(deletingCaseIds).length > 0;
+  const hasVisibleChecklistSave = visibleCases.some((item) =>
+    Boolean(checklistSavingByCase[item.id])
+  );
 
   const checklistLabels: Record<FollowUpChecklistKey, string> = {
     defectDocumented: t("cases-checklist-defect-documented"),
@@ -772,6 +775,8 @@ export default function CasesPage() {
   }
 
   function downloadCaseAuditRegister() {
+    if (visibleCases.length === 0 || hasVisibleChecklistSave) return;
+
     const content = buildCaseAuditRegisterCsv(
       visibleCases.map((item) => ({
         item,
@@ -1205,7 +1210,7 @@ export default function CasesPage() {
           <button
             type="button"
             onClick={downloadCaseAuditRegister}
-            disabled={visibleCases.length === 0}
+            disabled={visibleCases.length === 0 || hasVisibleChecklistSave}
             className="px-3 py-1.5 rounded-lg border border-blue-400/30 text-xs font-medium text-blue-100 hover:bg-blue-500/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
           >
             {t("cases-export-audit-register")}
