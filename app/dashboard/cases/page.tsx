@@ -31,7 +31,11 @@ import {
 } from "@/lib/case-timeline";
 import { buildDashboardProtocolHref } from "@/lib/dashboard-linked-case";
 import { buildCaseVaultHref } from "@/lib/vault";
-import { sanitizeDateQueryParam, validateRuegefristInput } from "@/lib/legal-utils";
+import {
+  getMillisecondsUntilNextSwissCalendarDay,
+  sanitizeDateQueryParam,
+  validateRuegefristInput,
+} from "@/lib/legal-utils";
 import type { TranslationKey } from "@/locales";
 
 type LinkedProtocolRow = Pick<Protocol, "id" | "case_id" | "status" | "created_at">;
@@ -486,13 +490,10 @@ export default function CasesPage() {
     let refreshTimer: number | undefined;
 
     const scheduleNextCalendarDay = () => {
-      const now = new Date();
-      const nextCalendarDay = new Date(now);
-      nextCalendarDay.setHours(24, 0, 0, 0);
       refreshTimer = window.setTimeout(() => {
         setTimelineRevision((current) => current + 1);
         scheduleNextCalendarDay();
-      }, nextCalendarDay.getTime() - now.getTime());
+      }, getMillisecondsUntilNextSwissCalendarDay());
     };
 
     scheduleNextCalendarDay();
