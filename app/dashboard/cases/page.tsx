@@ -81,6 +81,24 @@ function parseSortMode(value: string | null): CaseSortMode {
   return "nearest-deadline";
 }
 
+function filterCasesByStatus(
+  cases: ComplianceCaseViewModel[],
+  statusFilter: CaseStatusFilter
+): ComplianceCaseViewModel[] {
+  if (statusFilter === "all") return cases;
+  if (statusFilter === "triage") {
+    return cases.filter(
+      (item) => item.status === "urgent" || item.status === "expired" || item.status === "immediate-notice"
+    );
+  }
+  if (statusFilter === "urgent") {
+    return cases.filter(
+      (item) => item.status === "urgent" || item.status === "immediate-notice"
+    );
+  }
+  return cases.filter((item) => item.status === statusFilter);
+}
+
 type CaseFormState = {
   projectName: string;
   canton: string;
@@ -522,18 +540,7 @@ export default function CasesPage() {
   }, [cases, regimeFilter, sortMode, searchTerm]);
 
   const visibleCases = useMemo(() => {
-    if (statusFilter === "all") return searchScopedCases;
-    if (statusFilter === "triage") {
-      return searchScopedCases.filter(
-        (item) => item.status === "urgent" || item.status === "expired" || item.status === "immediate-notice"
-      );
-    }
-    if (statusFilter === "urgent") {
-      return searchScopedCases.filter(
-        (item) => item.status === "urgent" || item.status === "immediate-notice"
-      );
-    }
-    return searchScopedCases.filter((item) => item.status === statusFilter);
+    return filterCasesByStatus(searchScopedCases, statusFilter);
   }, [searchScopedCases, statusFilter]);
 
   const statusCounters = useMemo(
@@ -775,10 +782,27 @@ export default function CasesPage() {
   }
 
   function downloadCaseAuditRegister() {
-    if (visibleCases.length === 0 || hasVisibleChecklistSave) return;
+    const currentSearchScopedCases = applyComplianceCaseView(
+      buildComplianceCaseTimeline(caseInputs),
+      regimeFilter,
+      "all",
+      sortMode
+    );
+    const query = searchTerm.trim().toLowerCase();
+    const currentSearchResults = query
+      ? currentSearchScopedCases.filter((item) =>
+          `${item.projectName} ${item.canton}`.toLowerCase().includes(query)
+        )
+      : currentSearchScopedCases;
+    const currentVisibleCases = filterCasesByStatus(currentSearchResults, statusFilter);
+    const currentViewHasChecklistSave = currentVisibleCases.some((item) =>
+      Boolean(checklistSavingByCase[item.id])
+    );
+
+    if (currentVisibleCases.length === 0 || currentViewHasChecklistSave) return;
 
     const content = buildCaseAuditRegisterCsv(
-      visibleCases.map((item) => ({
+      currentVisibleCases.map((item) => ({
         item,
         checklist: effectiveChecklists[item.id] ?? item.checklistDefaults,
         protocolCount: protocolCounts[item.id] ?? 0,

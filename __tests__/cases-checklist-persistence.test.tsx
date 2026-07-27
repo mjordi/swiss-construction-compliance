@@ -1,9 +1,14 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { buildCaseAuditRegisterCsvMock, buildCaseLegalChronologyCsvMock } = vi.hoisted(() => ({
+const {
+  buildCaseAuditRegisterCsvMock,
+  buildCaseLegalChronologyCsvMock,
+  buildComplianceCaseTimelineMock,
+} = vi.hoisted(() => ({
   buildCaseAuditRegisterCsvMock: vi.fn(() => '\ufeff"Case audit register"'),
   buildCaseLegalChronologyCsvMock: vi.fn(() => '\ufeff"Case chronology"'),
+  buildComplianceCaseTimelineMock: vi.fn(),
 }));
 const replaceMock = vi.fn();
 const updateEqMock = vi.fn();
@@ -57,8 +62,9 @@ vi.mock("@/components/dashboard/PageHeader", () => ({
 
 vi.mock("@/lib/case-timeline", () => ({
   applyComplianceCaseView: (cases: unknown[]) => cases,
-  buildComplianceCaseTimeline: (inputs: Array<{ id: string; projectName: string; canton: string }>) =>
-    inputs.map((input) => ({
+  buildComplianceCaseTimeline: (inputs: Array<{ id: string; projectName: string; canton: string }>) => {
+    buildComplianceCaseTimelineMock(inputs);
+    return inputs.map((input) => ({
       id: input.id,
       projectName: input.projectName,
       canton: input.canton,
@@ -82,7 +88,8 @@ vi.mock("@/lib/case-timeline", () => ({
         emailReminderPlanned: false,
         evidenceComplete: false,
       },
-    })),
+    }));
+  },
   buildCaseAuditRegisterCsv: buildCaseAuditRegisterCsvMock,
   buildCaseDeadlineReminderICS: () => "BEGIN:VCALENDAR\nEND:VCALENDAR",
   buildCaseLegalChronologyCsv: buildCaseLegalChronologyCsvMock,
@@ -172,6 +179,7 @@ describe("cases checklist persistence", () => {
     revokeObjectURLMock.mockClear();
     buildCaseAuditRegisterCsvMock.mockClear();
     buildCaseLegalChronologyCsvMock.mockClear();
+    buildComplianceCaseTimelineMock.mockClear();
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
       value: createObjectURLMock,
@@ -399,8 +407,12 @@ describe("cases checklist persistence", () => {
     try {
       render(<CasesPage />);
 
-      fireEvent.click(await screen.findByRole("button", { name: "cases-export-audit-register" }));
+      const exportButton = await screen.findByRole("button", { name: "cases-export-audit-register" });
+      const timelineBuildCount = buildComplianceCaseTimelineMock.mock.calls.length;
 
+      fireEvent.click(exportButton);
+
+      expect(buildComplianceCaseTimelineMock).toHaveBeenCalledTimes(timelineBuildCount + 1);
       expect(buildCaseAuditRegisterCsvMock).toHaveBeenCalledWith(
         [
           {
