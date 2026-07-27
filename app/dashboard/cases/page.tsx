@@ -12,6 +12,7 @@ import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import type { Case, Protocol } from "@/lib/database.types";
 import {
   applyComplianceCaseView,
+  buildCaseAuditRegisterCsv,
   buildCaseDeadlineReminderICS,
   buildCaseLegalChronologyCsv,
   buildComplianceCaseTimeline,
@@ -770,6 +771,53 @@ export default function CasesPage() {
     }
   }
 
+  function downloadCaseAuditRegister() {
+    const content = buildCaseAuditRegisterCsv(
+      visibleCases.map((item) => ({
+        item,
+        checklist: effectiveChecklists[item.id] ?? item.checklistDefaults,
+        protocolCount: protocolCounts[item.id] ?? 0,
+      })),
+      {
+        title: t("cases-audit-register-title"),
+        generatedAt: t("cases-chronology-generated-at"),
+        caseId: t("cases-chronology-case-id"),
+        projectName: t("cases-chronology-project"),
+        canton: t("cases-chronology-canton"),
+        regime: t("cases-audit-register-regime"),
+        status: t("cases-audit-register-status"),
+        noticeDeadline: t("cases-notice-deadline"),
+        checklistProgress: t("cases-audit-register-checklist"),
+        linkedProtocols: t("cases-linked-protocols"),
+        auditReadiness: t("cases-audit-readiness"),
+        regimes: {
+          old: t("cases-old-law"),
+          new: t("cases-new-law"),
+        },
+        statuses: {
+          ok: t("cases-status-on-track"),
+          warning: t("cases-status-attention"),
+          urgent: t("cases-status-urgent"),
+          expired: t("cases-status-expired"),
+          "immediate-notice": t("cases-status-immediate-notice"),
+        },
+      },
+      new Date()
+    );
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+
+    try {
+      anchor.href = url;
+      anchor.download = "baucompliance-case-audit-register.csv";
+      anchor.click();
+    } finally {
+      anchor.remove();
+      URL.revokeObjectURL(url);
+    }
+  }
+
   function downloadCaseChronology(item: ComplianceCaseViewModel) {
     const content = buildCaseLegalChronologyCsv(
       item,
@@ -1153,24 +1201,34 @@ export default function CasesPage() {
           <FilterSelect label={t("cases-filter-sort")} value={sortMode} onChange={(v) => setSortMode(v as CaseSortMode)} options={[{ value: "nearest-deadline", label: t("cases-sort-nearest") }, { value: "most-urgent", label: t("cases-sort-urgent") }]} />
         </div>
 
-        {hasActiveFilters && (
-          <div className="flex flex-wrap justify-end gap-2">
-            <button
-              type="button"
-              onClick={copyShareLink}
-              className="px-3 py-1.5 rounded-lg border border-white/[0.12] text-xs font-medium text-cream hover:bg-white/[0.06]"
-            >
-              {shareLinkFeedback ? t(shareLinkFeedback) : t("cases-share-link")}
-            </button>
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="px-3 py-1.5 rounded-lg border border-white/[0.12] text-xs font-medium text-cream hover:bg-white/[0.06]"
-            >
-              {t("cases-clear-filters")}
-            </button>
-          </div>
-        )}
+        <div className="flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={downloadCaseAuditRegister}
+            disabled={visibleCases.length === 0}
+            className="px-3 py-1.5 rounded-lg border border-blue-400/30 text-xs font-medium text-blue-100 hover:bg-blue-500/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {t("cases-export-audit-register")}
+          </button>
+          {hasActiveFilters && (
+            <>
+              <button
+                type="button"
+                onClick={copyShareLink}
+                className="px-3 py-1.5 rounded-lg border border-white/[0.12] text-xs font-medium text-cream hover:bg-white/[0.06]"
+              >
+                {shareLinkFeedback ? t(shareLinkFeedback) : t("cases-share-link")}
+              </button>
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="px-3 py-1.5 rounded-lg border border-white/[0.12] text-xs font-medium text-cream hover:bg-white/[0.06]"
+              >
+                {t("cases-clear-filters")}
+              </button>
+            </>
+          )}
+        </div>
       </section>
 
       {/* Cases list */}

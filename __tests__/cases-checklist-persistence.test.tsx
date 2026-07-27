@@ -1,13 +1,15 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { buildCaseLegalChronologyCsvMock } = vi.hoisted(() => ({
+const { buildCaseAuditRegisterCsvMock, buildCaseLegalChronologyCsvMock } = vi.hoisted(() => ({
+  buildCaseAuditRegisterCsvMock: vi.fn(() => '\ufeff"Case audit register"'),
   buildCaseLegalChronologyCsvMock: vi.fn(() => '\ufeff"Case chronology"'),
 }));
 const replaceMock = vi.fn();
 const updateEqMock = vi.fn();
 const createObjectURLMock = vi.fn<(blob: Blob) => string>(() => "blob:case-reminder");
 const revokeObjectURLMock = vi.fn();
+let statusQueryParam: string | null = null;
 let updatePayloads: Array<{ checklist?: Record<string, boolean> }> = [];
 let caseChecklistData: Record<string, boolean> | null = {
   defectDocumented: false,
@@ -26,8 +28,8 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/cases",
   useRouter: () => ({ replace: replaceMock }),
   useSearchParams: () => ({
-    get: () => null,
-    toString: () => "",
+    get: (key: string) => (key === "status" ? statusQueryParam : null),
+    toString: () => (statusQueryParam ? `status=${statusQueryParam}` : ""),
   }),
 }));
 
@@ -81,6 +83,7 @@ vi.mock("@/lib/case-timeline", () => ({
         evidenceComplete: false,
       },
     })),
+  buildCaseAuditRegisterCsv: buildCaseAuditRegisterCsvMock,
   buildCaseDeadlineReminderICS: () => "BEGIN:VCALENDAR\nEND:VCALENDAR",
   buildCaseLegalChronologyCsv: buildCaseLegalChronologyCsvMock,
   deriveCaseLegalMilestones: (
@@ -167,6 +170,7 @@ describe("cases checklist persistence", () => {
     updatePayloads = [];
     createObjectURLMock.mockClear();
     revokeObjectURLMock.mockClear();
+    buildCaseAuditRegisterCsvMock.mockClear();
     buildCaseLegalChronologyCsvMock.mockClear();
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
@@ -183,6 +187,7 @@ describe("cases checklist persistence", () => {
       calendarReminderExported: false,
     };
     protocolRows = [];
+    statusQueryParam = null;
   });
 
   it("keeps timeline-derived checklist defaults when persisted checklist data is partial", async () => {
@@ -371,6 +376,78 @@ describe("cases checklist persistence", () => {
       expect(clickedAnchor.download).toBe(
         "baucompliance-case-case-1-chronology.csv"
       );
+      expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:case-reminder");
+      expect(updateEqMock).not.toHaveBeenCalled();
+    } finally {
+      anchorClickMock.mockRestore();
+    }
+  });
+
+  it("downloads the filtered audit register from the visible case view", async () => {
+    caseChecklistData = {
+      defectDocumented: true,
+      evidenceAttached: false,
+      noticeDrafted: false,
+      calendarReminderExported: true,
+    };
+    protocolRows = [{ case_id: "case-1" }, { case_id: "case-1" }];
+    statusQueryParam = "warning";
+    const anchorClickMock = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+
+    try {
+      render(<CasesPage />);
+
+      fireEvent.click(await screen.findByRole("button", { name: "cases-export-audit-register" }));
+
+      expect(buildCaseAuditRegisterCsvMock).toHaveBeenCalledWith(
+        [
+          {
+            item: expect.objectContaining({
+              id: "case-1",
+              projectName: "Alpine Tower",
+              canton: "ZH",
+            }),
+            checklist: {
+              defectDocumented: true,
+              evidenceAttached: false,
+              noticeDrafted: false,
+              calendarReminderExported: true,
+            },
+            protocolCount: 2,
+          },
+        ],
+        {
+          title: "cases-audit-register-title",
+          generatedAt: "cases-chronology-generated-at",
+          caseId: "cases-chronology-case-id",
+          projectName: "cases-chronology-project",
+          canton: "cases-chronology-canton",
+          regime: "cases-audit-register-regime",
+          status: "cases-audit-register-status",
+          noticeDeadline: "cases-notice-deadline",
+          checklistProgress: "cases-audit-register-checklist",
+          linkedProtocols: "cases-linked-protocols",
+          auditReadiness: "cases-audit-readiness",
+          regimes: {
+            old: "cases-old-law",
+            new: "cases-new-law",
+          },
+          statuses: {
+            ok: "cases-status-on-track",
+            warning: "cases-status-attention",
+            urgent: "cases-status-urgent",
+            expired: "cases-status-expired",
+            "immediate-notice": "cases-status-immediate-notice",
+          },
+        },
+        expect.any(Date)
+      );
+      expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+      expect(anchorClickMock).toHaveBeenCalledTimes(1);
+      const clickedAnchor = anchorClickMock.mock.instances[0] as HTMLAnchorElement;
+      expect(clickedAnchor.download).toBe("baucompliance-case-audit-register.csv");
       expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:case-reminder");
       expect(updateEqMock).not.toHaveBeenCalled();
     } finally {

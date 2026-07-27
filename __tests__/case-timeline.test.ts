@@ -1,6 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   applyComplianceCaseView,
+  buildCaseAuditRegisterCsv,
   buildCaseDeadlineReminderICS,
   buildCaseLegalChronologyCsv,
   buildComplianceCaseTimeline,
@@ -237,6 +238,107 @@ describe("case legal chronology CSV", () => {
 
     expect(csv).toContain('"2026-07-16","Protocol finalized","protocol-late"');
     expect(csv).not.toContain('"2026-07-15","Protocol finalized","protocol-late"');
+  });
+});
+
+describe("case audit register CSV", () => {
+  const labels = {
+    title: "Case audit register",
+    generatedAt: "Generated at",
+    caseId: "Case ID",
+    projectName: "Project",
+    canton: "Canton",
+    regime: "Legal regime",
+    status: "Legal status",
+    noticeDeadline: "Notice deadline",
+    checklistProgress: "Checklist readiness",
+    linkedProtocols: "Linked protocols",
+    auditReadiness: "Audit readiness",
+    regimes: { old: "Old law", new: "New law" },
+    statuses: {
+      ok: "On track",
+      warning: "Attention",
+      urgent: "Urgent",
+      expired: "Expired",
+      "immediate-notice": "Immediate notice",
+    },
+  };
+
+  it("exports ordered case status and readiness rows with generated metadata", () => {
+    const urgent = toComplianceCaseViewModel({
+      id: "case-urgent",
+      projectName: "Urgent Tower",
+      canton: "ZH",
+      contractDate: new Date("2026-01-10T00:00:00.000Z"),
+      discoveryDate: new Date("2026-03-01T00:00:00.000Z"),
+    });
+    const legacy = toComplianceCaseViewModel({
+      id: "case-legacy",
+      projectName: "Legacy Hall",
+      canton: "BE",
+      contractDate: new Date("2025-12-10T00:00:00.000Z"),
+      discoveryDate: new Date("2026-03-05T00:00:00.000Z"),
+    });
+
+    const csv = buildCaseAuditRegisterCsv(
+      [
+        {
+          item: urgent,
+          checklist: {
+            defectDocumented: true,
+            evidenceAttached: true,
+            noticeDrafted: false,
+            calendarReminderExported: true,
+          },
+          protocolCount: 2,
+        },
+        {
+          item: legacy,
+          checklist: {
+            defectDocumented: true,
+            evidenceAttached: false,
+            noticeDrafted: false,
+            calendarReminderExported: false,
+          },
+          protocolCount: 0,
+        },
+      ],
+      labels,
+      new Date("2026-07-27T07:00:00.000Z")
+    );
+
+    expect(csv.charCodeAt(0)).toBe(0xfeff);
+    expect(csv).toContain('\"Generated at\",\"2026-07-27T07:00:00.000Z\"');
+    expect(csv).toContain(
+      '\"Case ID\",\"Project\",\"Canton\",\"Legal regime\",\"Legal status\",\"Notice deadline\",\"Checklist readiness\",\"Linked protocols\",\"Audit readiness\"'
+    );
+    expect(csv).toContain(
+      `\"case-urgent\",\"Urgent Tower\",\"ZH\",\"New law\",\"${labels.statuses[urgent.status]}\",\"2026-04-30\",\"3/4\",\"2\",\"4/5\"`
+    );
+    expect(csv).toContain(
+      '\"case-legacy\",\"Legacy Hall\",\"BE\",\"Old law\",\"Immediate notice\",\"\",\"1/4\",\"0\",\"2/5\"'
+    );
+    expect(csv.indexOf('\"case-urgent\"')).toBeLessThan(csv.indexOf('\"case-legacy\"'));
+  });
+
+  it("neutralizes spreadsheet formulas in register text fields", () => {
+    const item = toComplianceCaseViewModel({
+      id: "+case-command",
+      projectName: "=HYPERLINK(\"https://example.test\")",
+      canton: "ZH",
+      contractDate: new Date("2026-01-10T00:00:00.000Z"),
+      discoveryDate: new Date("2026-03-01T00:00:00.000Z"),
+    });
+
+    const csv = buildCaseAuditRegisterCsv(
+      [{ item, checklist: item.checklistDefaults, protocolCount: 0 }],
+      labels,
+      new Date("2026-07-27T07:00:00.000Z")
+    );
+
+    expect(csv).toContain('\"\'+case-command\"');
+    expect(csv).toContain('\"\'=HYPERLINK(\"\"https://example.test\"\")\"');
+    expect(csv).toContain('\"2026-04-30\"');
   });
 });
 
