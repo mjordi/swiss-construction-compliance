@@ -480,6 +480,27 @@ export default function CasesPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [searchTerm]);
 
+  const [timelineRevision, setTimelineRevision] = useState(0);
+
+  useEffect(() => {
+    let refreshTimer: number | undefined;
+
+    const scheduleNextCalendarDay = () => {
+      const now = new Date();
+      const nextCalendarDay = new Date(now);
+      nextCalendarDay.setHours(24, 0, 0, 0);
+      refreshTimer = window.setTimeout(() => {
+        setTimelineRevision((current) => current + 1);
+        scheduleNextCalendarDay();
+      }, nextCalendarDay.getTime() - now.getTime());
+    };
+
+    scheduleNextCalendarDay();
+    return () => {
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+    };
+  }, []);
+
   const caseInputs: ComplianceCaseInput[] = useMemo(
     () =>
       dbCases.map((c) => ({
@@ -492,7 +513,10 @@ export default function CasesPage() {
     [dbCases]
   );
 
-  const cases = useMemo(() => buildComplianceCaseTimeline(caseInputs), [caseInputs]);
+  const cases = useMemo(() => {
+    void timelineRevision;
+    return buildComplianceCaseTimeline(caseInputs);
+  }, [caseInputs, timelineRevision]);
 
   const linkedProtocolEventsByCase = useMemo(() => {
     const result: Record<string, LinkedCaseProtocolEvent[]> = {};
