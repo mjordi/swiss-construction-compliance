@@ -300,6 +300,11 @@ describe("dashboard linked-case loading retry", () => {
     expect(screen.getByText("dashboard-final-review-standalone")).toBeTruthy();
     expect(screen.getByText("dashboard-final-review-defects-missing")).toBeTruthy();
     expect(screen.getByText("dashboard-final-review-signature-missing")).toBeTruthy();
+    expect(screen.getByText("dashboard-final-review-consequences-title")).toBeTruthy();
+    expect(screen.getByText("dashboard-final-review-protocol-consequence")).toBeTruthy();
+    expect(screen.getByText("dashboard-final-review-standalone-consequence")).toBeTruthy();
+    expect(screen.getByText("dashboard-final-review-export-consequence")).toBeTruthy();
+    expect(screen.queryByText("dashboard-final-review-linked-case-consequence")).toBeNull();
 
     fireEvent.click(screen.getByRole("checkbox"));
     signaturePadIsEmpty = false;
@@ -518,6 +523,11 @@ describe("dashboard linked-case loading retry", () => {
 
     expect(await screen.findByRole("option", { name: "Alpine Tower (ZH)" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "btn-next" }));
+    expect(await screen.findByText("dashboard-final-review-consequences-title")).toBeTruthy();
+    expect(screen.getByText("dashboard-final-review-protocol-consequence")).toBeTruthy();
+    expect(screen.getByText("dashboard-final-review-linked-case-consequence")).toBeTruthy();
+    expect(screen.getByText("dashboard-final-review-export-consequence")).toBeTruthy();
+    expect(screen.queryByText("dashboard-final-review-standalone-consequence")).toBeNull();
     fireEvent.click(screen.getByRole("checkbox"));
     signaturePadIsEmpty = false;
     await act(async () => {
