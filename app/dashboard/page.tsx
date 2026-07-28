@@ -906,6 +906,28 @@ export default function Dashboard() {
                     <dd className="text-right">{finalReviewSignatureSummary}</dd>
                   </div>
                 </dl>
+                <div className="mt-4 border-t border-accent/15 pt-3">
+                  <div
+                    id="dashboard-final-review-consequences-title"
+                    className="text-[10px] font-semibold uppercase tracking-[0.1em] text-accent/80"
+                  >
+                    {t("dashboard-final-review-consequences-title")}
+                  </div>
+                  <ul
+                    aria-labelledby="dashboard-final-review-consequences-title"
+                    className="mt-2 list-disc space-y-1.5 pl-4 text-xs leading-relaxed text-muted"
+                  >
+                    <li>{t("dashboard-final-review-protocol-consequence")}</li>
+                    <li>
+                      {t(
+                        effectiveSelectedCaseId
+                          ? "dashboard-final-review-linked-case-consequence"
+                          : "dashboard-final-review-standalone-consequence"
+                      )}
+                    </li>
+                    <li>{t("dashboard-final-review-export-consequence")}</li>
+                  </ul>
+                </div>
               </div>
 
               <div className="flex gap-3">
