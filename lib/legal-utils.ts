@@ -308,6 +308,16 @@ export function formatDateCH(date: Date): string {
   });
 }
 
+/** Format an instant on the Swiss legal calendar day. */
+export function formatTimestampDateCH(date: Date): string {
+  return date.toLocaleDateString("de-CH", {
+    timeZone: SWISS_TIME_ZONE,
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
 /**
  * Generate an ICS calendar file for a single deadline.
  */

@@ -93,6 +93,25 @@ describe("case timeline view model", () => {
     ]);
   });
 
+  it("formats finalized protocol timestamps on the Swiss calendar day", () => {
+    const vm = toComplianceCaseViewModel({
+      id: "timeline-protocol-midnight",
+      projectName: "Protocol Midnight Project",
+      canton: "ZH",
+      contractDate: new Date("2026-01-10"),
+      discoveryDate: new Date("2026-03-01"),
+    });
+
+    const milestones = deriveCaseLegalMilestones(vm, [
+      { id: "protocol-midnight", status: "finalized", createdAt: "2026-07-31T22:30:00.000Z" },
+    ]);
+
+    expect(milestones.find((milestone) => milestone.kind === "protocol-finalized")).toMatchObject({
+      id: "protocol-finalized-protocol-midnight",
+      dateLabel: "1. August 2026",
+    });
+  });
+
   it("rejects impossible timelines where discovery is before contract", () => {
     const input = {
       id: "invalid-1",

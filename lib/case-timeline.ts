@@ -2,6 +2,7 @@ import {
   calculateRuegefrist,
   determineLegalRegime,
   formatDateCH,
+  formatTimestampDateCH,
   generateDeadlineICS,
   validateRuegefristInput,
   type LegalRegime,
@@ -282,7 +283,7 @@ export function deriveCaseLegalMilestones(
       id: `protocol-finalized-${protocol.id}`,
       kind: "protocol-finalized",
       date: finalizedAt,
-      dateLabel: formatDateCH(finalizedAt),
+      dateLabel: formatTimestampDateCH(finalizedAt),
     });
   }
 
