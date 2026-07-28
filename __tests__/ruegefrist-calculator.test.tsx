@@ -75,6 +75,25 @@ describe("RuegefristCalculator", () => {
     expect(screen.queryByRole("button", { name: "calc-download-ics" })).toBeNull();
   });
 
+  it("preserves entered calendar dates when calculating east of Zurich", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-29T22:30:00.000Z"));
+
+    render(<RuegefristCalculator />);
+
+    fireEvent.change(screen.getByLabelText("calc-contract-date"), {
+      target: { value: "2026-02-01" },
+    });
+    fireEvent.change(screen.getByLabelText("calc-discovery-date"), {
+      target: { value: "2026-08-01" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "calc-calculate" }));
+
+    expect(screen.getByText("30. September 2026")).toBeTruthy();
+    expect(screen.getByText("0")).toBeTruthy();
+    expect(screen.queryByText("calc-expired")).toBeNull();
+  });
+
   it("exposes selected reminder presets with aria-pressed and updates when toggled", () => {
     render(<RuegefristCalculator />);
 

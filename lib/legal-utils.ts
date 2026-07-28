@@ -301,6 +301,7 @@ export function calculateRuegefrist(
  */
 export function formatDateCH(date: Date): string {
   return date.toLocaleDateString("de-CH", {
+    timeZone: "UTC",
     year: "numeric",
     month: "long",
     day: "numeric",
