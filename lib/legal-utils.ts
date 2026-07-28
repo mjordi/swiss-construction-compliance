@@ -14,6 +14,73 @@ export type LegalRegime = "old" | "new";
 export const DEFAULT_DEADLINE_REMINDER_OFFSETS = [14, 7, 1] as const;
 export const DEADLINE_REMINDER_OFFSET_OPTIONS = [30, 14, 7, 3, 1] as const;
 
+const MILLISECONDS_PER_DAY = 24 * 60 * 60 * 1000;
+const SWISS_TIME_ZONE = "Europe/Zurich";
+const swissCalendarFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: SWISS_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+});
+
+function getSwissCalendarParts(date: Date) {
+  const parts = Object.fromEntries(
+    swissCalendarFormatter
+      .formatToParts(date)
+      .filter((part) => ["year", "month", "day", "hour", "minute", "second"].includes(part.type))
+      .map((part) => [part.type, Number(part.value)])
+  );
+
+  return {
+    year: parts.year,
+    month: parts.month,
+    day: parts.day,
+    hour: parts.hour,
+    minute: parts.minute,
+    second: parts.second,
+  };
+}
+
+function getSwissUtcOffset(date: Date): number {
+  const parts = getSwissCalendarParts(date);
+  const representedAsUtc = Date.UTC(
+    parts.year,
+    parts.month - 1,
+    parts.day,
+    parts.hour,
+    parts.minute,
+    parts.second
+  );
+  return representedAsUtc - Math.floor(date.getTime() / 1000) * 1000;
+}
+
+function getSwissCalendarDayIndex(date: Date): number {
+  const { year, month, day } = getSwissCalendarParts(date);
+  return Math.floor(Date.UTC(year, month - 1, day) / MILLISECONDS_PER_DAY);
+}
+
+/** Milliseconds until the next legal calendar day begins in Europe/Zurich. */
+export function getMillisecondsUntilNextSwissCalendarDay(now: Date = new Date()): number {
+  const current = getSwissCalendarParts(now);
+  const nextDate = new Date(Date.UTC(current.year, current.month - 1, current.day + 1));
+  const nextMidnightAsUtc = Date.UTC(
+    nextDate.getUTCFullYear(),
+    nextDate.getUTCMonth(),
+    nextDate.getUTCDate()
+  );
+
+  let nextSwissMidnight = nextMidnightAsUtc;
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    nextSwissMidnight = nextMidnightAsUtc - getSwissUtcOffset(new Date(nextSwissMidnight));
+  }
+
+  return Math.max(0, nextSwissMidnight - now.getTime());
+}
+
 export interface DeadlineResult {
   /** Deadline date */
   date: Date;
@@ -159,11 +226,7 @@ export function addDays(date: Date, days: number): Date {
  * Calculate the number of days remaining from today to a target date.
  */
 export function getDaysRemaining(target: Date): number {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
-  const t = new Date(target);
-  t.setHours(0, 0, 0, 0);
-  return Math.floor((t.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+  return getSwissCalendarDayIndex(target) - getSwissCalendarDayIndex(new Date());
 }
 
 /**
@@ -238,6 +301,17 @@ export function calculateRuegefrist(
  */
 export function formatDateCH(date: Date): string {
   return date.toLocaleDateString("de-CH", {
+    timeZone: "UTC",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
+/** Format an instant on the Swiss legal calendar day. */
+export function formatTimestampDateCH(date: Date): string {
+  return date.toLocaleDateString("de-CH", {
+    timeZone: SWISS_TIME_ZONE,
     year: "numeric",
     month: "long",
     day: "numeric",

@@ -1,13 +1,21 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-const { buildCaseLegalChronologyCsvMock } = vi.hoisted(() => ({
+const {
+  buildCaseAuditRegisterCsvMock,
+  buildCaseLegalChronologyCsvMock,
+  buildComplianceCaseTimelineMock,
+} = vi.hoisted(() => ({
+  buildCaseAuditRegisterCsvMock: vi.fn(() => '\ufeff"Case audit register"'),
   buildCaseLegalChronologyCsvMock: vi.fn(() => '\ufeff"Case chronology"'),
+  buildComplianceCaseTimelineMock: vi.fn(),
 }));
 const replaceMock = vi.fn();
 const updateEqMock = vi.fn();
 const createObjectURLMock = vi.fn<(blob: Blob) => string>(() => "blob:case-reminder");
 const revokeObjectURLMock = vi.fn();
+let statusQueryParam: string | null = null;
+let timelineStatus: "warning" | "urgent" = "warning";
 let updatePayloads: Array<{ checklist?: Record<string, boolean> }> = [];
 let caseChecklistData: Record<string, boolean> | null = {
   defectDocumented: false,
@@ -26,8 +34,8 @@ vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/cases",
   useRouter: () => ({ replace: replaceMock }),
   useSearchParams: () => ({
-    get: () => null,
-    toString: () => "",
+    get: (key: string) => (key === "status" ? statusQueryParam : null),
+    toString: () => (statusQueryParam ? `status=${statusQueryParam}` : ""),
   }),
 }));
 
@@ -55,12 +63,13 @@ vi.mock("@/components/dashboard/PageHeader", () => ({
 
 vi.mock("@/lib/case-timeline", () => ({
   applyComplianceCaseView: (cases: unknown[]) => cases,
-  buildComplianceCaseTimeline: (inputs: Array<{ id: string; projectName: string; canton: string }>) =>
-    inputs.map((input) => ({
+  buildComplianceCaseTimeline: (inputs: Array<{ id: string; projectName: string; canton: string }>) => {
+    buildComplianceCaseTimelineMock(inputs);
+    return inputs.map((input) => ({
       id: input.id,
       projectName: input.projectName,
       canton: input.canton,
-      status: "warning",
+      status: timelineStatus,
       deadlineCountdownTone: "warning",
       deadlineCountdownLabel: "10 days left",
       regimeLabel: "New law",
@@ -80,7 +89,9 @@ vi.mock("@/lib/case-timeline", () => ({
         emailReminderPlanned: false,
         evidenceComplete: false,
       },
-    })),
+    }));
+  },
+  buildCaseAuditRegisterCsv: buildCaseAuditRegisterCsvMock,
   buildCaseDeadlineReminderICS: () => "BEGIN:VCALENDAR\nEND:VCALENDAR",
   buildCaseLegalChronologyCsv: buildCaseLegalChronologyCsvMock,
   deriveCaseLegalMilestones: (
@@ -167,7 +178,9 @@ describe("cases checklist persistence", () => {
     updatePayloads = [];
     createObjectURLMock.mockClear();
     revokeObjectURLMock.mockClear();
+    buildCaseAuditRegisterCsvMock.mockClear();
     buildCaseLegalChronologyCsvMock.mockClear();
+    buildComplianceCaseTimelineMock.mockClear();
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
       value: createObjectURLMock,
@@ -183,6 +196,8 @@ describe("cases checklist persistence", () => {
       calendarReminderExported: false,
     };
     protocolRows = [];
+    statusQueryParam = null;
+    timelineStatus = "warning";
   });
 
   it("keeps timeline-derived checklist defaults when persisted checklist data is partial", async () => {
@@ -376,6 +391,141 @@ describe("cases checklist persistence", () => {
     } finally {
       anchorClickMock.mockRestore();
     }
+  });
+
+  it("downloads the filtered audit register from the visible case view", async () => {
+    caseChecklistData = {
+      defectDocumented: true,
+      evidenceAttached: false,
+      noticeDrafted: false,
+      calendarReminderExported: true,
+    };
+    protocolRows = [{ case_id: "case-1" }, { case_id: "case-1" }];
+    statusQueryParam = "warning";
+    const anchorClickMock = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+
+    try {
+      render(<CasesPage />);
+
+      const exportButton = await screen.findByRole("button", { name: "cases-export-audit-register" });
+      const timelineBuildCount = buildComplianceCaseTimelineMock.mock.calls.length;
+
+      fireEvent.click(exportButton);
+
+      expect(buildComplianceCaseTimelineMock).toHaveBeenCalledTimes(timelineBuildCount + 1);
+      expect(buildCaseAuditRegisterCsvMock).toHaveBeenCalledWith(
+        [
+          {
+            item: expect.objectContaining({
+              id: "case-1",
+              projectName: "Alpine Tower",
+              canton: "ZH",
+            }),
+            checklist: {
+              defectDocumented: true,
+              evidenceAttached: false,
+              noticeDrafted: false,
+              calendarReminderExported: true,
+            },
+            protocolCount: 2,
+          },
+        ],
+        {
+          title: "cases-audit-register-title",
+          generatedAt: "cases-chronology-generated-at",
+          caseId: "cases-chronology-case-id",
+          projectName: "cases-chronology-project",
+          canton: "cases-chronology-canton",
+          regime: "cases-audit-register-regime",
+          status: "cases-audit-register-status",
+          noticeDeadline: "cases-notice-deadline",
+          checklistProgress: "cases-audit-register-checklist",
+          linkedProtocols: "cases-linked-protocols",
+          auditReadiness: "cases-audit-readiness",
+          regimes: {
+            old: "cases-old-law",
+            new: "cases-new-law",
+          },
+          statuses: {
+            ok: "cases-status-on-track",
+            warning: "cases-status-attention",
+            urgent: "cases-status-urgent",
+            expired: "cases-status-expired",
+            "immediate-notice": "cases-status-immediate-notice",
+          },
+        },
+        expect.any(Date)
+      );
+      expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+      expect(anchorClickMock).toHaveBeenCalledTimes(1);
+      const clickedAnchor = anchorClickMock.mock.instances[0] as HTMLAnchorElement;
+      expect(clickedAnchor.download).toBe("baucompliance-case-audit-register.csv");
+      expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:case-reminder");
+      expect(updateEqMock).not.toHaveBeenCalled();
+    } finally {
+      anchorClickMock.mockRestore();
+    }
+  });
+
+  it("refreshes filtered export eligibility when the calendar day changes", async () => {
+    statusQueryParam = "urgent";
+    let refreshCalendarDay: (() => void) | undefined;
+    const nativeSetTimeout = window.setTimeout.bind(window);
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout").mockImplementation((handler, timeout, ...args) => {
+      if (typeof handler === "function" && (timeout ?? 0) > 60_000) {
+        refreshCalendarDay = handler;
+        return nativeSetTimeout(() => {}, 0) as never;
+      }
+      return nativeSetTimeout(handler, timeout, ...args) as never;
+    });
+
+    try {
+      render(<CasesPage />);
+
+      const exportButton = await screen.findByRole("button", { name: "cases-export-audit-register" });
+      await waitFor(() => {
+        expect(buildComplianceCaseTimelineMock.mock.calls.length).toBeGreaterThan(1);
+      });
+      expect((exportButton as HTMLButtonElement).disabled).toBe(true);
+
+      timelineStatus = "urgent";
+      expect(refreshCalendarDay).toBeTypeOf("function");
+      act(() => refreshCalendarDay?.());
+
+      expect((exportButton as HTMLButtonElement).disabled).toBe(false);
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
+  });
+
+  it("disables the audit register export while a visible checklist save is pending", async () => {
+    let resolveUpdate!: (result: { error: null }) => void;
+    updateEqMock.mockReturnValueOnce(
+      new Promise((resolve) => {
+        resolveUpdate = resolve;
+      })
+    );
+
+    render(<CasesPage />);
+
+    const checkbox = await screen.findByLabelText("cases-checklist-evidence-attached");
+    const exportButton = screen.getByRole("button", { name: "cases-export-audit-register" });
+
+    fireEvent.click(checkbox);
+
+    await waitFor(() => {
+      expect((exportButton as HTMLButtonElement).disabled).toBe(true);
+    });
+    fireEvent.click(exportButton);
+    expect(buildCaseAuditRegisterCsvMock).not.toHaveBeenCalled();
+
+    resolveUpdate({ error: null });
+
+    await waitFor(() => {
+      expect((exportButton as HTMLButtonElement).disabled).toBe(false);
+    });
   });
 
   it("rolls back an optimistic checklist toggle and shows inline feedback when persistence fails", async () => {

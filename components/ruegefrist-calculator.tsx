@@ -20,7 +20,7 @@ import {
   DEFAULT_DEADLINE_REMINDER_OFFSETS,
   formatDateCH,
   generateDeadlineICS,
-  parseDateInput,
+  parseDateInputAsUTC,
   sanitizeDeadlineReminderQueryParam,
   serializeDeadlineReminderQueryParam,
   validateRuegefristInput,
@@ -158,8 +158,8 @@ export default function RuegefristCalculator() {
       rawContractDate !== null || rawDiscoveryDate !== null || rawReminders !== null;
 
     if (hasSharedParams) {
-      const sharedContractDate = rawContractDate && parseDateInput(rawContractDate) ? rawContractDate : "";
-      const sharedDiscoveryDate = rawDiscoveryDate && parseDateInput(rawDiscoveryDate) ? rawDiscoveryDate : "";
+      const sharedContractDate = rawContractDate && parseDateInputAsUTC(rawContractDate) ? rawContractDate : "";
+      const sharedDiscoveryDate = rawDiscoveryDate && parseDateInputAsUTC(rawDiscoveryDate) ? rawDiscoveryDate : "";
       const sharedReminderOffsets = sanitizeDeadlineReminderQueryParam(rawReminders);
       const serializedReminderOffsets = serializeDeadlineReminderQueryParam(sharedReminderOffsets);
 
@@ -191,8 +191,8 @@ export default function RuegefristCalculator() {
       loadSharedDates(nextContractDate, nextDiscoveryDate);
       loadSharedReminders(sharedReminderOffsets);
 
-      const parsedContractDate = sharedContractDate ? parseDateInput(sharedContractDate) : null;
-      const parsedDiscoveryDate = sharedDiscoveryDate ? parseDateInput(sharedDiscoveryDate) : null;
+      const parsedContractDate = sharedContractDate ? parseDateInputAsUTC(sharedContractDate) : null;
+      const parsedDiscoveryDate = sharedDiscoveryDate ? parseDateInputAsUTC(sharedDiscoveryDate) : null;
       if (
         parsedContractDate &&
         parsedDiscoveryDate &&
@@ -237,8 +237,8 @@ export default function RuegefristCalculator() {
   const validationError =
     contractDate && discoveryDate
       ? (() => {
-          const parsedContractDate = parseDateInput(contractDate);
-          const parsedDiscoveryDate = parseDateInput(discoveryDate);
+          const parsedContractDate = parseDateInputAsUTC(contractDate);
+          const parsedDiscoveryDate = parseDateInputAsUTC(discoveryDate);
           if (!parsedContractDate || !parsedDiscoveryDate) return null;
           return validateRuegefristInput(parsedContractDate, parsedDiscoveryDate);
         })()
@@ -264,8 +264,8 @@ export default function RuegefristCalculator() {
     clearShareLinkFeedback();
     clearDownloadFeedback();
     if (!contractDate || !discoveryDate || validationError) return;
-    const parsedContractDate = parseDateInput(contractDate);
-    const parsedDiscoveryDate = parseDateInput(discoveryDate);
+    const parsedContractDate = parseDateInputAsUTC(contractDate);
+    const parsedDiscoveryDate = parseDateInputAsUTC(discoveryDate);
     if (!parsedContractDate || !parsedDiscoveryDate) return;
     const r = calculateRuegefrist(parsedContractDate, parsedDiscoveryDate);
     setResult(r);

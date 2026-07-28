@@ -2,6 +2,7 @@ import {
   calculateRuegefrist,
   determineLegalRegime,
   formatDateCH,
+  formatTimestampDateCH,
   generateDeadlineICS,
   validateRuegefristInput,
   type LegalRegime,
@@ -119,6 +120,28 @@ export interface CaseLegalChronologyCsvLabels {
   milestone: string;
   sourceId: string;
   milestones: Record<CaseLegalMilestoneKind, string>;
+}
+
+export interface CaseAuditRegisterCsvRow {
+  item: ComplianceCaseViewModel;
+  checklist: FollowUpChecklistState;
+  protocolCount: number;
+}
+
+export interface CaseAuditRegisterCsvLabels {
+  title: string;
+  generatedAt: string;
+  caseId: string;
+  projectName: string;
+  canton: string;
+  regime: string;
+  status: string;
+  noticeDeadline: string;
+  checklistProgress: string;
+  linkedProtocols: string;
+  auditReadiness: string;
+  regimes: Record<LegalRegime, string>;
+  statuses: Record<CaseDeadlineStatus, string>;
 }
 
 export function toComplianceCaseViewModel(
@@ -260,7 +283,7 @@ export function deriveCaseLegalMilestones(
       id: `protocol-finalized-${protocol.id}`,
       kind: "protocol-finalized",
       date: finalizedAt,
-      dateLabel: formatDateCH(finalizedAt),
+      dateLabel: formatTimestampDateCH(finalizedAt),
     });
   }
 
@@ -277,6 +300,53 @@ export function deriveCaseLegalMilestones(
       milestoneOrder[a.kind] - milestoneOrder[b.kind] ||
       (a.id ?? a.kind).localeCompare(b.id ?? b.kind)
   );
+}
+
+export function buildCaseAuditRegisterCsv(
+  rows: CaseAuditRegisterCsvRow[],
+  labels: CaseAuditRegisterCsvLabels,
+  generatedAt: Date
+): string {
+  const csvRows: string[][] = [
+    [labels.title],
+    [labels.generatedAt, generatedAt.toISOString()],
+    [""],
+    [
+      labels.caseId,
+      labels.projectName,
+      labels.canton,
+      labels.regime,
+      labels.status,
+      labels.noticeDeadline,
+      labels.checklistProgress,
+      labels.linkedProtocols,
+      labels.auditReadiness,
+    ],
+    ...rows.map(({ item, checklist, protocolCount }) => {
+      const checklistProgress = deriveChecklistProgress(checklist);
+      const auditCompleted = [
+        checklist.defectDocumented,
+        checklist.evidenceAttached,
+        checklist.noticeDrafted,
+        !item.noticeApplies || checklist.calendarReminderExported,
+        protocolCount > 0,
+      ].filter(Boolean).length;
+
+      return [
+        item.id,
+        item.projectName,
+        item.canton,
+        labels.regimes[item.regime],
+        labels.statuses[item.status],
+        item.noticeDeadline ? formatSwissCalendarDate(item.noticeDeadline) : "",
+        `${checklistProgress.completed}/${checklistProgress.total}`,
+        String(protocolCount),
+        `${auditCompleted}/5`,
+      ];
+    }),
+  ];
+
+  return `\ufeff${csvRows.map((row) => row.map(quoteCsvField).join(",")).join("\r\n")}`;
 }
 
 export function buildCaseLegalChronologyCsv(

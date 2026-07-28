@@ -12,6 +12,7 @@ import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import type { Case, Protocol } from "@/lib/database.types";
 import {
   applyComplianceCaseView,
+  buildCaseAuditRegisterCsv,
   buildCaseDeadlineReminderICS,
   buildCaseLegalChronologyCsv,
   buildComplianceCaseTimeline,
@@ -30,7 +31,11 @@ import {
 } from "@/lib/case-timeline";
 import { buildDashboardProtocolHref } from "@/lib/dashboard-linked-case";
 import { buildCaseVaultHref } from "@/lib/vault";
-import { sanitizeDateQueryParam, validateRuegefristInput } from "@/lib/legal-utils";
+import {
+  getMillisecondsUntilNextSwissCalendarDay,
+  sanitizeDateQueryParam,
+  validateRuegefristInput,
+} from "@/lib/legal-utils";
 import type { TranslationKey } from "@/locales";
 
 type LinkedProtocolRow = Pick<Protocol, "id" | "case_id" | "status" | "created_at">;
@@ -78,6 +83,24 @@ function parseStatusFilter(value: string | null): CaseStatusFilter {
 function parseSortMode(value: string | null): CaseSortMode {
   if (value === "most-urgent") return value;
   return "nearest-deadline";
+}
+
+function filterCasesByStatus(
+  cases: ComplianceCaseViewModel[],
+  statusFilter: CaseStatusFilter
+): ComplianceCaseViewModel[] {
+  if (statusFilter === "all") return cases;
+  if (statusFilter === "triage") {
+    return cases.filter(
+      (item) => item.status === "urgent" || item.status === "expired" || item.status === "immediate-notice"
+    );
+  }
+  if (statusFilter === "urgent") {
+    return cases.filter(
+      (item) => item.status === "urgent" || item.status === "immediate-notice"
+    );
+  }
+  return cases.filter((item) => item.status === statusFilter);
 }
 
 type CaseFormState = {
@@ -461,6 +484,24 @@ export default function CasesPage() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [searchTerm]);
 
+  const [timelineRevision, setTimelineRevision] = useState(0);
+
+  useEffect(() => {
+    let refreshTimer: number | undefined;
+
+    const scheduleNextCalendarDay = () => {
+      refreshTimer = window.setTimeout(() => {
+        setTimelineRevision((current) => current + 1);
+        scheduleNextCalendarDay();
+      }, getMillisecondsUntilNextSwissCalendarDay());
+    };
+
+    scheduleNextCalendarDay();
+    return () => {
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+    };
+  }, []);
+
   const caseInputs: ComplianceCaseInput[] = useMemo(
     () =>
       dbCases.map((c) => ({
@@ -473,7 +514,10 @@ export default function CasesPage() {
     [dbCases]
   );
 
-  const cases = useMemo(() => buildComplianceCaseTimeline(caseInputs), [caseInputs]);
+  const cases = useMemo(() => {
+    void timelineRevision;
+    return buildComplianceCaseTimeline(caseInputs);
+  }, [caseInputs, timelineRevision]);
 
   const linkedProtocolEventsByCase = useMemo(() => {
     const result: Record<string, LinkedCaseProtocolEvent[]> = {};
@@ -521,18 +565,7 @@ export default function CasesPage() {
   }, [cases, regimeFilter, sortMode, searchTerm]);
 
   const visibleCases = useMemo(() => {
-    if (statusFilter === "all") return searchScopedCases;
-    if (statusFilter === "triage") {
-      return searchScopedCases.filter(
-        (item) => item.status === "urgent" || item.status === "expired" || item.status === "immediate-notice"
-      );
-    }
-    if (statusFilter === "urgent") {
-      return searchScopedCases.filter(
-        (item) => item.status === "urgent" || item.status === "immediate-notice"
-      );
-    }
-    return searchScopedCases.filter((item) => item.status === statusFilter);
+    return filterCasesByStatus(searchScopedCases, statusFilter);
   }, [searchScopedCases, statusFilter]);
 
   const statusCounters = useMemo(
@@ -678,6 +711,9 @@ export default function CasesPage() {
   }, [editFormData.contractDate, editFormData.discoveryDate]);
 
   const hasDeletingCases = Object.keys(deletingCaseIds).length > 0;
+  const hasVisibleChecklistSave = visibleCases.some((item) =>
+    Boolean(checklistSavingByCase[item.id])
+  );
 
   const checklistLabels: Record<FollowUpChecklistKey, string> = {
     defectDocumented: t("cases-checklist-defect-documented"),
@@ -767,6 +803,72 @@ export default function CasesPage() {
       void setChecklistItem(item.id, "calendarReminderExported", true);
     } catch {
       showTemporaryReminderExportFeedback(item.id, "cases-export-ics-error", "error", requestId);
+    }
+  }
+
+  function downloadCaseAuditRegister() {
+    const currentSearchScopedCases = applyComplianceCaseView(
+      buildComplianceCaseTimeline(caseInputs),
+      regimeFilter,
+      "all",
+      sortMode
+    );
+    const query = searchTerm.trim().toLowerCase();
+    const currentSearchResults = query
+      ? currentSearchScopedCases.filter((item) =>
+          `${item.projectName} ${item.canton}`.toLowerCase().includes(query)
+        )
+      : currentSearchScopedCases;
+    const currentVisibleCases = filterCasesByStatus(currentSearchResults, statusFilter);
+    const currentViewHasChecklistSave = currentVisibleCases.some((item) =>
+      Boolean(checklistSavingByCase[item.id])
+    );
+
+    if (currentVisibleCases.length === 0 || currentViewHasChecklistSave) return;
+
+    const content = buildCaseAuditRegisterCsv(
+      currentVisibleCases.map((item) => ({
+        item,
+        checklist: effectiveChecklists[item.id] ?? item.checklistDefaults,
+        protocolCount: protocolCounts[item.id] ?? 0,
+      })),
+      {
+        title: t("cases-audit-register-title"),
+        generatedAt: t("cases-chronology-generated-at"),
+        caseId: t("cases-chronology-case-id"),
+        projectName: t("cases-chronology-project"),
+        canton: t("cases-chronology-canton"),
+        regime: t("cases-audit-register-regime"),
+        status: t("cases-audit-register-status"),
+        noticeDeadline: t("cases-notice-deadline"),
+        checklistProgress: t("cases-audit-register-checklist"),
+        linkedProtocols: t("cases-linked-protocols"),
+        auditReadiness: t("cases-audit-readiness"),
+        regimes: {
+          old: t("cases-old-law"),
+          new: t("cases-new-law"),
+        },
+        statuses: {
+          ok: t("cases-status-on-track"),
+          warning: t("cases-status-attention"),
+          urgent: t("cases-status-urgent"),
+          expired: t("cases-status-expired"),
+          "immediate-notice": t("cases-status-immediate-notice"),
+        },
+      },
+      new Date()
+    );
+    const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement("a");
+
+    try {
+      anchor.href = url;
+      anchor.download = "baucompliance-case-audit-register.csv";
+      anchor.click();
+    } finally {
+      anchor.remove();
+      URL.revokeObjectURL(url);
     }
   }
 
@@ -1153,24 +1255,34 @@ export default function CasesPage() {
           <FilterSelect label={t("cases-filter-sort")} value={sortMode} onChange={(v) => setSortMode(v as CaseSortMode)} options={[{ value: "nearest-deadline", label: t("cases-sort-nearest") }, { value: "most-urgent", label: t("cases-sort-urgent") }]} />
         </div>
 
-        {hasActiveFilters && (
-          <div className="flex flex-wrap justify-end gap-2">
-            <button
-              type="button"
-              onClick={copyShareLink}
-              className="px-3 py-1.5 rounded-lg border border-white/[0.12] text-xs font-medium text-cream hover:bg-white/[0.06]"
-            >
-              {shareLinkFeedback ? t(shareLinkFeedback) : t("cases-share-link")}
-            </button>
-            <button
-              type="button"
-              onClick={clearFilters}
-              className="px-3 py-1.5 rounded-lg border border-white/[0.12] text-xs font-medium text-cream hover:bg-white/[0.06]"
-            >
-              {t("cases-clear-filters")}
-            </button>
-          </div>
-        )}
+        <div className="flex flex-wrap justify-end gap-2">
+          <button
+            type="button"
+            onClick={downloadCaseAuditRegister}
+            disabled={visibleCases.length === 0 || hasVisibleChecklistSave}
+            className="px-3 py-1.5 rounded-lg border border-blue-400/30 text-xs font-medium text-blue-100 hover:bg-blue-500/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            {t("cases-export-audit-register")}
+          </button>
+          {hasActiveFilters && (
+            <>
+              <button
+                type="button"
+                onClick={copyShareLink}
+                className="px-3 py-1.5 rounded-lg border border-white/[0.12] text-xs font-medium text-cream hover:bg-white/[0.06]"
+              >
+                {shareLinkFeedback ? t(shareLinkFeedback) : t("cases-share-link")}
+              </button>
+              <button
+                type="button"
+                onClick={clearFilters}
+                className="px-3 py-1.5 rounded-lg border border-white/[0.12] text-xs font-medium text-cream hover:bg-white/[0.06]"
+              >
+                {t("cases-clear-filters")}
+              </button>
+            </>
+          )}
+        </div>
       </section>
 
       {/* Cases list */}

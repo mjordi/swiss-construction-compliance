@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   determineLegalRegime,
   calculateRuegefrist,
@@ -12,6 +12,8 @@ import {
   sanitizeDeadlineReminderQueryParam,
   serializeDeadlineReminderQueryParam,
   normalizeDeadlineReminderOffsets,
+  getDaysRemaining,
+  getMillisecondsUntilNextSwissCalendarDay,
   OR_REVISION_DATE,
 } from "../lib/legal-utils";
 
@@ -102,6 +104,31 @@ describe("addDays", () => {
     const base = new Date("2026-12-15");
     const result = addDays(base, 60);
     expect(result.toISOString().split("T")[0]).toBe("2027-02-13");
+  });
+});
+
+describe("Swiss legal calendar day", () => {
+  it("calculates remaining days from the Europe/Zurich calendar date", () => {
+    vi.useFakeTimers();
+
+    try {
+      vi.setSystemTime(new Date("2026-07-31T21:30:00.000Z"));
+      expect(getDaysRemaining(new Date("2026-08-01T00:00:00.000Z"))).toBe(1);
+
+      vi.setSystemTime(new Date("2026-07-31T22:30:00.000Z"));
+      expect(getDaysRemaining(new Date("2026-08-01T00:00:00.000Z"))).toBe(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("locates the next Swiss midnight in summer and winter time", () => {
+    expect(
+      getMillisecondsUntilNextSwissCalendarDay(new Date("2026-07-31T21:30:00.000Z"))
+    ).toBe(30 * 60 * 1000);
+    expect(
+      getMillisecondsUntilNextSwissCalendarDay(new Date("2026-12-31T22:30:00.000Z"))
+    ).toBe(30 * 60 * 1000);
   });
 });
 
