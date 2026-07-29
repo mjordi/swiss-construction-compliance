@@ -506,6 +506,7 @@ export default function Dashboard() {
           noDefectsConfirmed,
           signatureCaptured: hasSignature,
           linkedCaseId: effectiveSelectedCaseId,
+          finalizedAt: new Date().toISOString(),
         })
       );
       clearPersistedWizardDraft();
@@ -533,7 +534,6 @@ export default function Dashboard() {
       const blob = await pdf(
         <AuditReportPDF
           fileName={projectData.name || "Project"}
-          date={new Date().toLocaleDateString('de-CH')}
           caseId={complianceRecord.caseId}
           contractor={projectData.contractor}
           client={projectData.client}

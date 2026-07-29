@@ -82,11 +82,16 @@ const styles = StyleSheet.create({
 
 interface AuditReportProps {
   fileName: string;
-  date: string;
   caseId?: string;
   contractor?: string;
   client?: string;
   report: FinalizedProtocolReport;
+}
+
+function getFinalizationDate(report: FinalizedProtocolReport): string {
+  return new Date(report.finalizedAt).toLocaleDateString('de-CH', {
+    timeZone: 'Europe/Zurich',
+  });
 }
 
 function getDefectEvidenceText(report: FinalizedProtocolReport): string {
@@ -100,7 +105,7 @@ function getDefectEvidenceText(report: FinalizedProtocolReport): string {
   }
 }
 
-export const AuditReportPDF = ({ fileName, date, caseId, contractor, client, report }: AuditReportProps) => (
+export const AuditReportPDF = ({ fileName, caseId, contractor, client, report }: AuditReportProps) => (
   <Document>
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
@@ -120,8 +125,8 @@ export const AuditReportPDF = ({ fileName, date, caseId, contractor, client, rep
         </View>
         
         <View style={styles.item}>
-          <Text style={styles.itemTitle}>Record Date</Text>
-          <Text style={styles.detailValue}>{date}</Text>
+          <Text style={styles.itemTitle}>Finalization Date</Text>
+          <Text style={styles.detailValue}>{getFinalizationDate(report)}</Text>
         </View>
 
         <View style={styles.item}>
@@ -131,7 +136,7 @@ export const AuditReportPDF = ({ fileName, date, caseId, contractor, client, rep
 
         {caseId ? (
           <View style={styles.item}>
-            <Text style={styles.itemTitle}>Record ID</Text>
+            <Text style={styles.itemTitle}>Case / Reference ID</Text>
             <Text style={styles.detailValue}>{caseId}</Text>
           </View>
         ) : null}

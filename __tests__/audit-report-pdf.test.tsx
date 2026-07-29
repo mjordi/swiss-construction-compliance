@@ -18,8 +18,7 @@ describe("AuditReportPDF", () => {
   it("renders source-bound protocol evidence without fabricated compliance claims", () => {
     const report = AuditReportPDF({
       fileName: "Alpine Tower",
-      date: "29.07.2026",
-      caseId: "record-1",
+      caseId: "reference-1",
       contractor: "Builder AG",
       client: "Owner GmbH",
       report: {
@@ -30,6 +29,7 @@ describe("AuditReportPDF", () => {
         },
         signatureCaptured: true,
         linkedCaseId: "case-1",
+        finalizedAt: "2026-07-29T21:30:00.000Z",
       },
     });
     const text = collectText(report);
@@ -38,6 +38,9 @@ describe("AuditReportPDF", () => {
     expect(text).toContain("Cracked balcony edge");
     expect(text).toContain("CAPTURED");
     expect(text).toContain("case-1");
+    expect(text).toContain("Finalization Date");
+    expect(text).toContain("Case / Reference ID");
+    expect(text).not.toContain("Record ID");
     expect(text).not.toContain("98%");
     expect(text).not.toContain("Passed 12/12 Mandatory Checks");
     expect(text).not.toContain("COMPLIANT");
@@ -47,12 +50,12 @@ describe("AuditReportPDF", () => {
   it("states explicit no-visible-defect evidence without inventing a score", () => {
     const report = AuditReportPDF({
       fileName: "Alpine Tower",
-      date: "29.07.2026",
       report: {
         status: "finalized",
         defectEvidence: { kind: "none-visible-confirmed" },
         signatureCaptured: true,
         linkedCaseId: null,
+        finalizedAt: "2026-07-29T21:30:00.000Z",
       },
     });
 

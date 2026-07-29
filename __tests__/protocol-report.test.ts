@@ -10,6 +10,7 @@ describe("buildFinalizedProtocolReport", () => {
         noDefectsConfirmed: false,
         signatureCaptured: true,
         linkedCaseId: "case-1",
+        finalizedAt: "2026-07-29T21:30:00.000Z",
       })
     ).toEqual({
       status: "finalized",
@@ -19,6 +20,7 @@ describe("buildFinalizedProtocolReport", () => {
       },
       signatureCaptured: true,
       linkedCaseId: "case-1",
+      finalizedAt: "2026-07-29T21:30:00.000Z",
     });
   });
 
@@ -29,6 +31,7 @@ describe("buildFinalizedProtocolReport", () => {
         noDefectsConfirmed: true,
         signatureCaptured: true,
         linkedCaseId: null,
+        finalizedAt: "2026-07-29T21:30:00.000Z",
       }).defectEvidence
     ).toEqual({ kind: "none-visible-confirmed" });
   });
@@ -40,12 +43,14 @@ describe("buildFinalizedProtocolReport", () => {
         noDefectsConfirmed: false,
         signatureCaptured: false,
         linkedCaseId: null,
+        finalizedAt: "2026-07-29T21:30:00.000Z",
       })
     ).toEqual({
       status: "finalized",
       defectEvidence: { kind: "not-recorded" },
       signatureCaptured: false,
       linkedCaseId: null,
+      finalizedAt: "2026-07-29T21:30:00.000Z",
     });
   });
 });

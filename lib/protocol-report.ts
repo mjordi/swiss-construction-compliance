@@ -8,6 +8,7 @@ export interface FinalizedProtocolReport {
   defectEvidence: ProtocolDefectEvidence;
   signatureCaptured: boolean;
   linkedCaseId: string | null;
+  finalizedAt: string;
 }
 
 export interface FinalizedProtocolReportInput {
@@ -15,6 +16,7 @@ export interface FinalizedProtocolReportInput {
   noDefectsConfirmed: boolean;
   signatureCaptured: boolean;
   linkedCaseId: string | null;
+  finalizedAt: string;
 }
 
 export function buildFinalizedProtocolReport(
@@ -32,5 +34,6 @@ export function buildFinalizedProtocolReport(
     defectEvidence,
     signatureCaptured: input.signatureCaptured,
     linkedCaseId: input.linkedCaseId,
+    finalizedAt: input.finalizedAt,
   };
 }

@@ -682,6 +682,7 @@ describe("dashboard linked-case loading retry", () => {
         },
         signatureCaptured: true,
         linkedCaseId: "case-1",
+        finalizedAt: expect.any(String),
       });
     });
   });
