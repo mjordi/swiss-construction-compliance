@@ -17,6 +17,7 @@ let protocolInsertFactory: (payload: Record<string, unknown>) => Promise<{ error
 let signaturePadIsEmpty = true;
 let signaturePadEndStrokeHandler: (() => void) | null = null;
 let pdfToBlobFactory: () => Promise<Blob>;
+let lastPdfElement: { props?: Record<string, unknown> } | null;
 const createObjectURLMock = vi.fn(() => "blob:dashboard-pdf");
 const revokeObjectURLMock = vi.fn();
 const anchorClickMock = vi.fn();
@@ -156,9 +157,12 @@ vi.mock("signature_pad", () => ({
 }));
 
 vi.mock("@react-pdf/renderer", () => ({
-  pdf: () => ({
-    toBlob: () => pdfToBlobFactory(),
-  }),
+  pdf: (document: { props?: Record<string, unknown> }) => {
+    lastPdfElement = document;
+    return {
+      toBlob: () => pdfToBlobFactory(),
+    };
+  },
 }));
 
 vi.mock("@/components/dashboard/AuditReportPDF", () => ({
@@ -251,6 +255,7 @@ describe("dashboard linked-case loading retry", () => {
     signaturePadIsEmpty = true;
     signaturePadEndStrokeHandler = null;
     pdfToBlobFactory = () => Promise.resolve(new Blob(["pdf"], { type: "application/pdf" }));
+    lastPdfElement = null;
     createObjectURLMock.mockClear();
     revokeObjectURLMock.mockClear();
     anchorClickMock.mockClear();
@@ -636,6 +641,50 @@ describe("dashboard linked-case loading retry", () => {
 
     expect(screen.queryByText("dashboard-linked-case-follow-up-title")).toBeNull();
     expect(screen.queryByRole("link", { name: "dashboard-linked-case-follow-up-action" })).toBeNull();
+  });
+
+  it("passes an evidence-derived protocol report to the PDF download", async () => {
+    window.localStorage.setItem(
+      "baucompliance:wizard-project-draft",
+      JSON.stringify({
+        selectedCaseId: "case-1",
+        name: "Alpine Tower",
+        contractor: "Builder AG",
+        client: "Owner GmbH",
+        defectDescription: "Cracked balcony edge",
+        updatedAt: "2026-05-15T09:00:00.000Z",
+      })
+    );
+    caseResponseFactory = () => ({ data: [buildCase()], error: null });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole("option", { name: "Alpine Tower (ZH)" })).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "btn-next" }));
+    signaturePadIsEmpty = false;
+    await act(async () => {
+      signaturePadEndStrokeHandler?.();
+    });
+
+    const finalizeButton = await screen.findByRole("button", { name: "btn-finalize" });
+    await waitFor(() => {
+      expect(finalizeButton.getAttribute("disabled")).toBeNull();
+    });
+    fireEvent.click(finalizeButton);
+    fireEvent.click(await screen.findByRole("button", { name: "btn-download" }));
+
+    await waitFor(() => {
+      expect(lastPdfElement?.props?.report).toEqual({
+        status: "finalized",
+        defectEvidence: {
+          kind: "documented",
+          description: "Cracked balcony edge",
+        },
+        signatureCaptured: true,
+        linkedCaseId: "case-1",
+        finalizedAt: expect.any(String),
+      });
+    });
   });
 
   it("locks protocol finalization controls and ignores duplicate finalize clicks while saving", async () => {

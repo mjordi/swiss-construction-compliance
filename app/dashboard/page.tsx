@@ -14,6 +14,7 @@ import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { buildComplianceRecord } from "@/lib/compliance-record";
 import { getEffectiveSelectedCaseId, hasStaleLinkedCase as isStaleLinkedCase } from "@/lib/dashboard-linked-case";
 import { buildProtocolDefectDescription, buildWizardDraft, getProtocolFinalizeReadiness, type WizardDraft } from "@/lib/dashboard-protocol";
+import { buildFinalizedProtocolReport, type FinalizedProtocolReport } from "@/lib/protocol-report";
 import { buildCaseVaultHref, buildVaultProjectCasesHref } from "@/lib/vault";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
@@ -69,6 +70,7 @@ export default function Dashboard() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [submissionError, setSubmissionError] = useState<string | null>(null);
   const [downloadFeedback, setDownloadFeedback] = useState<TranslationKey | null>(null);
+  const [finalizedProtocolReport, setFinalizedProtocolReport] = useState<FinalizedProtocolReport | null>(null);
   const [defectDescription, setDefectDescription] = useState("");
   const [noDefectsConfirmed, setNoDefectsConfirmed] = useState(false);
   const sigCanvas = useRef<HTMLCanvasElement>(null);
@@ -438,6 +440,7 @@ export default function Dashboard() {
 
     finalizeInFlightRef.current = true;
     setSubmissionError(null);
+    setFinalizedProtocolReport(null);
     setIsGenerating(true);
 
     try {
@@ -497,6 +500,15 @@ export default function Dashboard() {
         }
       }
 
+      setFinalizedProtocolReport(
+        buildFinalizedProtocolReport({
+          defectDescription,
+          noDefectsConfirmed,
+          signatureCaptured: hasSignature,
+          linkedCaseId: effectiveSelectedCaseId,
+          finalizedAt: new Date().toISOString(),
+        })
+      );
       clearPersistedWizardDraft();
       setDraftUpdatedAt(null);
       setStep(3);
@@ -516,13 +528,16 @@ export default function Dashboard() {
     setDownloadFeedback(null);
     setIsGenerating(true);
     try {
+      if (!finalizedProtocolReport) {
+        throw new Error("Finalized protocol report evidence is unavailable");
+      }
       const blob = await pdf(
         <AuditReportPDF
           fileName={projectData.name || "Project"}
-          date={new Date().toLocaleDateString('de-CH')}
           caseId={complianceRecord.caseId}
           contractor={projectData.contractor}
           client={projectData.client}
+          report={finalizedProtocolReport}
         />
       ).toBlob();
 
@@ -557,6 +572,7 @@ export default function Dashboard() {
     clearDownloadFeedbackTimer();
     setDownloadFeedback(null);
     setIsGenerating(false);
+    setFinalizedProtocolReport(null);
     clearDraft();
     setStep(1);
   };
