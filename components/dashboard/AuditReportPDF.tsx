@@ -1,4 +1,5 @@
 import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
+import type { FinalizedProtocolReport } from '@/lib/protocol-report';
 
 // Register a standard font
 Font.register({
@@ -41,24 +42,7 @@ const styles = StyleSheet.create({
     margin: 10,
     padding: 10,
   },
-  scoreContainer: {
-    backgroundColor: '#f0fdf4', // Emerald 50
-    padding: 15,
-    borderRadius: 8,
-    marginBottom: 20,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  scoreLabel: {
-    fontSize: 12,
-    color: '#166534',
-  },
-  scoreValue: {
-    fontSize: 28,
-    fontWeight: 'bold',
-    color: '#16a34a',
-  },
+
   item: {
     flexDirection: 'row',
     marginBottom: 12,
@@ -71,12 +55,16 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     width: '40%',
   },
-  itemStatus: {
+  statusValue: {
     fontSize: 10,
     backgroundColor: '#dcfce7',
     color: '#166534',
     padding: '4 8',
     borderRadius: 4,
+  },
+  detailValue: {
+    fontSize: 12,
+    width: '60%',
   },
   footer: {
     position: 'absolute',
@@ -98,79 +86,92 @@ interface AuditReportProps {
   caseId?: string;
   contractor?: string;
   client?: string;
+  report: FinalizedProtocolReport;
 }
 
-export const AuditReportPDF = ({ fileName, date, caseId, contractor, client }: AuditReportProps) => (
+function getDefectEvidenceText(report: FinalizedProtocolReport): string {
+  switch (report.defectEvidence.kind) {
+    case 'documented':
+      return report.defectEvidence.description;
+    case 'none-visible-confirmed':
+      return 'No visible defects confirmed';
+    case 'not-recorded':
+      return 'No defect statement recorded';
+  }
+}
+
+export const AuditReportPDF = ({ fileName, date, caseId, contractor, client, report }: AuditReportProps) => (
   <Document>
     <Page size="A4" style={styles.page}>
       <View style={styles.header}>
         <View>
-          <Text style={styles.title}>Compliance Audit</Text>
-          <Text style={styles.subtitle}>SIA 118 / Swiss Code of Obligations 2026</Text>
+          <Text style={styles.title}>Finalized Protocol Record</Text>
+          <Text style={styles.subtitle}>Source-bound record of captured protocol information</Text>
         </View>
         <Text style={styles.brand}>BauCompliance.ch</Text>
       </View>
 
-      <View style={styles.scoreContainer}>
-        <View>
-          <Text style={styles.scoreLabel}>OVERALL COMPLIANCE SCORE</Text>
-          <Text style={{ fontSize: 10, color: '#166534', marginTop: 4 }}>Passed 12/12 Mandatory Checks</Text>
-        </View>
-        <Text style={styles.scoreValue}>98%</Text>
-      </View>
-
       <View style={styles.section}>
-        <Text style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 15, color: '#334155' }}>Audit Details</Text>
+        <Text style={{ fontSize: 14, fontWeight: 'bold', marginBottom: 15, color: '#334155' }}>Protocol Details</Text>
         
         <View style={styles.item}>
           <Text style={styles.itemTitle}>File Name</Text>
-          <Text style={{ fontSize: 12 }}>{fileName}</Text>
+          <Text style={styles.detailValue}>{fileName}</Text>
         </View>
         
         <View style={styles.item}>
-          <Text style={styles.itemTitle}>Scan Date</Text>
-          <Text style={{ fontSize: 12 }}>{date}</Text>
+          <Text style={styles.itemTitle}>Record Date</Text>
+          <Text style={styles.detailValue}>{date}</Text>
+        </View>
+
+        <View style={styles.item}>
+          <Text style={styles.itemTitle}>Protocol Status</Text>
+          <Text style={styles.statusValue}>{report.status === 'finalized' ? 'FINALIZED' : report.status}</Text>
         </View>
 
         {caseId ? (
           <View style={styles.item}>
-            <Text style={styles.itemTitle}>Case ID</Text>
-            <Text style={{ fontSize: 12 }}>{caseId}</Text>
+            <Text style={styles.itemTitle}>Record ID</Text>
+            <Text style={styles.detailValue}>{caseId}</Text>
+          </View>
+        ) : null}
+
+        {report.linkedCaseId ? (
+          <View style={styles.item}>
+            <Text style={styles.itemTitle}>Linked Case ID</Text>
+            <Text style={styles.detailValue}>{report.linkedCaseId}</Text>
           </View>
         ) : null}
 
         {contractor ? (
           <View style={styles.item}>
             <Text style={styles.itemTitle}>Contractor</Text>
-            <Text style={{ fontSize: 12 }}>{contractor}</Text>
+            <Text style={styles.detailValue}>{contractor}</Text>
           </View>
         ) : null}
 
         {client ? (
           <View style={styles.item}>
             <Text style={styles.itemTitle}>Client</Text>
-            <Text style={{ fontSize: 12 }}>{client}</Text>
+            <Text style={styles.detailValue}>{client}</Text>
           </View>
         ) : null}
 
         <View style={styles.item}>
-          <Text style={styles.itemTitle}>Liability Clauses (Art. 371)</Text>
-          <Text style={styles.itemStatus}>COMPLIANT</Text>
+          <Text style={styles.itemTitle}>Defect Statement</Text>
+          <Text style={styles.detailValue}>{getDefectEvidenceText(report)}</Text>
         </View>
 
         <View style={styles.item}>
-          <Text style={styles.itemTitle}>Defect Notification</Text>
-          <Text style={styles.itemStatus}>COMPLIANT</Text>
-        </View>
-
-        <View style={styles.item}>
-          <Text style={styles.itemTitle}>Digital Handover</Text>
-          <Text style={[styles.itemStatus, { backgroundColor: '#fef9c3', color: '#854d0e' }]}>RECOMMENDATION</Text>
+          <Text style={styles.itemTitle}>Signature Capture</Text>
+          <Text style={report.signatureCaptured ? styles.statusValue : styles.detailValue}>
+            {report.signatureCaptured ? 'CAPTURED' : 'NOT CAPTURED'}
+          </Text>
         </View>
       </View>
 
       <View style={styles.footer}>
-        <Text>Generated automatically by BauCompliance.ch Audit Engine v4.2</Text>
+        <Text>Generated automatically by BauCompliance.ch from the finalized protocol record.</Text>
         <Text>This document is for informational purposes and does not constitute formal legal advice.</Text>
       </View>
     </Page>
