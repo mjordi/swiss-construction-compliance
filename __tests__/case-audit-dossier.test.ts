@@ -14,6 +14,7 @@ const labels: CaseAuditDossierLabels = {
   contractDate: "Contract date",
   discoveryDate: "Defect discovered",
   noticeDeadline: "Notice deadline",
+  noticeDeadlineNotFixed: "No fixed deadline",
   nextAction: "Next legal action",
   checklist: "Readiness checklist",
   checklistReady: "Ready",
@@ -95,7 +96,7 @@ describe("buildCaseAuditDossier", () => {
     expect(report.linkedProtocolsSummary).toBe("No finalized protocol linked");
   });
 
-  it("treats the fixed calendar reminder as ready when no fixed notice deadline applies", () => {
+  it("omits an inapplicable calendar reminder and localizes the old-law deadline", () => {
     const oldLawItem = toComplianceCaseViewModel({
       id: "old-case",
       projectName: "Legacy project",
@@ -111,7 +112,10 @@ describe("buildCaseAuditDossier", () => {
       generatedAt: new Date("2026-07-30T12:00:00.000Z"),
     });
 
+    expect(report.noticeDeadline).toBe("No fixed deadline");
+    expect(report.readiness.completed).toBe(2);
+    expect(report.readiness.total).toBe(3);
+    expect(report.readiness.ready).not.toContain("Calendar reminder exported");
     expect(report.readiness.missing).not.toContain("Calendar reminder exported");
-    expect(report.readiness.ready).toContain("Calendar reminder exported");
   });
 });

@@ -1,7 +1,6 @@
 import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import {
   deriveCaseLegalMilestones,
-  deriveChecklistProgress,
   type CaseDeadlineStatus,
   type CaseLegalMilestoneKind,
   type ComplianceCaseViewModel,
@@ -22,6 +21,7 @@ export interface CaseAuditDossierLabels {
   contractDate: string;
   discoveryDate: string;
   noticeDeadline: string;
+  noticeDeadlineNotFixed: string;
   nextAction: string;
   checklist: string;
   checklistReady: string;
@@ -106,17 +106,14 @@ export function buildCaseAuditDossier({
   generatedAt: Date;
 }): CaseAuditDossierReport {
   const normalizedChecklist = normalizeFollowUpChecklistState(checklist);
-  const effectiveChecklist = {
-    ...normalizedChecklist,
-    calendarReminderExported:
-      !item.noticeApplies || normalizedChecklist.calendarReminderExported,
-  };
-  const progress = deriveChecklistProgress(effectiveChecklist);
-  const ready = checklistKeys
-    .filter((key) => effectiveChecklist[key])
+  const applicableChecklistKeys = item.noticeApplies
+    ? checklistKeys
+    : checklistKeys.filter((key) => key !== "calendarReminderExported");
+  const ready = applicableChecklistKeys
+    .filter((key) => normalizedChecklist[key])
     .map((key) => labels.checklistItems[key]);
-  const missing = checklistKeys
-    .filter((key) => !effectiveChecklist[key])
+  const missing = applicableChecklistKeys
+    .filter((key) => !normalizedChecklist[key])
     .map((key) => labels.checklistItems[key]);
   const milestones = deriveCaseLegalMilestones(item, linkedProtocols).map((milestone) => ({
     kind: milestone.kind,
@@ -159,11 +156,13 @@ export function buildCaseAuditDossier({
     status: labels.statuses[item.status],
     contractDate: item.contractDateLabel,
     discoveryDate: item.discoveryDateLabel,
-    noticeDeadline: item.noticeDeadlineLabel,
+    noticeDeadline: item.noticeApplies
+      ? item.noticeDeadlineLabel
+      : labels.noticeDeadlineNotFixed,
     nextAction: item.nextAction,
     readiness: {
-      completed: progress.completed,
-      total: progress.total,
+      completed: ready.length,
+      total: applicableChecklistKeys.length,
       ready,
       missing,
     },

@@ -980,6 +980,7 @@ export default function CasesPage() {
           contractDate: t("cases-contract-date"),
           discoveryDate: t("cases-defect-discovered"),
           noticeDeadline: t("cases-notice-deadline"),
+          noticeDeadlineNotFixed: t("cases-not-fixed"),
           nextAction: t("cases-next-legal-action"),
           checklist: t("cases-followup-checklist"),
           checklistReady: t("cases-dossier-ready"),
