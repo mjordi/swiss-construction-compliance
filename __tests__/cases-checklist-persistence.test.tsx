@@ -5,10 +5,14 @@ const {
   buildCaseAuditRegisterCsvMock,
   buildCaseLegalChronologyCsvMock,
   buildComplianceCaseTimelineMock,
+  pdfToBlobMock,
+  pdfMock,
 } = vi.hoisted(() => ({
   buildCaseAuditRegisterCsvMock: vi.fn(() => '\ufeff"Case audit register"'),
   buildCaseLegalChronologyCsvMock: vi.fn(() => '\ufeff"Case chronology"'),
   buildComplianceCaseTimelineMock: vi.fn(),
+  pdfToBlobMock: vi.fn(async () => new Blob(["pdf"], { type: "application/pdf" })),
+  pdfMock: vi.fn(),
 }));
 const replaceMock = vi.fn();
 const updateEqMock = vi.fn();
@@ -59,6 +63,14 @@ vi.mock("@/components/dashboard/PageHeader", () => ({
       <p>{subtitle}</p>
     </div>
   ),
+}));
+
+vi.mock("@react-pdf/renderer", () => ({
+  StyleSheet: { create: (styles: unknown) => styles },
+  pdf: (document: unknown) => {
+    pdfMock(document);
+    return { toBlob: pdfToBlobMock };
+  },
 }));
 
 vi.mock("@/lib/case-timeline", () => ({
@@ -181,6 +193,8 @@ describe("cases checklist persistence", () => {
     buildCaseAuditRegisterCsvMock.mockClear();
     buildCaseLegalChronologyCsvMock.mockClear();
     buildComplianceCaseTimelineMock.mockClear();
+    pdfMock.mockClear();
+    pdfToBlobMock.mockClear();
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
       value: createObjectURLMock,
@@ -386,6 +400,74 @@ describe("cases checklist persistence", () => {
       expect(clickedAnchor.download).toBe(
         "baucompliance-case-case-1-chronology.csv"
       );
+      expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:case-reminder");
+      expect(updateEqMock).not.toHaveBeenCalled();
+    } finally {
+      anchorClickMock.mockRestore();
+    }
+  });
+
+  it("locks same-case actions while the audit dossier PDF is being prepared", async () => {
+    pdfToBlobMock.mockImplementationOnce(() => new Promise<Blob>(() => undefined));
+
+    render(<CasesPage />);
+
+    const dossierButton = await screen.findByRole("button", { name: "cases-export-dossier-pdf" });
+    fireEvent.click(dossierButton);
+
+    await waitFor(() => {
+      expect((screen.getByRole("button", { name: "cases-dossier-title" }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByRole("button", { name: "cases-edit" }) as HTMLButtonElement).disabled).toBe(true);
+      expect((screen.getByTitle("cases-delete") as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.queryByRole("link", { name: "cases-open-in-vault" })).toBeNull();
+      expect(screen.queryByRole("link", { name: "cases-create-protocol" })).toBeNull();
+      expect((screen.getByLabelText("cases-checklist-defect-documented") as HTMLInputElement).disabled).toBe(true);
+    });
+  });
+
+  it("downloads a source-bound case audit dossier PDF", async () => {
+    protocolRows = [
+      {
+        id: "protocol-finalized-1",
+        case_id: "case-1",
+        status: "finalized",
+        created_at: "2026-03-25T10:00:00.000Z",
+      },
+    ];
+    caseChecklistData = {
+      defectDocumented: true,
+      evidenceAttached: false,
+      noticeDrafted: true,
+      calendarReminderExported: false,
+    };
+    const anchorClickMock = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+
+    try {
+      render(<CasesPage />);
+
+      fireEvent.click(
+        await screen.findByRole("button", { name: "cases-export-dossier-pdf" })
+      );
+
+      await screen.findByText("cases-dossier-download-success");
+      expect(pdfMock).toHaveBeenCalledTimes(1);
+      const pdfDocument = pdfMock.mock.calls[0][0] as {
+        props: { report: { caseId: string; projectName: string; readiness: { missing: string[] }; milestones: Array<{ sourceId: string | null }> } };
+      };
+      expect(pdfDocument.props.report).toMatchObject({
+        caseId: "case-1",
+        projectName: "Alpine Tower",
+        readiness: {
+          missing: ["cases-checklist-evidence-attached", "cases-checklist-calendar-exported"],
+        },
+      });
+      expect(pdfDocument.props.report.milestones.some((milestone) => milestone.sourceId === "protocol-finalized-1")).toBe(true);
+      expect(createObjectURLMock).toHaveBeenCalledWith(expect.any(Blob));
+      expect(anchorClickMock).toHaveBeenCalledTimes(1);
+      const clickedAnchor = anchorClickMock.mock.instances[0] as HTMLAnchorElement;
+      expect(clickedAnchor.download).toBe("baucompliance-case-case-1-audit-dossier.pdf");
       expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:case-reminder");
       expect(updateEqMock).not.toHaveBeenCalled();
     } finally {
