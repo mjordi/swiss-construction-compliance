@@ -4,11 +4,14 @@ import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, Trash2, Loader2 } from "lucide-react";
+import { pdf } from "@react-pdf/renderer";
 import PageHeader from "@/components/dashboard/PageHeader";
+import { CaseAuditDossierPDF } from "@/components/dashboard/CaseAuditDossierPDF";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
+import { buildCaseAuditDossier } from "@/lib/case-audit-dossier";
 import type { Case, Protocol } from "@/lib/database.types";
 import {
   applyComplianceCaseView,
@@ -66,6 +69,14 @@ const legalMilestoneLabelKey: Record<CaseLegalMilestoneKind, TranslationKey> = {
   discovery: "cases-legal-milestone-discovery",
   "protocol-finalized": "cases-legal-milestone-protocol-finalized",
   "notice-deadline": "cases-legal-milestone-notice-deadline",
+};
+
+const caseNextActionLabelKey: Record<ComplianceCaseViewModel["status"], TranslationKey> = {
+  ok: "cases-next-action-ok",
+  warning: "cases-next-action-warning",
+  urgent: "cases-next-action-urgent",
+  expired: "cases-next-action-expired",
+  "immediate-notice": "cases-next-action-immediate-notice",
 };
 
 function parseRegimeFilter(value: string | null): CaseRegimeFilter {
@@ -224,6 +235,14 @@ export default function CasesPage() {
   >({});
   const reminderExportResetTimersRef = useRef<Record<string, number>>({});
   const reminderExportRequestIdsRef = useRef<Record<string, number>>({});
+  const [dossierFeedbackByCase, setDossierFeedbackByCase] = useState<
+    Record<string, { key: TranslationKey; tone: "success" | "error" }>
+  >({});
+  const [dossierGeneratingByCase, setDossierGeneratingByCase] = useState<Record<string, boolean>>({});
+  const dossierFeedbackTimersRef = useRef<Record<string, number>>({});
+  const dossierRequestIdsRef = useRef<Record<string, number>>({});
+  const dossierInFlightIdsRef = useRef<Set<string>>(new Set());
+  const dossierMountedRef = useRef(true);
   const [checklistSaveErrorByCase, setChecklistSaveErrorByCase] = useState<Record<string, TranslationKey>>({});
   const [checklistSavingByCase, setChecklistSavingByCase] = useState<Record<string, boolean>>({});
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
@@ -432,7 +451,11 @@ export default function CasesPage() {
   }, [regimeFilter, statusFilter, sortMode, searchTerm, pathname, router, searchParams]);
 
   useEffect(() => {
+    dossierMountedRef.current = true;
+    const dossierInFlightIds = dossierInFlightIdsRef.current;
+    const dossierRequestIds = dossierRequestIdsRef.current;
     return () => {
+      dossierMountedRef.current = false;
       shareLinkRequestIdRef.current += 1;
       if (shareLinkResetTimerRef.current !== null) {
         window.clearTimeout(shareLinkResetTimerRef.current);
@@ -440,8 +463,16 @@ export default function CasesPage() {
       for (const timer of Object.values(reminderExportResetTimersRef.current)) {
         window.clearTimeout(timer);
       }
+      for (const timer of Object.values(dossierFeedbackTimersRef.current)) {
+        window.clearTimeout(timer);
+      }
       reminderExportResetTimersRef.current = {};
       reminderExportRequestIdsRef.current = {};
+      dossierFeedbackTimersRef.current = {};
+      dossierInFlightIds.clear();
+      for (const caseId of Object.keys(dossierRequestIds)) {
+        dossierRequestIds[caseId] += 1;
+      }
     };
   }, []);
 
@@ -908,6 +939,138 @@ export default function CasesPage() {
     }
   }
 
+  async function downloadCaseAuditDossier(
+    item: ComplianceCaseViewModel,
+    checklist: FollowUpChecklistState
+  ) {
+    if (dossierInFlightIdsRef.current.has(item.id) || checklistSavingByCase[item.id]) return;
+
+    dossierInFlightIdsRef.current.add(item.id);
+    const requestId = (dossierRequestIdsRef.current[item.id] ?? 0) + 1;
+    dossierRequestIdsRef.current[item.id] = requestId;
+    const existingTimer = dossierFeedbackTimersRef.current[item.id];
+    if (existingTimer !== undefined) {
+      window.clearTimeout(existingTimer);
+      delete dossierFeedbackTimersRef.current[item.id];
+    }
+    setDossierFeedbackByCase((current) => {
+      if (!(item.id in current)) return current;
+      const next = { ...current };
+      delete next[item.id];
+      return next;
+    });
+    setDossierGeneratingByCase((current) => ({ ...current, [item.id]: true }));
+
+    try {
+      const report = buildCaseAuditDossier({
+        item: {
+          ...item,
+          nextAction: t(caseNextActionLabelKey[item.status]),
+        },
+        checklist,
+        linkedProtocols: linkedProtocolEventsByCase[item.id] ?? [],
+        labels: {
+          title: t("cases-dossier-title"),
+          generatedAt: t("cases-chronology-generated-at"),
+          caseId: t("cases-chronology-case-id"),
+          projectName: t("cases-chronology-project"),
+          canton: t("cases-chronology-canton"),
+          regime: t("cases-audit-register-regime"),
+          status: t("cases-audit-register-status"),
+          contractDate: t("cases-contract-date"),
+          discoveryDate: t("cases-defect-discovered"),
+          noticeDeadline: t("cases-notice-deadline"),
+          noticeDeadlineNotFixed: t("cases-not-fixed"),
+          nextAction: t("cases-next-legal-action"),
+          checklist: t("cases-followup-checklist"),
+          checklistReady: t("cases-dossier-ready"),
+          checklistMissing: t("cases-audit-missing"),
+          linkedProtocols: t("cases-dossier-finalized-protocols"),
+          chronology: t("cases-legal-timeline-title"),
+          noLinkedProtocols: t("cases-dossier-no-finalized-protocols"),
+          legalDisclaimer: t("calc-disclaimer"),
+          regimes: {
+            old: t("cases-old-law"),
+            new: t("cases-new-law"),
+          },
+          statuses: {
+            ok: t("cases-status-on-track"),
+            warning: t("cases-status-attention"),
+            urgent: t("cases-status-urgent"),
+            expired: t("cases-status-expired"),
+            "immediate-notice": t("cases-status-immediate-notice"),
+          },
+          checklistItems: {
+            defectDocumented: t("cases-checklist-defect-documented"),
+            evidenceAttached: t("cases-checklist-evidence-attached"),
+            noticeDrafted: t("cases-checklist-notice-drafted"),
+            calendarReminderExported: t("cases-checklist-calendar-exported"),
+          },
+          milestones: {
+            contract: t("cases-legal-milestone-contract"),
+            discovery: t("cases-legal-milestone-discovery"),
+            "protocol-finalized": t("cases-legal-milestone-protocol-finalized"),
+            "notice-deadline": t("cases-legal-milestone-notice-deadline"),
+          },
+        },
+        generatedAt: new Date(),
+      });
+      const blob = await pdf(<CaseAuditDossierPDF report={report} />).toBlob();
+      if (!dossierMountedRef.current || dossierRequestIdsRef.current[item.id] !== requestId) return;
+
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      try {
+        anchor.href = url;
+        anchor.download = `baucompliance-case-${item.id}-audit-dossier.pdf`;
+        anchor.click();
+      } finally {
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      }
+
+      setDossierFeedbackByCase((current) => ({
+        ...current,
+        [item.id]: { key: "cases-dossier-download-success", tone: "success" },
+      }));
+      dossierFeedbackTimersRef.current[item.id] = window.setTimeout(() => {
+        if (dossierRequestIdsRef.current[item.id] !== requestId) return;
+        setDossierFeedbackByCase((current) => {
+          if (!(item.id in current)) return current;
+          const next = { ...current };
+          delete next[item.id];
+          return next;
+        });
+        delete dossierFeedbackTimersRef.current[item.id];
+      }, 2000);
+    } catch {
+      if (!dossierMountedRef.current || dossierRequestIdsRef.current[item.id] !== requestId) return;
+      setDossierFeedbackByCase((current) => ({
+        ...current,
+        [item.id]: { key: "cases-dossier-download-error", tone: "error" },
+      }));
+      dossierFeedbackTimersRef.current[item.id] = window.setTimeout(() => {
+        if (dossierRequestIdsRef.current[item.id] !== requestId) return;
+        setDossierFeedbackByCase((current) => {
+          if (!(item.id in current)) return current;
+          const next = { ...current };
+          delete next[item.id];
+          return next;
+        });
+        delete dossierFeedbackTimersRef.current[item.id];
+      }, 2000);
+    } finally {
+      dossierInFlightIdsRef.current.delete(item.id);
+      if (dossierMountedRef.current && dossierRequestIdsRef.current[item.id] === requestId) {
+        setDossierGeneratingByCase((current) => {
+          const next = { ...current };
+          delete next[item.id];
+          return next;
+        });
+      }
+    }
+  }
+
   async function handleAddCase(e: React.FormEvent) {
     e.preventDefault();
     if (
@@ -1328,6 +1491,8 @@ export default function CasesPage() {
             const checklist = effectiveChecklists[item.id] ?? item.checklistDefaults;
             const progress = deriveChecklistProgress(checklist);
             const isChecklistSaving = Boolean(checklistSavingByCase[item.id]);
+            const isDossierGenerating = Boolean(dossierGeneratingByCase[item.id]);
+            const isCaseBusy = isChecklistSaving || isDossierGenerating;
 
             return (
               <article key={item.id} className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05]">
@@ -1348,7 +1513,7 @@ export default function CasesPage() {
                         {protocolCounts[item.id]} {t("cases-protocols")}
                       </span>
                     )}
-                    {isChecklistSaving ? (
+                    {isCaseBusy ? (
                       <span
                         aria-disabled="true"
                         className="px-2.5 py-1 rounded-md border border-cyan-500/20 text-cyan-200/60 bg-cyan-500/[0.04] cursor-not-allowed"
@@ -1363,7 +1528,7 @@ export default function CasesPage() {
                         {t("cases-open-in-vault")}
                       </Link>
                     )}
-                    {isChecklistSaving ? (
+                    {isCaseBusy ? (
                       <span
                         aria-disabled="true"
                         className="px-2.5 py-1 rounded-md border border-blue-500/20 text-blue-200/60 bg-blue-500/[0.04] cursor-not-allowed"
@@ -1385,7 +1550,7 @@ export default function CasesPage() {
                         if (!dbCase) return;
                         openEditForm(dbCase);
                       }}
-                      disabled={Boolean(updatingCaseId) || hasDeletingCases || isChecklistSaving}
+                      disabled={Boolean(updatingCaseId) || hasDeletingCases || isCaseBusy}
                       className="px-2.5 py-1 rounded-md border border-white/[0.14] text-cream hover:bg-white/[0.06] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                     >
                       {t("cases-edit")}
@@ -1395,7 +1560,7 @@ export default function CasesPage() {
                       aria-label={t("cases-delete")}
                       className="ml-2 p-1.5 rounded-md text-muted/40 hover:text-red-400 hover:bg-red-400/[0.06] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
                       title={t("cases-delete")}
-                      disabled={!!deletingCaseIds[item.id] || Boolean(updatingCaseId) || isChecklistSaving}
+                      disabled={!!deletingCaseIds[item.id] || Boolean(updatingCaseId) || isCaseBusy}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -1593,15 +1758,36 @@ export default function CasesPage() {
                         </li>
                       ))}
                     </ol>
-                    <div className="mt-4 flex justify-end">
+                    <div className="mt-4 flex flex-wrap justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => downloadCaseChronology(item)}
-                        className="rounded-lg border border-blue-400/30 px-3 py-2 text-sm text-blue-100 hover:bg-blue-500/[0.1]"
+                        disabled={isCaseBusy}
+                        className="rounded-lg border border-blue-400/30 px-3 py-2 text-sm text-blue-100 hover:bg-blue-500/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {t("cases-export-chronology-csv")}
                       </button>
+                      <button
+                        type="button"
+                        onClick={() => void downloadCaseAuditDossier(item, checklist)}
+                        disabled={isCaseBusy}
+                        className="rounded-lg border border-accent/40 px-3 py-2 text-sm text-accent hover:bg-accent/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {isDossierGenerating ? t("cases-dossier-title") : t("cases-export-dossier-pdf")}
+                      </button>
                     </div>
+                    {dossierFeedbackByCase[item.id] && (
+                      <p
+                        role="status"
+                        className={`mt-2 text-right text-xs ${
+                          dossierFeedbackByCase[item.id].tone === "success"
+                            ? "text-emerald-300"
+                            : "text-rose-300"
+                        }`}
+                      >
+                        {t(dossierFeedbackByCase[item.id].key)}
+                      </p>
+                    )}
                   </section>
 
                   <div className="rounded-lg border border-white/[0.06] bg-black/20 p-3 space-y-2">
@@ -1609,11 +1795,11 @@ export default function CasesPage() {
                     {Object.entries(checklistLabels).map(([key, label]) => {
                       const checklistKey = key as FollowUpChecklistKey;
                       return (
-                        <label key={key} className={`flex items-center gap-2 text-sm text-cream ${isChecklistSaving ? "opacity-70" : ""}`}>
+                        <label key={key} className={`flex items-center gap-2 text-sm text-cream ${isCaseBusy ? "opacity-70" : ""}`}>
                           <input
                             type="checkbox"
                             checked={checklist[checklistKey]}
-                            disabled={isChecklistSaving}
+                            disabled={isCaseBusy}
                             onChange={() => toggleChecklistItem(item.id, checklistKey)}
                           />
                           <span>{label}</span>
@@ -1631,7 +1817,7 @@ export default function CasesPage() {
                         <button
                           type="button"
                           onClick={() => downloadCaseReminder(item)}
-                          disabled={isChecklistSaving}
+                          disabled={isCaseBusy}
                           className="rounded-lg border border-white/[0.14] px-3 py-2 text-sm text-cream hover:bg-white/[0.06] disabled:cursor-not-allowed disabled:opacity-50"
                         >
                           {t("cases-export-ics")}
