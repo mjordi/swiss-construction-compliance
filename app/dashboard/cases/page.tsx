@@ -6,12 +6,14 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { pdf } from "@react-pdf/renderer";
 import PageHeader from "@/components/dashboard/PageHeader";
+import { AuditReportPDF } from "@/components/dashboard/AuditReportPDF";
 import { CaseAuditDossierPDF } from "@/components/dashboard/CaseAuditDossierPDF";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { buildCaseAuditDossier } from "@/lib/case-audit-dossier";
+import { buildFinalizedProtocolReportFromRecord } from "@/lib/protocol-report";
 import type { Case, Protocol } from "@/lib/database.types";
 import {
   applyComplianceCaseView,
@@ -35,13 +37,41 @@ import {
 import { buildDashboardProtocolHref } from "@/lib/dashboard-linked-case";
 import { buildCaseVaultHref } from "@/lib/vault";
 import {
+  formatTimestampDateCH,
   getMillisecondsUntilNextSwissCalendarDay,
   sanitizeDateQueryParam,
   validateRuegefristInput,
 } from "@/lib/legal-utils";
 import type { TranslationKey } from "@/locales";
 
-type LinkedProtocolRow = Pick<Protocol, "id" | "case_id" | "status" | "created_at">;
+type LinkedProtocolRow = Pick<
+  Protocol,
+  | "id"
+  | "case_id"
+  | "status"
+  | "created_at"
+>;
+
+type FinalizedProtocolPdfRow = Pick<
+  Protocol,
+  | "id"
+  | "case_id"
+  | "status"
+  | "created_at"
+  | "project_name"
+  | "contractor"
+  | "client"
+  | "defect_description"
+  | "signature_data"
+> & { status: "finalized" };
+
+type FinalizedLinkedProtocolRow = LinkedProtocolRow & { status: "finalized" };
+
+function isFinalizedLinkedProtocol(
+  protocol: LinkedProtocolRow
+): protocol is FinalizedLinkedProtocolRow {
+  return protocol.status === "finalized";
+}
 
 const SWISS_CANTONS = [
   "AG","AI","AR","BE","BL","BS","FR","GE","GL","GR",
@@ -243,6 +273,13 @@ export default function CasesPage() {
   const dossierRequestIdsRef = useRef<Record<string, number>>({});
   const dossierInFlightIdsRef = useRef<Set<string>>(new Set());
   const dossierMountedRef = useRef(true);
+  const [protocolPdfFeedbackByCase, setProtocolPdfFeedbackByCase] = useState<
+    Record<string, { key: TranslationKey; tone: "success" | "error" }>
+  >({});
+  const [protocolPdfGeneratingByCase, setProtocolPdfGeneratingByCase] = useState<Record<string, boolean>>({});
+  const protocolPdfFeedbackTimersRef = useRef<Record<string, number>>({});
+  const protocolPdfRequestIdsRef = useRef<Record<string, number>>({});
+  const protocolPdfInFlightCaseIdsRef = useRef<Set<string>>(new Set());
   const [checklistSaveErrorByCase, setChecklistSaveErrorByCase] = useState<Record<string, TranslationKey>>({});
   const [checklistSavingByCase, setChecklistSavingByCase] = useState<Record<string, boolean>>({});
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
@@ -454,6 +491,8 @@ export default function CasesPage() {
     dossierMountedRef.current = true;
     const dossierInFlightIds = dossierInFlightIdsRef.current;
     const dossierRequestIds = dossierRequestIdsRef.current;
+    const protocolPdfInFlightCaseIds = protocolPdfInFlightCaseIdsRef.current;
+    const protocolPdfRequestIds = protocolPdfRequestIdsRef.current;
     return () => {
       dossierMountedRef.current = false;
       shareLinkRequestIdRef.current += 1;
@@ -466,12 +505,20 @@ export default function CasesPage() {
       for (const timer of Object.values(dossierFeedbackTimersRef.current)) {
         window.clearTimeout(timer);
       }
+      for (const timer of Object.values(protocolPdfFeedbackTimersRef.current)) {
+        window.clearTimeout(timer);
+      }
       reminderExportResetTimersRef.current = {};
       reminderExportRequestIdsRef.current = {};
       dossierFeedbackTimersRef.current = {};
+      protocolPdfFeedbackTimersRef.current = {};
       dossierInFlightIds.clear();
+      protocolPdfInFlightCaseIds.clear();
       for (const caseId of Object.keys(dossierRequestIds)) {
         dossierRequestIds[caseId] += 1;
+      }
+      for (const caseId of Object.keys(protocolPdfRequestIds)) {
+        protocolPdfRequestIds[caseId] += 1;
       }
     };
   }, []);
@@ -563,6 +610,27 @@ export default function CasesPage() {
         createdAt: protocol.created_at,
       });
       result[protocol.case_id] = events;
+    }
+
+    return result;
+  }, [linkedProtocols]);
+
+  const finalizedProtocolsByCase = useMemo(() => {
+    const result: Record<string, FinalizedLinkedProtocolRow[]> = {};
+
+    for (const protocol of linkedProtocols) {
+      if (!protocol.case_id || !isFinalizedLinkedProtocol(protocol)) continue;
+      const records = result[protocol.case_id] ?? [];
+      records.push(protocol);
+      result[protocol.case_id] = records;
+    }
+
+    for (const records of Object.values(result)) {
+      records.sort(
+        (a, b) =>
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime() ||
+          a.id.localeCompare(b.id)
+      );
     }
 
     return result;
@@ -936,6 +1004,91 @@ export default function CasesPage() {
     } finally {
       anchor.remove();
       URL.revokeObjectURL(url);
+    }
+  }
+
+  async function downloadFinalizedProtocolPdf(protocol: FinalizedLinkedProtocolRow) {
+    const caseId = protocol.case_id;
+    if (!caseId || protocolPdfInFlightCaseIdsRef.current.has(caseId) || checklistSavingByCase[caseId]) {
+      return;
+    }
+
+    protocolPdfInFlightCaseIdsRef.current.add(caseId);
+    const requestId = (protocolPdfRequestIdsRef.current[caseId] ?? 0) + 1;
+    protocolPdfRequestIdsRef.current[caseId] = requestId;
+    const existingTimer = protocolPdfFeedbackTimersRef.current[caseId];
+    if (existingTimer !== undefined) {
+      window.clearTimeout(existingTimer);
+      delete protocolPdfFeedbackTimersRef.current[caseId];
+    }
+    setProtocolPdfFeedbackByCase((current) => {
+      if (!(caseId in current)) return current;
+      const next = { ...current };
+      delete next[caseId];
+      return next;
+    });
+    setProtocolPdfGeneratingByCase((current) => ({ ...current, [caseId]: true }));
+
+    const showFeedback = (key: TranslationKey, tone: "success" | "error") => {
+      setProtocolPdfFeedbackByCase((current) => ({ ...current, [caseId]: { key, tone } }));
+      protocolPdfFeedbackTimersRef.current[caseId] = window.setTimeout(() => {
+        if (protocolPdfRequestIdsRef.current[caseId] !== requestId) return;
+        setProtocolPdfFeedbackByCase((current) => {
+          if (!(caseId in current)) return current;
+          const next = { ...current };
+          delete next[caseId];
+          return next;
+        });
+        delete protocolPdfFeedbackTimersRef.current[caseId];
+      }, 2000);
+    };
+
+    try {
+      const { data, error } = await supabase
+        .from("protocols")
+        .select("id, case_id, status, created_at, project_name, contractor, client, defect_description, signature_data")
+        .eq("id", protocol.id)
+        .eq("user_id", user?.id ?? "")
+        .eq("status", "finalized")
+        .single();
+      if (error || !data) throw error ?? new Error("Finalized protocol not found");
+
+      const finalizedProtocol = data as FinalizedProtocolPdfRow;
+      const report = buildFinalizedProtocolReportFromRecord(finalizedProtocol);
+      const blob = await pdf(
+        <AuditReportPDF
+          fileName={finalizedProtocol.project_name || "Project"}
+          caseId={finalizedProtocol.id}
+          contractor={finalizedProtocol.contractor}
+          client={finalizedProtocol.client}
+          report={report}
+        />
+      ).toBlob();
+      if (!dossierMountedRef.current || protocolPdfRequestIdsRef.current[caseId] !== requestId) return;
+
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      try {
+        anchor.href = url;
+        anchor.download = `baucompliance-protocol-${finalizedProtocol.id}.pdf`;
+        anchor.click();
+      } finally {
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      }
+      showFeedback("cases-finalized-protocol-download-success", "success");
+    } catch {
+      if (!dossierMountedRef.current || protocolPdfRequestIdsRef.current[caseId] !== requestId) return;
+      showFeedback("cases-finalized-protocol-download-error", "error");
+    } finally {
+      protocolPdfInFlightCaseIdsRef.current.delete(caseId);
+      if (dossierMountedRef.current && protocolPdfRequestIdsRef.current[caseId] === requestId) {
+        setProtocolPdfGeneratingByCase((current) => {
+          const next = { ...current };
+          delete next[caseId];
+          return next;
+        });
+      }
     }
   }
 
@@ -1492,7 +1645,9 @@ export default function CasesPage() {
             const progress = deriveChecklistProgress(checklist);
             const isChecklistSaving = Boolean(checklistSavingByCase[item.id]);
             const isDossierGenerating = Boolean(dossierGeneratingByCase[item.id]);
-            const isCaseBusy = isChecklistSaving || isDossierGenerating;
+            const isProtocolPdfGenerating = Boolean(protocolPdfGeneratingByCase[item.id]);
+            const finalizedProtocols = finalizedProtocolsByCase[item.id] ?? [];
+            const isCaseBusy = isChecklistSaving || isDossierGenerating || isProtocolPdfGenerating;
 
             return (
               <article key={item.id} className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05]">
@@ -1789,6 +1944,61 @@ export default function CasesPage() {
                       </p>
                     )}
                   </section>
+
+                  {finalizedProtocols.length > 0 && (
+                    <section
+                      data-testid={`cases-finalized-protocols-${item.id}`}
+                      aria-labelledby={`cases-finalized-protocols-title-${item.id}`}
+                      className="mb-4 rounded-lg border border-emerald-500/20 bg-emerald-500/[0.05] p-4"
+                    >
+                      <h3
+                        id={`cases-finalized-protocols-title-${item.id}`}
+                        className="text-xs font-semibold uppercase tracking-[0.08em] text-emerald-200"
+                      >
+                        {t("cases-finalized-protocols-title")}
+                      </h3>
+                      <p className="mt-1 text-xs text-muted">
+                        {t("cases-finalized-protocols-desc")}
+                      </p>
+                      <ul className="mt-3 space-y-2">
+                        {finalizedProtocols.map((protocol) => (
+                          <li
+                            key={protocol.id}
+                            className="flex flex-col gap-2 rounded-lg border border-white/[0.06] bg-black/20 p-3 sm:flex-row sm:items-center sm:justify-between"
+                          >
+                            <div className="min-w-0 text-xs">
+                              <div className="truncate font-mono text-cream">{protocol.id}</div>
+                              <time dateTime={protocol.created_at} className="mt-1 block text-muted">
+                                {formatTimestampDateCH(new Date(protocol.created_at))}
+                              </time>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => void downloadFinalizedProtocolPdf(protocol)}
+                              disabled={isCaseBusy}
+                              className="rounded-lg border border-emerald-400/30 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-500/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              {isProtocolPdfGenerating
+                                ? t("cases-finalized-protocol-generating")
+                                : t("cases-download-finalized-protocol")}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                      {protocolPdfFeedbackByCase[item.id] && (
+                        <p
+                          role="status"
+                          className={`mt-2 text-right text-xs ${
+                            protocolPdfFeedbackByCase[item.id].tone === "success"
+                              ? "text-emerald-300"
+                              : "text-rose-300"
+                          }`}
+                        >
+                          {t(protocolPdfFeedbackByCase[item.id].key)}
+                        </p>
+                      )}
+                    </section>
+                  )}
 
                   <div className="rounded-lg border border-white/[0.06] bg-black/20 p-3 space-y-2">
                     <div className="text-xs uppercase tracking-[0.08em] text-muted/70">{t("cases-followup-checklist")}</div>

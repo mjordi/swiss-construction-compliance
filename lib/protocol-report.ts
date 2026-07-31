@@ -1,3 +1,5 @@
+import { NO_VISIBLE_DEFECTS_CONFIRMED_MARKER } from "@/lib/dashboard-protocol";
+
 export type ProtocolDefectEvidence =
   | { kind: "documented"; description: string }
   | { kind: "none-visible-confirmed" }
@@ -19,6 +21,14 @@ export interface FinalizedProtocolReportInput {
   finalizedAt: string;
 }
 
+export interface PersistedFinalizedProtocolReportInput {
+  status: "finalized";
+  defect_description: string | null;
+  signature_data: string | null;
+  case_id: string | null;
+  created_at: string;
+}
+
 export function buildFinalizedProtocolReport(
   input: FinalizedProtocolReportInput
 ): FinalizedProtocolReport {
@@ -36,4 +46,19 @@ export function buildFinalizedProtocolReport(
     linkedCaseId: input.linkedCaseId,
     finalizedAt: input.finalizedAt,
   };
+}
+
+export function buildFinalizedProtocolReportFromRecord(
+  record: PersistedFinalizedProtocolReportInput
+): FinalizedProtocolReport {
+  const noDefectsConfirmed =
+    record.defect_description === NO_VISIBLE_DEFECTS_CONFIRMED_MARKER;
+
+  return buildFinalizedProtocolReport({
+    defectDescription: noDefectsConfirmed ? "" : (record.defect_description ?? ""),
+    noDefectsConfirmed,
+    signatureCaptured: Boolean(record.signature_data),
+    linkedCaseId: record.case_id,
+    finalizedAt: record.created_at,
+  });
 }

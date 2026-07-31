@@ -27,11 +27,17 @@ let caseChecklistData: Record<string, boolean> | null = {
   noticeDrafted: false,
   calendarReminderExported: false,
 };
+let protocolSelectColumns: string[] = [];
 let protocolRows: Array<{
   id?: string;
   case_id: string;
   status?: "draft" | "awaiting-signature" | "finalized";
   created_at?: string;
+  project_name?: string;
+  contractor?: string;
+  client?: string;
+  defect_description?: string | null;
+  signature_data?: string | null;
 }> = [];
 
 vi.mock("next/navigation", () => ({
@@ -63,6 +69,10 @@ vi.mock("@/components/dashboard/PageHeader", () => ({
       <p>{subtitle}</p>
     </div>
   ),
+}));
+
+vi.mock("@/components/dashboard/AuditReportPDF", () => ({
+  AuditReportPDF: (props: unknown) => <div data-testid="protocol-report-pdf" data-props={JSON.stringify(props)} />,
 }));
 
 vi.mock("@react-pdf/renderer", () => ({
@@ -168,11 +178,30 @@ vi.mock("@/lib/supabase", () => ({
 
       if (table === "protocols") {
         return {
-          select: () => ({
-            eq: () => ({
-              not: () => Promise.resolve({ data: protocolRows, error: null }),
-            }),
-          }),
+          select: (columns: string) => {
+            protocolSelectColumns.push(columns);
+            if (columns.includes("signature_data")) {
+              let selectedId: string | undefined;
+              const detailQuery = {
+                eq: (column: string, value: string) => {
+                  if (column === "id") selectedId = value;
+                  return detailQuery;
+                },
+                single: () =>
+                  Promise.resolve({
+                    data: protocolRows.find((protocol) => protocol.id === selectedId) ?? null,
+                    error: null,
+                  }),
+              };
+              return detailQuery;
+            }
+
+            return {
+              eq: () => ({
+                not: () => Promise.resolve({ data: protocolRows, error: null }),
+              }),
+            };
+          },
         };
       }
 
@@ -194,7 +223,8 @@ describe("cases checklist persistence", () => {
     buildCaseLegalChronologyCsvMock.mockClear();
     buildComplianceCaseTimelineMock.mockClear();
     pdfMock.mockClear();
-    pdfToBlobMock.mockClear();
+    pdfToBlobMock.mockReset();
+    pdfToBlobMock.mockResolvedValue(new Blob(["pdf"], { type: "application/pdf" }));
     Object.defineProperty(URL, "createObjectURL", {
       configurable: true,
       value: createObjectURLMock,
@@ -210,6 +240,7 @@ describe("cases checklist persistence", () => {
       calendarReminderExported: false,
     };
     protocolRows = [];
+    protocolSelectColumns = [];
     statusQueryParam = null;
     timelineStatus = "warning";
   });
@@ -338,6 +369,118 @@ describe("cases checklist persistence", () => {
       "cases-legal-milestone-protocol-finalized25.03.2026",
       "cases-legal-milestone-notice-deadline20.05.2026",
     ]);
+  });
+
+  it("lists only finalized linked protocols and regenerates their source-bound PDF", async () => {
+    protocolRows = [
+      {
+        id: "protocol-finalized-1",
+        case_id: "case-1",
+        status: "finalized",
+        created_at: "2026-03-25T10:00:00.000Z",
+        project_name: "Alpine Tower handover",
+        contractor: "Alpine Build AG",
+        client: "Owner AG",
+        defect_description: "Cracked balcony edge",
+        signature_data: "data:image/png;base64,signature",
+      },
+      {
+        id: "protocol-draft-1",
+        case_id: "case-1",
+        status: "draft",
+        created_at: "2026-03-24T10:00:00.000Z",
+        project_name: "Draft protocol",
+        contractor: "Alpine Build AG",
+        client: "Owner AG",
+        defect_description: null,
+        signature_data: null,
+      },
+    ];
+    const anchorClickMock = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+
+    try {
+      render(<CasesPage />);
+
+      const records = await screen.findByTestId("cases-finalized-protocols-case-1");
+      expect(records.textContent).toContain("protocol-finalized-1");
+      expect(records.textContent).not.toContain("protocol-draft-1");
+      expect(protocolSelectColumns.length).toBeGreaterThan(0);
+      expect(protocolSelectColumns.every((columns) => columns === "id, case_id, status, created_at")).toBe(true);
+
+      fireEvent.click(screen.getByRole("button", { name: "cases-download-finalized-protocol" }));
+
+      await screen.findByText("cases-finalized-protocol-download-success");
+      expect(protocolSelectColumns).toContain(
+        "id, case_id, status, created_at, project_name, contractor, client, defect_description, signature_data"
+      );
+      expect(pdfMock).toHaveBeenCalledTimes(1);
+      const pdfDocument = pdfMock.mock.calls[0][0] as {
+        props: {
+          fileName: string;
+          caseId: string;
+          contractor: string;
+          client: string;
+          report: {
+            defectEvidence: { kind: string; description?: string };
+            signatureCaptured: boolean;
+            linkedCaseId: string;
+            finalizedAt: string;
+          };
+        };
+      };
+      expect(pdfDocument.props).toMatchObject({
+        fileName: "Alpine Tower handover",
+        caseId: "protocol-finalized-1",
+        contractor: "Alpine Build AG",
+        client: "Owner AG",
+        report: {
+          defectEvidence: { kind: "documented", description: "Cracked balcony edge" },
+          signatureCaptured: true,
+          linkedCaseId: "case-1",
+          finalizedAt: "2026-03-25T10:00:00.000Z",
+        },
+      });
+      expect(anchorClickMock).toHaveBeenCalledTimes(1);
+      expect((anchorClickMock.mock.instances[0] as HTMLAnchorElement).download).toBe(
+        "baucompliance-protocol-protocol-finalized-1.pdf"
+      );
+    } finally {
+      anchorClickMock.mockRestore();
+    }
+  });
+
+  it("locks same-case actions while a finalized protocol PDF is being prepared", async () => {
+    protocolRows = [
+      {
+        id: "protocol-finalized-1",
+        case_id: "case-1",
+        status: "finalized",
+        created_at: "2026-03-25T10:00:00.000Z",
+        project_name: "Alpine Tower handover",
+        contractor: "Alpine Build AG",
+        client: "Owner AG",
+        defect_description: "Cracked balcony edge",
+        signature_data: "data:image/png;base64,signature",
+      },
+    ];
+    pdfToBlobMock.mockImplementationOnce(() => new Promise<Blob>(() => undefined));
+
+    render(<CasesPage />);
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "cases-download-finalized-protocol" })
+    );
+
+    await waitFor(() => {
+      expect(
+        (screen.getByRole("button", { name: "cases-finalized-protocol-generating" }) as HTMLButtonElement).disabled
+      ).toBe(true);
+      expect((screen.getByRole("button", { name: "cases-edit" }) as HTMLButtonElement).disabled).toBe(true);
+      expect(screen.queryByRole("link", { name: "cases-open-in-vault" })).toBeNull();
+      expect((screen.getByLabelText("cases-checklist-defect-documented") as HTMLInputElement).disabled).toBe(true);
+    });
   });
 
   it("downloads the case legal chronology CSV without persisting state", async () => {
