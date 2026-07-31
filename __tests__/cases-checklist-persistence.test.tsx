@@ -27,6 +27,7 @@ let caseChecklistData: Record<string, boolean> | null = {
   noticeDrafted: false,
   calendarReminderExported: false,
 };
+let protocolSelectColumns: string[] = [];
 let protocolRows: Array<{
   id?: string;
   case_id: string;
@@ -177,11 +178,30 @@ vi.mock("@/lib/supabase", () => ({
 
       if (table === "protocols") {
         return {
-          select: () => ({
-            eq: () => ({
-              not: () => Promise.resolve({ data: protocolRows, error: null }),
-            }),
-          }),
+          select: (columns: string) => {
+            protocolSelectColumns.push(columns);
+            if (columns.includes("signature_data")) {
+              let selectedId: string | undefined;
+              const detailQuery = {
+                eq: (column: string, value: string) => {
+                  if (column === "id") selectedId = value;
+                  return detailQuery;
+                },
+                single: () =>
+                  Promise.resolve({
+                    data: protocolRows.find((protocol) => protocol.id === selectedId) ?? null,
+                    error: null,
+                  }),
+              };
+              return detailQuery;
+            }
+
+            return {
+              eq: () => ({
+                not: () => Promise.resolve({ data: protocolRows, error: null }),
+              }),
+            };
+          },
         };
       }
 
@@ -220,6 +240,7 @@ describe("cases checklist persistence", () => {
       calendarReminderExported: false,
     };
     protocolRows = [];
+    protocolSelectColumns = [];
     statusQueryParam = null;
     timelineStatus = "warning";
   });
@@ -385,10 +406,15 @@ describe("cases checklist persistence", () => {
       const records = await screen.findByTestId("cases-finalized-protocols-case-1");
       expect(records.textContent).toContain("protocol-finalized-1");
       expect(records.textContent).not.toContain("protocol-draft-1");
+      expect(protocolSelectColumns.length).toBeGreaterThan(0);
+      expect(protocolSelectColumns.every((columns) => columns === "id, case_id, status, created_at")).toBe(true);
 
       fireEvent.click(screen.getByRole("button", { name: "cases-download-finalized-protocol" }));
 
       await screen.findByText("cases-finalized-protocol-download-success");
+      expect(protocolSelectColumns).toContain(
+        "id, case_id, status, created_at, project_name, contractor, client, defect_description, signature_data"
+      );
       expect(pdfMock).toHaveBeenCalledTimes(1);
       const pdfDocument = pdfMock.mock.calls[0][0] as {
         props: {

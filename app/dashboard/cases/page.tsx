@@ -50,12 +50,20 @@ type LinkedProtocolRow = Pick<
   | "case_id"
   | "status"
   | "created_at"
+>;
+
+type FinalizedProtocolPdfRow = Pick<
+  Protocol,
+  | "id"
+  | "case_id"
+  | "status"
+  | "created_at"
   | "project_name"
   | "contractor"
   | "client"
   | "defect_description"
   | "signature_data"
->;
+> & { status: "finalized" };
 
 type FinalizedLinkedProtocolRow = LinkedProtocolRow & { status: "finalized" };
 
@@ -312,7 +320,7 @@ export default function CasesPage() {
           .order("created_at", { ascending: false }),
         supabase
           .from("protocols")
-          .select("id, case_id, status, created_at, project_name, contractor, client, defect_description, signature_data")
+          .select("id, case_id, status, created_at")
           .eq("user_id", user.id)
           .not("case_id", "is", null),
       ]);
@@ -1036,13 +1044,23 @@ export default function CasesPage() {
     };
 
     try {
-      const report = buildFinalizedProtocolReportFromRecord(protocol);
+      const { data, error } = await supabase
+        .from("protocols")
+        .select("id, case_id, status, created_at, project_name, contractor, client, defect_description, signature_data")
+        .eq("id", protocol.id)
+        .eq("user_id", user?.id ?? "")
+        .eq("status", "finalized")
+        .single();
+      if (error || !data) throw error ?? new Error("Finalized protocol not found");
+
+      const finalizedProtocol = data as FinalizedProtocolPdfRow;
+      const report = buildFinalizedProtocolReportFromRecord(finalizedProtocol);
       const blob = await pdf(
         <AuditReportPDF
-          fileName={protocol.project_name || "Project"}
-          caseId={protocol.id}
-          contractor={protocol.contractor}
-          client={protocol.client}
+          fileName={finalizedProtocol.project_name || "Project"}
+          caseId={finalizedProtocol.id}
+          contractor={finalizedProtocol.contractor}
+          client={finalizedProtocol.client}
           report={report}
         />
       ).toBlob();
@@ -1052,7 +1070,7 @@ export default function CasesPage() {
       const anchor = document.createElement("a");
       try {
         anchor.href = url;
-        anchor.download = `baucompliance-protocol-${protocol.id}.pdf`;
+        anchor.download = `baucompliance-protocol-${finalizedProtocol.id}.pdf`;
         anchor.click();
       } finally {
         anchor.remove();
