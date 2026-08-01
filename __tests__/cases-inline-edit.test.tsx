@@ -108,6 +108,19 @@ vi.mock("@/lib/case-timeline", () => ({
 
 vi.mock("@/lib/supabase", () => {
   const supabaseMock = {
+    rpc: async (
+      name: string,
+      params: { target_case_id: string; target_key: string; target_value: boolean }
+    ) => {
+      expect(name).toBe("set_case_checklist_item");
+      const current = casesData.find((item) => item.id === params.target_case_id);
+      const checklist = {
+        ...(current?.checklist ?? {}),
+        [params.target_key]: params.target_value,
+      };
+      const result = await updateEqMock({ checklist }, "id", params.target_case_id);
+      return { data: !result?.error, error: result?.error ?? null };
+    },
     from: (table: string) => {
       if (table === "cases") {
         return {

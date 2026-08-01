@@ -852,13 +852,14 @@ export default function CasesPage() {
     setDbCases((current) => applyChecklistState(current, updated));
 
     try {
-      const { error } = await supabase
-        .from("cases")
-        .update({ checklist: updated, updated_at: new Date().toISOString() })
-        .eq("id", caseId);
+      const { data: persisted, error } = await supabase.rpc("set_case_checklist_item", {
+        target_case_id: caseId,
+        target_key: key,
+        target_value: value,
+      });
 
-      if (error) {
-        throw error;
+      if (error || persisted !== true) {
+        throw error ?? new Error("Checklist update was not confirmed");
       }
 
       lastSuccessfulCasesRef.current = applyChecklistState(lastSuccessfulCasesRef.current, updated);

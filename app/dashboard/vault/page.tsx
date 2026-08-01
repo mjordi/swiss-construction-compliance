@@ -431,6 +431,9 @@ export default function TechVault() {
     const nextStatus = archived ? currentProject.restoredStatus : "archived";
     const previousProject = currentProject;
 
+    // A refresh started before this mutation may contain the old status. Invalidate
+    // it before applying the optimistic state, then refresh from the committed row.
+    latestFetchIdRef.current += 1;
     pendingStatusMutationProjectIdsRef.current.add(projectId);
     setStatusMutationProjectIds((current) => (current.includes(projectId) ? current : [...current, projectId]));
     setStatusMutationErrors((current) => {
@@ -484,6 +487,7 @@ export default function TechVault() {
           projectName: currentProject.name,
           key: archived ? "vault-restore-success" : "vault-archive-success",
         });
+        triggerRefresh();
       }
     } catch {
       setProjects((current) =>
@@ -504,7 +508,7 @@ export default function TechVault() {
       pendingStatusMutationProjectIdsRef.current.delete(projectId);
       setStatusMutationProjectIds((current) => current.filter((currentProjectId) => currentProjectId !== projectId));
     }
-  }, [projects, supabase, user]);
+  }, [projects, supabase, triggerRefresh, user]);
 
   return (
     <div className="max-w-6xl mx-auto h-[calc(100vh-100px)] flex flex-col">

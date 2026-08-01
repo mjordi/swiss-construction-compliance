@@ -50,6 +50,49 @@ $$;
 revoke all on function public.mark_case_evidence_attached(uuid) from public;
 grant execute on function public.mark_case_evidence_attached(uuid) to authenticated;
 
+-- Checklist writes are per-key so a stale client cannot replace a concurrently
+-- updated field (notably evidenceAttached) with an older whole-object snapshot.
+create or replace function public.set_case_checklist_item(
+  target_case_id uuid,
+  target_key text,
+  target_value boolean
+)
+returns boolean
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  affected_rows integer;
+begin
+  if target_key not in (
+    'defectDocumented',
+    'evidenceAttached',
+    'noticeDrafted',
+    'calendarReminderExported'
+  ) then
+    raise exception 'Unsupported checklist key';
+  end if;
+
+  update public.cases
+  set checklist = jsonb_set(
+    coalesce(checklist, '{}'::jsonb),
+    array[target_key],
+    to_jsonb(target_value),
+    true
+  ),
+  updated_at = now()
+  where id = target_case_id
+    and user_id = auth.uid();
+
+  get diagnostics affected_rows = row_count;
+  return affected_rows > 0;
+end;
+$$;
+
+revoke all on function public.set_case_checklist_item(uuid, text, boolean) from public;
+grant execute on function public.set_case_checklist_item(uuid, text, boolean) to authenticated;
+
 drop policy if exists "Users can read own case_evidence" on public.case_evidence;
 create policy "Users can read own case_evidence"
   on public.case_evidence for select

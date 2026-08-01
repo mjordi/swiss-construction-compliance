@@ -48,6 +48,9 @@ export function buildCaseEvidencePath(
 
 export function sanitizeCaseEvidenceDownloadName(name: string): string {
   const basename = name.replace(/\\/g, "/").split("/").pop() ?? "";
-  const sanitized = basename.replace(/[\u0000-\u001f\u007f-\u009f]/g, "").trim();
+  const sanitized = basename
+    .replace(/[\u0000-\u001f\u007f-\u009f]/g, "")
+    .replace(/[:/?#[\]@!$&'()*+,;=%]/g, "_")
+    .trim();
   return (sanitized || "evidence").slice(0, 180);
 }

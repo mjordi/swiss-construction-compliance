@@ -59,6 +59,21 @@ describe("case evidence migration", () => {
     expect(sql).toContain("grant execute on function public.mark_case_evidence_attached(uuid) to authenticated");
   });
 
+  it("persists Cases checklist toggles per key without replacing concurrent fields", () => {
+    const sql = migrationSql();
+    const fn = sql.match(/create or replace function public\.set_case_checklist_item\([\s\S]*?\$\$;/)?.[0];
+
+    expect(fn).toBeDefined();
+    expect(fn).toContain("target_key text");
+    expect(fn).toContain("target_value boolean");
+    expect(fn).toContain("'evidenceattached'");
+    expect(fn).toContain("array[target_key]");
+    expect(fn).toContain("to_jsonb(target_value)");
+    expect(fn).toMatch(/where id = target_case_id\s+and user_id = auth\.uid\(\)/);
+    expect(sql).toContain("revoke all on function public.set_case_checklist_item(uuid, text, boolean) from public");
+    expect(sql).toContain("grant execute on function public.set_case_checklist_item(uuid, text, boolean) to authenticated");
+  });
+
   it("keeps read/insert case-bound but permits exact owner-path delete after case deletion", () => {
     const sql = migrationSql();
 

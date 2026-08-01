@@ -6,6 +6,7 @@ const pushMock = vi.fn();
 const authUser = { id: "user-1" };
 const caseLoadMock = vi.fn();
 const protocolLoadMock = vi.fn();
+const statusUpdateMock = vi.fn();
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -68,7 +69,17 @@ const cases = [
 vi.mock("@/lib/supabase", () => ({
   getSupabase: () => ({
     from: (table: string) => table === "cases"
-      ? { select: () => ({ eq: () => ({ order: caseLoadMock }) }) }
+      ? {
+          select: () => ({ eq: () => ({ order: caseLoadMock }) }),
+          update: (payload: { status: string }) => ({
+            eq: () => ({
+              eq: async () => {
+                cases.find((item) => item.id === "active")!.status = payload.status;
+                return statusUpdateMock(payload);
+              },
+            }),
+          }),
+        }
       : { select: () => ({ eq: protocolLoadMock }) },
   }),
 }));
@@ -78,7 +89,9 @@ import TechVault from "@/app/dashboard/vault/page";
 describe("case evidence Vault integration", () => {
   beforeEach(() => {
     cases[0].checklist = {};
+    cases[0].status = "active";
     pushMock.mockClear();
+    statusUpdateMock.mockReset().mockResolvedValue({ error: null });
     caseLoadMock.mockReset().mockResolvedValue({ data: cases, error: null });
     protocolLoadMock.mockReset().mockResolvedValue({
       data: [{ id: "p1", case_id: "active", project_name: "Active Case" }],
@@ -132,5 +145,28 @@ describe("case evidence Vault integration", () => {
       const refreshedArticle = screen.getByText("Active Case").closest("article")!;
       expect(within(refreshedArticle).getByText("25%")).toBeTruthy();
     });
+  });
+
+  it("does not let an older evidence refresh overwrite a concurrent archive", async () => {
+    const pendingRefresh = deferred<{ data: typeof cases; error: null }>();
+    const staleCases = cases.map((item) => ({ ...item, checklist: { ...item.checklist } })) as typeof cases;
+    caseLoadMock
+      .mockResolvedValueOnce({ data: cases, error: null })
+      .mockReturnValueOnce(pendingRefresh.promise)
+      .mockResolvedValue({ data: cases, error: null });
+
+    render(<TechVault />);
+    const article = (await screen.findByText("Active Case")).closest("article")!;
+    fireEvent.click(within(article).getByTestId("evidence-active"));
+    await waitFor(() => expect(caseLoadMock).toHaveBeenCalledTimes(2));
+
+    fireEvent.click(within(article).getByRole("button", { name: "vault-archive-project" }));
+    await waitFor(() => expect(caseLoadMock).toHaveBeenCalledTimes(3));
+    pendingRefresh.resolve({ data: staleCases, error: null });
+
+    fireEvent.click(screen.getByRole("tab", { name: "vault-tab-archived" }));
+    await waitFor(() => expect(screen.getByText("Active Case")).toBeTruthy());
+    expect(statusUpdateMock).toHaveBeenCalledWith(expect.objectContaining({ status: "archived" }));
+    expect(within(screen.getByText("Active Case").closest("article")!).getByText("vault-status-archived")).toBeTruthy();
   });
 });

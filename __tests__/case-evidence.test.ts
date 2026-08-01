@@ -36,6 +36,7 @@ describe("case evidence helpers", () => {
   it("sanitizes download names to a nonempty bounded basename", () => {
     expect(sanitizeCaseEvidenceDownloadName("../../reports\\final\u0000.pdf")).toBe("final.pdf");
     expect(sanitizeCaseEvidenceDownloadName("folder/\u0007")).toBe("evidence");
+    expect(sanitizeCaseEvidenceDownloadName("site #1 & plans?.pdf")).toBe("site _1 _ plans_.pdf");
     expect(sanitizeCaseEvidenceDownloadName("a".repeat(300))).toHaveLength(180);
   });
 });
