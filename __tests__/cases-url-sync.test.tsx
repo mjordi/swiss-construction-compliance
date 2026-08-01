@@ -4,7 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 let currentSearch = "";
 const replaceMock = vi.fn();
 const routerMock = { replace: replaceMock };
-const deleteCaseEqMock = vi.fn();
+const deleteCaseWithEvidenceMock = vi.fn();
 
 type CasesResponse = { data: Array<Record<string, unknown>> | null; error: { message: string } | null };
 type ProtocolsResponse = { data: Array<{ case_id: string | null }> | null; error: { message: string } | null };
@@ -103,9 +103,6 @@ vi.mock("@/lib/supabase", () => ({
               order: () => Promise.resolve().then(() => caseResponseFactory()),
             }),
           }),
-          delete: () => ({
-            eq: deleteCaseEqMock,
-          }),
         };
       }
 
@@ -120,6 +117,10 @@ vi.mock("@/lib/supabase", () => ({
       }
 
       throw new Error(`Unexpected table ${table}`);
+    },
+    rpc: (name: string, args: { target_case_id: string }) => {
+      if (name !== "delete_case_with_evidence") throw new Error(`Unexpected RPC ${name}`);
+      return deleteCaseWithEvidenceMock(args);
     },
   }),
 }));
@@ -151,8 +152,8 @@ describe("cases filter URL synchronization", () => {
   beforeEach(() => {
     currentSearch = "";
     replaceMock.mockReset();
-    deleteCaseEqMock.mockReset();
-    deleteCaseEqMock.mockResolvedValue({ error: null });
+    deleteCaseWithEvidenceMock.mockReset();
+    deleteCaseWithEvidenceMock.mockResolvedValue({ data: { deleted: true, storage_paths: [] }, error: null });
     caseResponseFactory = () => ({ data: [], error: null });
     protocolResponseFactory = () => ({ data: [], error: null });
   });
@@ -432,7 +433,7 @@ describe("cases filter URL synchronization", () => {
     fireEvent.click(screen.getByTitle("cases-delete"));
 
     await waitFor(() => {
-      expect(deleteCaseEqMock).toHaveBeenCalledWith("id", "case-1");
+      expect(deleteCaseWithEvidenceMock).toHaveBeenCalledWith({ target_case_id: "case-1" });
     });
 
     expect(screen.getByText("Alpine Tower")).toBeTruthy();

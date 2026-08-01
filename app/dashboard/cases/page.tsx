@@ -11,7 +11,7 @@ import { CaseAuditDossierPDF } from "@/components/dashboard/CaseAuditDossierPDF"
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
-import { listCaseEvidenceObjectPaths, removeCaseEvidenceObjects } from "@/lib/case-evidence-cleanup";
+import { removeCaseEvidenceObjects } from "@/lib/case-evidence-cleanup";
 import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { buildCaseAuditDossier } from "@/lib/case-audit-dossier";
 import { buildFinalizedProtocolReportFromRecord } from "@/lib/protocol-report";
@@ -1275,14 +1275,17 @@ export default function CasesPage() {
     setDeletingCaseIds((current) => ({ ...current, [caseId]: true }));
 
     try {
-      // Retain the objects until the case deletion is confirmed. Deleting Storage
-      // first can leave live metadata pointing to missing evidence if the DB write fails.
-      const evidencePaths = await listCaseEvidenceObjectPaths(supabase.storage, user.id, caseId);
-
-      const { error } = await supabase.from("cases").delete().eq("id", caseId);
-      if (error) {
-        throw error;
+      // Capture paths and delete under one parent-row lock so concurrent evidence
+      // metadata inserts are either included or fail against the deleted case.
+      const { data: deletion, error } = await supabase.rpc("delete_case_with_evidence", {
+        target_case_id: caseId,
+      });
+      if (error || !deletion || deletion.deleted !== true || !Array.isArray(deletion.storage_paths)) {
+        throw error ?? new Error("Case deletion was not confirmed");
       }
+      const evidencePaths = deletion.storage_paths.filter(
+        (path: unknown): path is string => typeof path === "string"
+      );
 
       try {
         await removeCaseEvidenceObjects(supabase.storage, evidencePaths);

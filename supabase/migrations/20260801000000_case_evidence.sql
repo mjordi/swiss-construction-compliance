@@ -93,6 +93,46 @@ $$;
 revoke all on function public.set_case_checklist_item(uuid, text, boolean) from public;
 grant execute on function public.set_case_checklist_item(uuid, text, boolean) to authenticated;
 
+-- Lock the parent case while capturing evidence paths and deleting it. The
+-- foreign key's parent-row lock serializes concurrent metadata inserts with
+-- this lock: an insert that wins is included, while one that loses observes
+-- the deleted case and can clean up its just-uploaded object.
+create or replace function public.delete_case_with_evidence(target_case_id uuid)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  evidence_paths jsonb;
+begin
+  perform 1
+  from public.cases
+  where id = target_case_id
+    and user_id = auth.uid()
+  for update;
+
+  if not found then
+    return jsonb_build_object('deleted', false, 'storage_paths', '[]'::jsonb);
+  end if;
+
+  select coalesce(jsonb_agg(storage_path order by created_at), '[]'::jsonb)
+  into evidence_paths
+  from public.case_evidence
+  where case_id = target_case_id
+    and user_id = auth.uid();
+
+  delete from public.cases
+  where id = target_case_id
+    and user_id = auth.uid();
+
+  return jsonb_build_object('deleted', true, 'storage_paths', evidence_paths);
+end;
+$$;
+
+revoke all on function public.delete_case_with_evidence(uuid) from public;
+grant execute on function public.delete_case_with_evidence(uuid) to authenticated;
+
 drop policy if exists "Users can read own case_evidence" on public.case_evidence;
 create policy "Users can read own case_evidence"
   on public.case_evidence for select

@@ -3,9 +3,8 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 
 const replaceMock = vi.fn();
 const insertMock = vi.fn();
-const deleteEqMock = vi.fn();
+const deleteCaseWithEvidenceMock = vi.fn();
 const confirmMock = vi.fn(() => true);
-const listCaseEvidenceObjectPathsMock = vi.hoisted(() => vi.fn());
 const removeCaseEvidenceObjectsMock = vi.hoisted(() => vi.fn());
 
 type CaseRecord = {
@@ -112,9 +111,6 @@ vi.mock("@/lib/supabase", () => ({
             }),
           }),
           insert: insertMock,
-          delete: () => ({
-            eq: deleteEqMock,
-          }),
         };
       }
 
@@ -130,11 +126,14 @@ vi.mock("@/lib/supabase", () => ({
 
       throw new Error(`Unexpected table ${table}`);
     },
+    rpc: (name: string, args: { target_case_id: string }) => {
+      if (name !== "delete_case_with_evidence") throw new Error(`Unexpected RPC ${name}`);
+      return deleteCaseWithEvidenceMock(args);
+    },
   }),
 }));
 
 vi.mock("@/lib/case-evidence-cleanup", () => ({
-  listCaseEvidenceObjectPaths: listCaseEvidenceObjectPathsMock,
   removeCaseEvidenceObjects: removeCaseEvidenceObjectsMock,
 }));
 
@@ -169,8 +168,10 @@ describe("cases mutation feedback", () => {
   beforeEach(() => {
     replaceMock.mockReset();
     insertMock.mockReset();
-    deleteEqMock.mockReset();
-    listCaseEvidenceObjectPathsMock.mockReset().mockResolvedValue(["user-1/case-1/report.pdf"]);
+    deleteCaseWithEvidenceMock.mockReset().mockResolvedValue({
+      data: { deleted: true, storage_paths: ["user-1/case-1/report.pdf"] },
+      error: null,
+    });
     removeCaseEvidenceObjectsMock.mockReset().mockResolvedValue(undefined);
     confirmMock.mockClear();
     casesData = [buildCase("case-1", "Alpine Tower")];
@@ -270,7 +271,7 @@ describe("cases mutation feedback", () => {
   });
 
   it("keeps the case visible and preserves evidence when delete returns an error", async () => {
-    deleteEqMock.mockResolvedValueOnce({ error: { message: "delete failed" } });
+    deleteCaseWithEvidenceMock.mockResolvedValueOnce({ data: null, error: { message: "delete failed" } });
 
     render(<CasesPage />);
 
@@ -279,13 +280,13 @@ describe("cases mutation feedback", () => {
     fireEvent.click(screen.getByTitle("cases-delete"));
 
     expect(await screen.findByText("cases-delete-error")).toBeTruthy();
-    expect(listCaseEvidenceObjectPathsMock).toHaveBeenCalledWith(undefined, "user-1", "case-1");
+    expect(deleteCaseWithEvidenceMock).toHaveBeenCalledWith({ target_case_id: "case-1" });
     expect(removeCaseEvidenceObjectsMock).not.toHaveBeenCalled();
     expect(screen.getByText("Alpine Tower")).toBeTruthy();
   });
 
-  it("does not delete a case when its stored evidence paths cannot be listed", async () => {
-    listCaseEvidenceObjectPathsMock.mockRejectedValueOnce(new Error("storage listing failed"));
+  it("does not remove a case when atomic deletion is not confirmed", async () => {
+    deleteCaseWithEvidenceMock.mockResolvedValueOnce({ data: { deleted: false, storage_paths: [] }, error: null });
 
     render(<CasesPage />);
 
@@ -294,14 +295,14 @@ describe("cases mutation feedback", () => {
 
     expect(await screen.findByText("cases-delete-error")).toBeTruthy();
     expect(removeCaseEvidenceObjectsMock).not.toHaveBeenCalled();
-    expect(deleteEqMock).not.toHaveBeenCalled();
+    expect(deleteCaseWithEvidenceMock).toHaveBeenCalledWith({ target_case_id: "case-1" });
     expect(screen.getByText("Alpine Tower")).toBeTruthy();
   });
 
-  it("removes evidence only after case deletion succeeds and reports cleanup separately", async () => {
-    deleteEqMock.mockImplementationOnce(async (_field: string, caseId: string) => {
+  it("removes atomically captured evidence only after case deletion succeeds and reports cleanup separately", async () => {
+    deleteCaseWithEvidenceMock.mockImplementationOnce(async ({ target_case_id: caseId }: { target_case_id: string }) => {
       casesData = casesData.filter((item) => item.id !== caseId);
-      return { error: null };
+      return { data: { deleted: true, storage_paths: ["user-1/case-1/report.pdf"] }, error: null };
     });
     removeCaseEvidenceObjectsMock.mockRejectedValueOnce(new Error("storage cleanup failed"));
 
@@ -315,10 +316,10 @@ describe("cases mutation feedback", () => {
   });
 
   it("keeps the delete control disabled while a delete request is in flight", async () => {
-    let resolveDelete: ((value: { error: null }) => void) | null = null;
-    deleteEqMock.mockImplementationOnce(
+    let resolveDelete!: (value: { data: { deleted: true; storage_paths: string[] }; error: null }) => void;
+    deleteCaseWithEvidenceMock.mockImplementationOnce(
       () =>
-        new Promise<{ error: null }>((resolve) => {
+        new Promise<{ data: { deleted: true; storage_paths: string[] }; error: null }>((resolve) => {
           resolveDelete = resolve;
         })
     );
@@ -332,20 +333,19 @@ describe("cases mutation feedback", () => {
       expect((screen.getByTitle("cases-delete") as HTMLButtonElement).disabled).toBe(true);
     });
 
-    resolveDelete?.({ error: null });
+    resolveDelete({ data: { deleted: true, storage_paths: [] }, error: null });
 
     await waitFor(() => {
-      expect(deleteEqMock).toHaveBeenCalledWith("id", "case-1");
+      expect(deleteCaseWithEvidenceMock).toHaveBeenCalledWith({ target_case_id: "case-1" });
     });
   });
 
   it("clears stale delete feedback after a successful retry following a thrown delete failure", async () => {
-    deleteEqMock
+    deleteCaseWithEvidenceMock
       .mockRejectedValueOnce(new Error("network down"))
-      .mockImplementationOnce(async (field: string, caseId: string) => {
-        expect(field).toBe("id");
+      .mockImplementationOnce(async ({ target_case_id: caseId }: { target_case_id: string }) => {
         casesData = casesData.filter((item) => item.id !== caseId);
-        return { error: null };
+        return { data: { deleted: true, storage_paths: ["user-1/case-1/report.pdf"] }, error: null };
       });
 
     render(<CasesPage />);

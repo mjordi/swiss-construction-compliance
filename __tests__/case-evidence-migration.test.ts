@@ -74,6 +74,21 @@ describe("case evidence migration", () => {
     expect(sql).toContain("grant execute on function public.set_case_checklist_item(uuid, text, boolean) to authenticated");
   });
 
+  it("serializes case deletion with evidence inserts and atomically returns cleanup paths", () => {
+    const sql = migrationSql();
+    const fn = sql.match(/create or replace function public\.delete_case_with_evidence\(target_case_id uuid\)[\s\S]*?\$\$;/)?.[0];
+
+    expect(fn).toBeDefined();
+    expect(fn).toContain("returns jsonb");
+    expect(fn).toContain("security invoker");
+    expect(fn).toContain("set search_path = ''");
+    expect(fn).toMatch(/from public\.cases[\s\S]*?where id = target_case_id[\s\S]*?and user_id = auth\.uid\(\)[\s\S]*?for update/);
+    expect(fn).toMatch(/select coalesce\(jsonb_agg\(storage_path order by created_at\), '\[\]'::jsonb\)[\s\S]*?from public\.case_evidence[\s\S]*?delete from public\.cases/);
+    expect(fn).toContain("jsonb_build_object('deleted', true, 'storage_paths', evidence_paths)");
+    expect(sql).toContain("revoke all on function public.delete_case_with_evidence(uuid) from public");
+    expect(sql).toContain("grant execute on function public.delete_case_with_evidence(uuid) to authenticated");
+  });
+
   it("keeps read/insert case-bound but permits exact owner-path delete after case deletion", () => {
     const sql = migrationSql();
 
