@@ -51,6 +51,7 @@ describe("case evidence migration", () => {
     expect(fn).toContain("coalesce(checklist, '{}'::jsonb)");
     expect(fn).toContain("'{evidenceattached}'");
     expect(fn).toContain("'true'::jsonb");
+    expect(fn).toContain("updated_at = now()");
     expect(fn).toMatch(/where id = target_case_id\s+and user_id = auth\.uid\(\)/);
     expect(fn).toContain("get diagnostics affected_rows = row_count");
     expect(fn).toContain("return affected_rows > 0");

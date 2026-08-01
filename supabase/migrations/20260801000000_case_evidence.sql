@@ -37,7 +37,8 @@ begin
     '{evidenceAttached}',
     'true'::jsonb,
     true
-  )
+  ),
+  updated_at = now()
   where id = target_case_id
     and user_id = auth.uid();
 

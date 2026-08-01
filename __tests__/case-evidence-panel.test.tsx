@@ -17,6 +17,7 @@ const listMock = vi.fn();
 const uploadMock = vi.fn();
 const removeMock = vi.fn();
 const insertMock = vi.fn();
+const lookupMock = vi.fn();
 const rpcMock = vi.fn();
 const signedUrlMock = vi.fn();
 
@@ -34,7 +35,11 @@ const supabaseMock = {
   from: (table: string) => {
     if (table === "case_evidence") {
       return {
-        select: () => ({ eq: () => ({ eq: () => ({ order: listMock }) }) }),
+        select: () => ({
+          eq: (column: string) => column === "storage_path"
+            ? { maybeSingle: lookupMock }
+            : { eq: () => ({ order: listMock }) },
+        }),
         insert: (payload: unknown) => {
           insertMock(payload);
           return { select: () => ({ single: () => insertMock.mock.results.at(-1)?.value }) };
@@ -60,6 +65,7 @@ describe("CaseEvidencePanel", () => {
     uploadMock.mockReset().mockResolvedValue({ data: { path: evidence.storage_path }, error: null });
     removeMock.mockReset().mockResolvedValue({ data: null, error: null });
     insertMock.mockReset().mockReturnValue(Promise.resolve({ data: evidence, error: null }));
+    lookupMock.mockReset().mockResolvedValue({ data: null, error: null });
     rpcMock.mockReset().mockResolvedValue({ data: true, error: null });
     signedUrlMock.mockReset().mockResolvedValue({ data: { signedUrl: "https://signed.test/file" }, error: null });
   });
@@ -72,6 +78,16 @@ describe("CaseEvidencePanel", () => {
 
     expect(await screen.findByText("vault-evidence-empty")).toBeTruthy();
     expect(listMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not claim the evidence list is empty when loading fails", async () => {
+    listMock.mockResolvedValue({ data: null, error: { message: "list failed" } });
+    render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-list-error");
+    expect(screen.queryByText("vault-evidence-empty")).toBeNull();
   });
 
   it("validates selected files before upload", async () => {
@@ -226,9 +242,39 @@ describe("CaseEvidencePanel", () => {
 
     await waitFor(() => expect(removeMock).toHaveBeenCalledTimes(1));
     const uploadedPath = uploadMock.mock.calls[0][0];
+    expect(lookupMock).toHaveBeenCalledTimes(1);
     expect(removeMock).toHaveBeenCalledWith([uploadedPath]);
     expect(rpcMock).not.toHaveBeenCalled();
     expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-upload-error");
+  });
+
+  it("keeps the object when reconciliation finds metadata after an ambiguous insert rejection", async () => {
+    insertMock.mockReset().mockImplementation(() => Promise.reject(new Error("response lost")));
+    lookupMock.mockResolvedValue({ data: evidence, error: null });
+    render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
+    fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
+    fireEvent.change(await screen.findByLabelText("vault-evidence-file-label"), {
+      target: { files: [new File(["pdf"], "report.pdf", { type: "application/pdf" })] },
+    });
+
+    expect(await screen.findByText("vault-evidence-upload-success")).toBeTruthy();
+    expect(lookupMock).toHaveBeenCalledTimes(1);
+    expect(removeMock).not.toHaveBeenCalled();
+    expect(rpcMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not delete the object when metadata reconciliation also fails", async () => {
+    insertMock.mockReset().mockImplementation(() => Promise.reject(new Error("response lost")));
+    lookupMock.mockResolvedValue({ data: null, error: { message: "lookup failed" } });
+    render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
+    fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
+    fireEvent.change(await screen.findByLabelText("vault-evidence-file-label"), {
+      target: { files: [new File(["pdf"], "report.pdf", { type: "application/pdf" })] },
+    });
+
+    expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-persistence-unknown");
+    expect(removeMock).not.toHaveBeenCalled();
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 
   it("retries a returned compensation error and reports the metadata upload failure after cleanup succeeds", async () => {

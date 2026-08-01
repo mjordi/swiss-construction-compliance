@@ -151,23 +151,44 @@ export default function CaseEvidencePanel({
         if (error || !data) throw error ?? new Error("Evidence metadata was not returned");
         metadata = data as CaseEvidence;
       } catch (metadataError) {
-        let cleanupSucceeded = false;
-        for (let attempt = 0; attempt < 2; attempt += 1) {
-          try {
-            const { error: removeError } = await bucket.remove([storagePath]);
-            if (!removeError) {
-              cleanupSucceeded = true;
-              break;
-            }
-          } catch {
-            // A rejected removal is retried by the next iteration.
-          }
-        }
-        if (!cleanupSucceeded) {
-          if (isCurrentContext()) setMessage({ key: "vault-evidence-cleanup-warning", kind: "alert" });
+        // An insert request can reject after PostgREST has committed it. Reconcile by
+        // the unique path before removing the object so a committed row never points
+        // at a file deleted during an ambiguous transport failure.
+        let persistedMetadata: CaseEvidence | null;
+        try {
+          const { data, error: reconciliationError } = await supabase
+            .from("case_evidence")
+            .select("*")
+            .eq("storage_path", storagePath)
+            .maybeSingle();
+          if (reconciliationError) throw reconciliationError;
+          persistedMetadata = data as CaseEvidence | null;
+        } catch {
+          if (isCurrentContext()) setMessage({ key: "vault-evidence-persistence-unknown", kind: "alert" });
           return;
         }
-        throw metadataError;
+
+        if (persistedMetadata) {
+          metadata = persistedMetadata;
+        } else {
+          let cleanupSucceeded = false;
+          for (let attempt = 0; attempt < 2; attempt += 1) {
+            try {
+              const { error: removeError } = await bucket.remove([storagePath]);
+              if (!removeError) {
+                cleanupSucceeded = true;
+                break;
+              }
+            } catch {
+              // A rejected removal is retried by the next iteration.
+            }
+          }
+          if (!cleanupSucceeded) {
+            if (isCurrentContext()) setMessage({ key: "vault-evidence-cleanup-warning", kind: "alert" });
+            return;
+          }
+          throw metadataError;
+        }
       }
 
       if (isCurrentContext()) {
@@ -274,7 +295,7 @@ export default function CaseEvidencePanel({
           {message ? <p role={message.kind} className={message.kind === "alert" ? "text-xs text-amber-300" : "text-xs text-emerald-300"}>{t(message.key)}</p> : null}
           {loading ? (
             <p role="status" className="flex items-center gap-2 text-xs text-slate-300"><Loader2 className="h-3 w-3 animate-spin" />{t("vault-evidence-loading")}</p>
-          ) : evidence.length === 0 ? (
+          ) : evidence.length === 0 && message?.key !== "vault-evidence-list-error" ? (
             <p className="text-xs text-slate-400">{t("vault-evidence-empty")}</p>
           ) : (
             <ul className="space-y-2">
