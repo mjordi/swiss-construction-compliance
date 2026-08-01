@@ -165,6 +165,7 @@ vi.mock("@/lib/supabase", () => {
 });
 
 vi.mock("@/lib/case-evidence-cleanup", () => ({
+  listCaseEvidenceObjectPaths: vi.fn().mockResolvedValue([]),
   removeCaseEvidenceObjects: vi.fn().mockResolvedValue(undefined),
 }));
 

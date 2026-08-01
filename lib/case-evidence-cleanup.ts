@@ -18,11 +18,11 @@ export interface CaseEvidenceStorageClient {
   from(bucket: string): CaseEvidenceBucket;
 }
 
-export async function removeCaseEvidenceObjects(
+export async function listCaseEvidenceObjectPaths(
   storage: CaseEvidenceStorageClient,
   userId: string,
   caseId: string
-): Promise<void> {
+): Promise<string[]> {
   const bucket = storage.from(CASE_EVIDENCE_BUCKET);
   const folder = `${userId}/${caseId}`;
   const paths: string[] = [];
@@ -39,8 +39,30 @@ export async function removeCaseEvidenceObjects(
     if (objects.length < LIST_PAGE_SIZE) break;
   }
 
+  return paths;
+}
+
+export async function removeCaseEvidenceObjects(
+  storage: CaseEvidenceStorageClient,
+  paths: string[]
+): Promise<void> {
+  const bucket = storage.from(CASE_EVIDENCE_BUCKET);
+
   for (let offset = 0; offset < paths.length; offset += REMOVE_BATCH_SIZE) {
-    const { error } = await bucket.remove(paths.slice(offset, offset + REMOVE_BATCH_SIZE));
-    if (error) throw error;
+    const batch = paths.slice(offset, offset + REMOVE_BATCH_SIZE);
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      try {
+        const { error } = await bucket.remove(batch);
+        if (!error) {
+          lastError = null;
+          break;
+        }
+        lastError = error;
+      } catch (error) {
+        lastError = error;
+      }
+    }
+    if (lastError) throw lastError;
   }
 }
