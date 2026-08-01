@@ -171,11 +171,11 @@ export default function CaseEvidencePanel({
         }
 
         if (!uploadedObjectFound) {
-          if (!await removeUploadedObject()) {
-            if (isCurrentContext()) setMessage({ key: "vault-evidence-cleanup-warning", kind: "alert" });
-            return;
-          }
-          throw uploadError;
+          // A rejected upload has no ordering guarantee relative to Storage. Even a
+          // successful remove of a currently absent path could run before the upload
+          // commits, so preserve the generated path instead of creating a late orphan.
+          if (isCurrentContext()) setMessage({ key: "vault-evidence-persistence-unknown", kind: "alert" });
+          return;
         }
         uploadError = null;
       }

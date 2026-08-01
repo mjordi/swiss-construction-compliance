@@ -5,6 +5,7 @@ const replaceMock = vi.fn();
 const insertMock = vi.fn();
 const deleteEqMock = vi.fn();
 const confirmMock = vi.fn(() => true);
+const removeCaseEvidenceObjectsMock = vi.hoisted(() => vi.fn());
 
 type CaseRecord = {
   id: string;
@@ -131,6 +132,10 @@ vi.mock("@/lib/supabase", () => ({
   }),
 }));
 
+vi.mock("@/lib/case-evidence-cleanup", () => ({
+  removeCaseEvidenceObjects: removeCaseEvidenceObjectsMock,
+}));
+
 import CasesPage from "@/app/dashboard/cases/page";
 
 function buildCase(id: string, projectName: string): CaseRecord {
@@ -163,6 +168,7 @@ describe("cases mutation feedback", () => {
     replaceMock.mockReset();
     insertMock.mockReset();
     deleteEqMock.mockReset();
+    removeCaseEvidenceObjectsMock.mockReset().mockResolvedValue(undefined);
     confirmMock.mockClear();
     casesData = [buildCase("case-1", "Alpine Tower")];
     window.confirm = confirmMock;
@@ -270,6 +276,20 @@ describe("cases mutation feedback", () => {
     fireEvent.click(screen.getByTitle("cases-delete"));
 
     expect(await screen.findByText("cases-delete-error")).toBeTruthy();
+    expect(screen.getByText("Alpine Tower")).toBeTruthy();
+  });
+
+  it("does not delete a case when its stored evidence cannot be removed", async () => {
+    removeCaseEvidenceObjectsMock.mockRejectedValueOnce(new Error("storage cleanup failed"));
+
+    render(<CasesPage />);
+
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+    fireEvent.click(screen.getByTitle("cases-delete"));
+
+    expect(await screen.findByText("cases-delete-error")).toBeTruthy();
+    expect(removeCaseEvidenceObjectsMock).toHaveBeenCalledWith(undefined, "user-1", "case-1");
+    expect(deleteEqMock).not.toHaveBeenCalled();
     expect(screen.getByText("Alpine Tower")).toBeTruthy();
   });
 

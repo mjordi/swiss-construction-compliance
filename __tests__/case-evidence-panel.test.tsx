@@ -171,7 +171,7 @@ describe("CaseEvidencePanel", () => {
     expect(rpcMock).toHaveBeenCalledTimes(1);
   });
 
-  it("cleans up the generated path when a rejected upload cannot be found", async () => {
+  it("preserves the generated path when a rejected upload remains ambiguous after bounded lookups", async () => {
     uploadMock.mockRejectedValue(new Error("upload response lost"));
     render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
     fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
@@ -179,9 +179,9 @@ describe("CaseEvidencePanel", () => {
       target: { files: [new File(["pdf"], "report.pdf", { type: "application/pdf" })] },
     });
 
-    expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-upload-error");
+    expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-persistence-unknown");
     expect(storageListMock).toHaveBeenCalledTimes(3);
-    expect(removeMock).toHaveBeenCalledWith([uploadMock.mock.calls[0][0]]);
+    expect(removeMock).not.toHaveBeenCalled();
     expect(insertMock).not.toHaveBeenCalled();
     expect(rpcMock).not.toHaveBeenCalled();
   });

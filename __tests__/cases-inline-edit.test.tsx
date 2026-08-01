@@ -164,6 +164,10 @@ vi.mock("@/lib/supabase", () => {
   };
 });
 
+vi.mock("@/lib/case-evidence-cleanup", () => ({
+  removeCaseEvidenceObjects: vi.fn().mockResolvedValue(undefined),
+}));
+
 import CasesPage from "@/app/dashboard/cases/page";
 
 function buildCase(id: string, projectName: string): CaseRecord {

@@ -11,6 +11,7 @@ import { CaseAuditDossierPDF } from "@/components/dashboard/CaseAuditDossierPDF"
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
+import { removeCaseEvidenceObjects } from "@/lib/case-evidence-cleanup";
 import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { buildCaseAuditDossier } from "@/lib/case-audit-dossier";
 import { buildFinalizedProtocolReportFromRecord } from "@/lib/protocol-report";
@@ -1266,7 +1267,7 @@ export default function CasesPage() {
   }
 
   async function handleDeleteCase(caseId: string, projectName: string) {
-    if (updatingCaseId) return;
+    if (!user || updatingCaseId) return;
     const confirmText = t("cases-delete-confirm").replace("{projectName}", projectName);
     const confirmed = window.confirm(confirmText);
     if (!confirmed) return;
@@ -1274,6 +1275,8 @@ export default function CasesPage() {
     setDeletingCaseIds((current) => ({ ...current, [caseId]: true }));
 
     try {
+      await removeCaseEvidenceObjects(supabase.storage, user.id, caseId);
+
       const { error } = await supabase.from("cases").delete().eq("id", caseId);
       if (error) {
         throw error;
