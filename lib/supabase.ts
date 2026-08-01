@@ -58,8 +58,22 @@ function createPlaceholderClient() {
     updateUser: () => Promise.resolve({ data: { user: null }, error: createConfigError() }),
   };
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  return { from: () => noopQuery, auth: noopAuth } as any;
+  const noopStorageBucket = {
+    upload: () => Promise.resolve({ data: null, error: createConfigError() }),
+    remove: () => Promise.resolve({ data: null, error: createConfigError() }),
+    createSignedUrl: () => Promise.resolve({ data: null, error: createConfigError() }),
+  };
+
+  const noopStorage = {
+    from: () => noopStorageBucket,
+  };
+
+  return {
+    from: () => noopQuery,
+    rpc: () => Promise.resolve({ data: null, error: createConfigError() }),
+    auth: noopAuth,
+    storage: noopStorage,
+  } as unknown as ReturnType<typeof createBrowserClient>;
 }
 
 export { CONFIG_ERROR_MESSAGE };

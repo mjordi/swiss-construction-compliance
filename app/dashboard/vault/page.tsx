@@ -7,6 +7,7 @@ import { Folder, FileText, Plus, Search, ShieldCheck, Loader2, AlertCircle } fro
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
+import CaseEvidencePanel from "@/components/dashboard/CaseEvidencePanel";
 import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { getSupabase } from "@/lib/supabase";
 import type { Case, Protocol } from "@/lib/database.types";
@@ -686,7 +687,7 @@ export default function TechVault() {
                       <div className="flex items-center justify-between text-sm mb-3">
                         <div className="flex items-center gap-2 text-slate-300">
                           <FileText className="w-4 h-4 text-slate-500" />
-                          <span>{project.docs} {t("vault-docs-label")}</span>
+                          <span>{project.docs} {t("vault-linked-protocols-label")}</span>
                         </div>
                         <span className={`text-xs px-2 py-1 rounded-md ${statusClass[project.status]}`}>
                           {t(statusLabelKey[project.status])}
@@ -749,6 +750,14 @@ export default function TechVault() {
                           <p role="alert" className="text-sm text-red-300">
                             {t(statusMutationErrors[project.id])}
                           </p>
+                        ) : null}
+                        {user ? (
+                          <CaseEvidencePanel
+                            userId={user.id}
+                            caseId={project.id}
+                            caseName={project.name}
+                            readOnly={project.archived}
+                          />
                         ) : null}
                       </div>
                     </article>
