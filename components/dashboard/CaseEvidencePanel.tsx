@@ -128,10 +128,57 @@ export default function CaseEvidencePanel({
 
     try {
       const bucket = supabase.storage.from(CASE_EVIDENCE_BUCKET);
-      const { error: uploadError } = await bucket.upload(storagePath, file, {
-        contentType: file.type,
-        upsert: false,
-      });
+      const removeUploadedObject = async () => {
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          try {
+            const { error } = await bucket.remove([storagePath]);
+            if (!error) return true;
+          } catch {
+            // A rejected removal is retried by the next iteration.
+          }
+        }
+        return false;
+      };
+
+      let uploadError: unknown = null;
+      let uploadOutcomeAmbiguous = false;
+      try {
+        const result = await bucket.upload(storagePath, file, {
+          contentType: file.type,
+          upsert: false,
+        });
+        uploadError = result.error;
+      } catch (error) {
+        uploadError = error;
+        uploadOutcomeAmbiguous = true;
+      }
+
+      if (uploadOutcomeAmbiguous) {
+        const pathParts = storagePath.split("/");
+        const objectName = pathParts.pop() as string;
+        const folder = pathParts.join("/");
+        let uploadedObjectFound = false;
+        for (let attempt = 0; attempt < 3; attempt += 1) {
+          try {
+            const { data, error } = await bucket.list(folder, { limit: 100, search: objectName });
+            if (error) throw error;
+            uploadedObjectFound = (data ?? []).some((item: { name: string }) => item.name === objectName);
+          } catch {
+            // Cleanup below is still attempted so an unverified upload cannot become an orphan.
+          }
+          if (uploadedObjectFound) break;
+          if (attempt < 2) await new Promise((resolve) => setTimeout(resolve, 150));
+        }
+
+        if (!uploadedObjectFound) {
+          if (!await removeUploadedObject()) {
+            if (isCurrentContext()) setMessage({ key: "vault-evidence-cleanup-warning", kind: "alert" });
+            return;
+          }
+          throw uploadError;
+        }
+        uploadError = null;
+      }
       if (uploadError) throw uploadError;
 
       let metadata: CaseEvidence;
@@ -192,18 +239,7 @@ export default function CaseEvidencePanel({
           if (isCurrentContext()) setMessage({ key: "vault-evidence-persistence-unknown", kind: "alert" });
           return;
         } else {
-          let cleanupSucceeded = false;
-          for (let attempt = 0; attempt < 2; attempt += 1) {
-            try {
-              const { error: removeError } = await bucket.remove([storagePath]);
-              if (!removeError) {
-                cleanupSucceeded = true;
-                break;
-              }
-            } catch {
-              // A rejected removal is retried by the next iteration.
-            }
-          }
+          const cleanupSucceeded = await removeUploadedObject();
           if (!cleanupSucceeded) {
             if (isCurrentContext()) setMessage({ key: "vault-evidence-cleanup-warning", kind: "alert" });
             return;

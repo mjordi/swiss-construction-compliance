@@ -15,6 +15,7 @@ const evidence = {
 
 const listMock = vi.fn();
 const uploadMock = vi.fn();
+const storageListMock = vi.fn();
 const removeMock = vi.fn();
 const insertMock = vi.fn();
 const lookupMock = vi.fn();
@@ -50,7 +51,7 @@ const supabaseMock = {
   },
   rpc: rpcMock,
   storage: {
-    from: () => ({ upload: uploadMock, remove: removeMock, createSignedUrl: signedUrlMock }),
+    from: () => ({ upload: uploadMock, list: storageListMock, remove: removeMock, createSignedUrl: signedUrlMock }),
   },
 };
 
@@ -63,6 +64,7 @@ describe("CaseEvidencePanel", () => {
   beforeEach(() => {
     listMock.mockReset().mockResolvedValue({ data: [], error: null });
     uploadMock.mockReset().mockResolvedValue({ data: { path: evidence.storage_path }, error: null });
+    storageListMock.mockReset().mockResolvedValue({ data: [], error: null });
     removeMock.mockReset().mockResolvedValue({ data: null, error: null });
     insertMock.mockReset().mockReturnValue(Promise.resolve({ data: evidence, error: null }));
     lookupMock.mockReset().mockResolvedValue({ data: null, error: null });
@@ -144,6 +146,44 @@ describe("CaseEvidencePanel", () => {
     expect(rpcMock.mock.calls[0][1]).toEqual({ target_case_id: "case-1" });
     expect(await screen.findByText("vault-evidence-upload-success")).toBeTruthy();
     expect(onChecklistUpdated).toHaveBeenCalledTimes(1);
+  });
+
+  it("continues metadata persistence when a rejected upload is found at its generated path", async () => {
+    uploadMock.mockRejectedValue(new Error("upload response lost"));
+    storageListMock.mockImplementation((_folder: string, options: { search: string }) => Promise.resolve({
+      data: [{ name: options.search }],
+      error: null,
+    }));
+    render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
+    fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
+    fireEvent.change(await screen.findByLabelText("vault-evidence-file-label"), {
+      target: { files: [new File(["pdf"], "report.pdf", { type: "application/pdf" })] },
+    });
+
+    expect(await screen.findByText("vault-evidence-upload-success")).toBeTruthy();
+    const storagePath = uploadMock.mock.calls[0][0] as string;
+    expect(storageListMock).toHaveBeenCalledWith("user-1/case-1", {
+      limit: 100,
+      search: storagePath.split("/").pop(),
+    });
+    expect(insertMock).toHaveBeenCalledTimes(1);
+    expect(removeMock).not.toHaveBeenCalled();
+    expect(rpcMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("cleans up the generated path when a rejected upload cannot be found", async () => {
+    uploadMock.mockRejectedValue(new Error("upload response lost"));
+    render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
+    fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
+    fireEvent.change(await screen.findByLabelText("vault-evidence-file-label"), {
+      target: { files: [new File(["pdf"], "report.pdf", { type: "application/pdf" })] },
+    });
+
+    expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-upload-error");
+    expect(storageListMock).toHaveBeenCalledTimes(3);
+    expect(removeMock).toHaveBeenCalledWith([uploadMock.mock.calls[0][0]]);
+    expect(insertMock).not.toHaveBeenCalled();
+    expect(rpcMock).not.toHaveBeenCalled();
   });
 
   it("removes the new object and skips checklist updates when metadata persistence fails", async () => {
