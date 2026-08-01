@@ -4,6 +4,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 const replaceMock = vi.fn();
 const insertMock = vi.fn();
 const deleteCaseWithEvidenceMock = vi.fn();
+const completeCaseEvidenceCleanupMock = vi.fn();
 const confirmMock = vi.fn(() => true);
 const removeCaseEvidenceObjectsMock = vi.hoisted(() => vi.fn());
 
@@ -127,8 +128,9 @@ vi.mock("@/lib/supabase", () => ({
       throw new Error(`Unexpected table ${table}`);
     },
     rpc: (name: string, args: { target_case_id: string }) => {
-      if (name !== "delete_case_with_evidence") throw new Error(`Unexpected RPC ${name}`);
-      return deleteCaseWithEvidenceMock(args);
+      if (name === "delete_case_with_evidence") return deleteCaseWithEvidenceMock(args);
+      if (name === "complete_case_evidence_cleanup") return completeCaseEvidenceCleanupMock(args);
+      throw new Error(`Unexpected RPC ${name}`);
     },
   }),
 }));
@@ -172,6 +174,7 @@ describe("cases mutation feedback", () => {
       data: { deleted: true, storage_paths: ["user-1/case-1/report.pdf"] },
       error: null,
     });
+    completeCaseEvidenceCleanupMock.mockReset().mockResolvedValue({ data: true, error: null });
     removeCaseEvidenceObjectsMock.mockReset().mockResolvedValue(undefined);
     confirmMock.mockClear();
     casesData = [buildCase("case-1", "Alpine Tower")];
@@ -312,6 +315,24 @@ describe("cases mutation feedback", () => {
 
     expect(await screen.findByText("cases-delete-evidence-cleanup-error")).toBeTruthy();
     expect(removeCaseEvidenceObjectsMock).toHaveBeenCalledWith(undefined, ["user-1/case-1/report.pdf"]);
+    expect(completeCaseEvidenceCleanupMock).not.toHaveBeenCalled();
+    expect(screen.queryByText("Alpine Tower")).toBeNull();
+  });
+
+  it("acknowledges the durable cleanup job only after Storage removal succeeds", async () => {
+    deleteCaseWithEvidenceMock.mockImplementationOnce(async ({ target_case_id: caseId }: { target_case_id: string }) => {
+      casesData = casesData.filter((item) => item.id !== caseId);
+      return { data: { deleted: true, storage_paths: ["user-1/case-1/report.pdf"] }, error: null };
+    });
+    render(<CasesPage />);
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+
+    fireEvent.click(screen.getByTitle("cases-delete"));
+
+    await waitFor(() => {
+      expect(removeCaseEvidenceObjectsMock).toHaveBeenCalledWith(undefined, ["user-1/case-1/report.pdf"]);
+      expect(completeCaseEvidenceCleanupMock).toHaveBeenCalledWith({ target_case_id: "case-1" });
+    });
     expect(screen.queryByText("Alpine Tower")).toBeNull();
   });
 

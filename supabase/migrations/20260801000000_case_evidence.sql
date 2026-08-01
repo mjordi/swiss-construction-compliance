@@ -22,6 +22,23 @@ create index if not exists case_evidence_user_case_created_idx
 
 alter table public.case_evidence enable row level security;
 
+-- Keep cleanup paths durable across a lost delete RPC response. The case ID is
+-- intentionally not a foreign key because the queue must survive case deletion.
+create table if not exists public.case_evidence_cleanup_jobs (
+  case_id uuid primary key,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  storage_paths jsonb not null check (jsonb_typeof(storage_paths) = 'array'),
+  created_at timestamptz not null default now()
+);
+
+alter table public.case_evidence_cleanup_jobs enable row level security;
+
+drop policy if exists "Users can manage own case evidence cleanup jobs" on public.case_evidence_cleanup_jobs;
+create policy "Users can manage own case evidence cleanup jobs"
+  on public.case_evidence_cleanup_jobs for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
 create or replace function public.mark_case_evidence_attached(target_case_id uuid)
 returns boolean
 language plpgsql
@@ -113,6 +130,18 @@ begin
   for update;
 
   if not found then
+    -- A retry after an ambiguous transport failure recovers the durable paths
+    -- written by the committed first call instead of losing them with metadata.
+    select storage_paths
+    into evidence_paths
+    from public.case_evidence_cleanup_jobs
+    where case_id = target_case_id
+      and user_id = auth.uid();
+
+    if found then
+      return jsonb_build_object('deleted', true, 'storage_paths', evidence_paths);
+    end if;
+
     return jsonb_build_object('deleted', false, 'storage_paths', '[]'::jsonb);
   end if;
 
@@ -121,6 +150,15 @@ begin
   from public.case_evidence
   where case_id = target_case_id
     and user_id = auth.uid();
+
+  if jsonb_array_length(evidence_paths) > 0 then
+    insert into public.case_evidence_cleanup_jobs (case_id, user_id, storage_paths)
+    values (target_case_id, auth.uid(), evidence_paths)
+    on conflict (case_id) do update
+      set storage_paths = excluded.storage_paths,
+          user_id = excluded.user_id,
+          created_at = now();
+  end if;
 
   delete from public.cases
   where id = target_case_id
@@ -132,6 +170,27 @@ $$;
 
 revoke all on function public.delete_case_with_evidence(uuid) from public;
 grant execute on function public.delete_case_with_evidence(uuid) to authenticated;
+
+create or replace function public.complete_case_evidence_cleanup(target_case_id uuid)
+returns boolean
+language plpgsql
+security invoker
+set search_path = ''
+as $$
+declare
+  affected_rows integer;
+begin
+  delete from public.case_evidence_cleanup_jobs
+  where case_id = target_case_id
+    and user_id = auth.uid();
+
+  get diagnostics affected_rows = row_count;
+  return affected_rows > 0;
+end;
+$$;
+
+revoke all on function public.complete_case_evidence_cleanup(uuid) from public;
+grant execute on function public.complete_case_evidence_cleanup(uuid) to authenticated;
 
 drop policy if exists "Users can read own case_evidence" on public.case_evidence;
 create policy "Users can read own case_evidence"
@@ -154,6 +213,7 @@ create policy "Users can insert own case_evidence"
       select 1 from public.cases
       where cases.id = case_evidence.case_id
         and cases.user_id = auth.uid()
+        and cases.status <> 'archived'
     )
   );
 
@@ -198,6 +258,7 @@ create policy "Users can insert own case evidence objects"
       select 1 from public.cases
       where cases.id::text = split_part(name, '/', 2)
         and cases.user_id = auth.uid()
+        and cases.status <> 'archived'
     )
   );
 

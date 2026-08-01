@@ -74,7 +74,7 @@ describe("case evidence migration", () => {
     expect(sql).toContain("grant execute on function public.set_case_checklist_item(uuid, text, boolean) to authenticated");
   });
 
-  it("serializes case deletion with evidence inserts and atomically returns cleanup paths", () => {
+  it("serializes case deletion and durably preserves cleanup paths across ambiguous responses", () => {
     const sql = migrationSql();
     const fn = sql.match(/create or replace function public\.delete_case_with_evidence\(target_case_id uuid\)[\s\S]*?\$\$;/)?.[0];
 
@@ -84,9 +84,16 @@ describe("case evidence migration", () => {
     expect(fn).toContain("set search_path = ''");
     expect(fn).toMatch(/from public\.cases[\s\S]*?where id = target_case_id[\s\S]*?and user_id = auth\.uid\(\)[\s\S]*?for update/);
     expect(fn).toMatch(/select coalesce\(jsonb_agg\(storage_path order by created_at\), '\[\]'::jsonb\)[\s\S]*?from public\.case_evidence[\s\S]*?delete from public\.cases/);
+    expect(sql).toContain("create table if not exists public.case_evidence_cleanup_jobs");
+    expect(sql).toMatch(/case_id uuid primary key[\s\S]*?storage_paths jsonb not null/);
+    expect(fn).toMatch(/if not found then[\s\S]*?from public\.case_evidence_cleanup_jobs[\s\S]*?return jsonb_build_object\('deleted', true, 'storage_paths', evidence_paths\)/);
+    expect(fn).toMatch(/insert into public\.case_evidence_cleanup_jobs[\s\S]*?delete from public\.cases/);
     expect(fn).toContain("jsonb_build_object('deleted', true, 'storage_paths', evidence_paths)");
     expect(sql).toContain("revoke all on function public.delete_case_with_evidence(uuid) from public");
     expect(sql).toContain("grant execute on function public.delete_case_with_evidence(uuid) to authenticated");
+    const completeFn = sql.match(/create or replace function public\.complete_case_evidence_cleanup\(target_case_id uuid\)[\s\S]*?\$\$;/)?.[0];
+    expect(completeFn).toMatch(/delete from public\.case_evidence_cleanup_jobs[\s\S]*?user_id = auth\.uid\(\)/);
+    expect(sql).toContain("grant execute on function public.complete_case_evidence_cleanup(uuid) to authenticated");
   });
 
   it("keeps read/insert case-bound but permits exact owner-path delete after case deletion", () => {
@@ -104,7 +111,11 @@ describe("case evidence migration", () => {
       expect(policy).toContain("split_part(name, '/', 1) = auth.uid()::text");
       expect(policy).toContain(`split_part(name, '/', 3) ~ ${pathRegex}`);
       expect(policy).toMatch(/exists\s*\([\s\S]*?public\.cases[\s\S]*?cases\.id::text = split_part\(name, '\/', 2\)[\s\S]*?cases\.user_id = auth\.uid\(\)/);
+      if (operation === "insert") expect(policy).toContain("cases.status <> 'archived'");
     }
+
+    const metadataInsertPolicy = sql.match(/create policy "users can insert own case_evidence"[\s\S]*?;/)?.[0];
+    expect(metadataInsertPolicy).toContain("cases.status <> 'archived'");
 
     const deletePolicy = storagePolicy(sql, "delete", "delete");
     expect(deletePolicy).toContain("bucket_id = 'case-evidence'");
