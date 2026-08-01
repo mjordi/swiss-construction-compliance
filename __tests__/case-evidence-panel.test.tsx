@@ -104,7 +104,15 @@ describe("CaseEvidencePanel", () => {
 
   it("uploads, persists metadata, and atomically marks evidence attached only after both succeed", async () => {
     listMock.mockResolvedValue({ data: [evidence], error: null });
-    render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
+    const onChecklistUpdated = vi.fn();
+    render(
+      <CaseEvidencePanel
+        userId="user-1"
+        caseId="case-1"
+        caseName="Alpine"
+        onChecklistUpdated={onChecklistUpdated}
+      />
+    );
     fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
     const input = await screen.findByLabelText("vault-evidence-file-label");
     const file = new File(["pdf"], "report.weird", { type: "application/pdf" });
@@ -119,6 +127,7 @@ describe("CaseEvidencePanel", () => {
     expect(rpcMock).toHaveBeenCalledWith("mark_case_evidence_attached", { target_case_id: "case-1" });
     expect(rpcMock.mock.calls[0][1]).toEqual({ target_case_id: "case-1" });
     expect(await screen.findByText("vault-evidence-upload-success")).toBeTruthy();
+    expect(onChecklistUpdated).toHaveBeenCalledTimes(1);
   });
 
   it("removes the new object and skips checklist updates when metadata persistence fails", async () => {
@@ -149,13 +158,22 @@ describe("CaseEvidencePanel", () => {
 
   it("keeps persisted evidence and reports a checklist warning when the RPC returns an error", async () => {
     rpcMock.mockResolvedValue({ data: null, error: { message: "sync failed" } });
-    render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
+    const onChecklistUpdated = vi.fn();
+    render(
+      <CaseEvidencePanel
+        userId="user-1"
+        caseId="case-1"
+        caseName="Alpine"
+        onChecklistUpdated={onChecklistUpdated}
+      />
+    );
     fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
     const input = await screen.findByLabelText("vault-evidence-file-label");
     fireEvent.change(input, { target: { files: [new File(["pdf"], "report.pdf", { type: "application/pdf" })] } });
 
     expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-checklist-warning");
     expect(removeMock).not.toHaveBeenCalled();
+    expect(onChecklistUpdated).not.toHaveBeenCalled();
   });
 
   it("reports a checklist warning when the atomic checklist RPC rejects", async () => {

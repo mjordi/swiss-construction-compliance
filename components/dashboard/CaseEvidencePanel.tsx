@@ -20,6 +20,7 @@ interface CaseEvidencePanelProps {
   caseId: string;
   caseName: string;
   readOnly?: boolean;
+  onChecklistUpdated?: () => void;
 }
 
 const validationKey: Record<CaseEvidenceValidationError, TranslationKey> = {
@@ -33,6 +34,7 @@ export default function CaseEvidencePanel({
   caseId,
   caseName,
   readOnly = false,
+  onChecklistUpdated,
 }: CaseEvidencePanelProps) {
   const { t } = useLanguage();
   const supabase = useMemo(() => getSupabase(), []);
@@ -184,7 +186,10 @@ export default function CaseEvidencePanel({
           throw checklistError ?? new Error("Checklist update was not confirmed");
         }
 
-        if (isCurrentContext()) setMessage({ key: "vault-evidence-upload-success", kind: "status" });
+        if (isCurrentContext()) {
+          setMessage({ key: "vault-evidence-upload-success", kind: "status" });
+          onChecklistUpdated?.();
+        }
       } catch {
         if (isCurrentContext()) setMessage({ key: "vault-evidence-checklist-warning", kind: "alert" });
       }
@@ -196,7 +201,7 @@ export default function CaseEvidencePanel({
         setUploading(false);
       }
     }
-  }, [caseId, readOnly, supabase, userId]);
+  }, [caseId, onChecklistUpdated, readOnly, supabase, userId]);
 
   const handleDownload = useCallback(async (item: CaseEvidence) => {
     if (downloadPendingRef.current.has(item.storage_path)) return;

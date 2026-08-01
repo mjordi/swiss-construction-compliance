@@ -757,6 +757,7 @@ export default function TechVault() {
                             caseId={project.id}
                             caseName={project.name}
                             readOnly={project.archived}
+                            onChecklistUpdated={triggerRefresh}
                           />
                         ) : null}
                       </div>

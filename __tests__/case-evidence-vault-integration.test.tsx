@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { HTMLAttributes, ReactNode } from "react";
 
@@ -23,11 +23,28 @@ vi.mock("@/lib/case-timeline", () => ({
     id, status: "ok", regime: "new", daysToDeadline: 30, noticeApplies: true,
     checklistDefaults: { defectDocumented: false, evidenceAttached: false, noticeDrafted: false, calendarReminderExported: false },
   })),
-  deriveChecklistProgress: () => ({ completed: 0, total: 4 }),
+  deriveChecklistProgress: (checklist: Record<string, boolean>) => ({
+    completed: Object.values(checklist).filter(Boolean).length,
+    total: 4,
+  }),
 }));
 vi.mock("@/components/dashboard/CaseEvidencePanel", () => ({
-  default: ({ caseId, readOnly }: { caseId: string; readOnly?: boolean }) => (
-    <button type="button" data-testid={`evidence-${caseId}`} onClick={(event) => event.stopPropagation()}>
+  default: ({ caseId, readOnly, onChecklistUpdated }: {
+    caseId: string;
+    readOnly?: boolean;
+    onChecklistUpdated?: () => void;
+  }) => (
+    <button
+      type="button"
+      data-testid={`evidence-${caseId}`}
+      onClick={(event) => {
+        event.stopPropagation();
+        if (!readOnly) {
+          cases.find((item) => item.id === caseId)!.checklist = { evidenceAttached: true };
+          onChecklistUpdated?.();
+        }
+      }}
+    >
       {readOnly ? "read-only evidence" : "manage evidence"}
     </button>
   ),
@@ -48,14 +65,24 @@ vi.mock("@/lib/supabase", () => ({
 import TechVault from "@/app/dashboard/vault/page";
 
 describe("case evidence Vault integration", () => {
+  beforeEach(() => {
+    cases[0].checklist = {};
+    pushMock.mockClear();
+  });
+
   it("mounts evidence controls on active cards without activating card navigation and labels counts as linked protocols", async () => {
     render(<TechVault />);
     await screen.findByText("Active Case");
 
     const article = screen.getByText("Active Case").closest("article")!;
     expect(within(article).getByText("1 linked protocols")).toBeTruthy();
+    expect(within(article).getByText("0%")).toBeTruthy();
     fireEvent.click(within(article).getByTestId("evidence-active"));
     expect(within(article).getByText("manage evidence")).toBeTruthy();
+    await waitFor(() => {
+      const refreshedArticle = screen.getByText("Active Case").closest("article")!;
+      expect(within(refreshedArticle).getByText("25%")).toBeTruthy();
+    });
     expect(pushMock).not.toHaveBeenCalled();
   });
 
