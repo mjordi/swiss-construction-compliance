@@ -135,8 +135,9 @@ export default function CaseEvidencePanel({
       if (uploadError) throw uploadError;
 
       let metadata: CaseEvidence;
+      let insertOutcomeAmbiguous = false;
       try {
-        const { data, error } = await supabase
+        const insertRequest = supabase
           .from("case_evidence")
           .insert({
             user_id: userId,
@@ -148,28 +149,48 @@ export default function CaseEvidencePanel({
           })
           .select("*")
           .single();
+        let insertResult;
+        try {
+          insertResult = await insertRequest;
+        } catch (error) {
+          insertOutcomeAmbiguous = true;
+          throw error;
+        }
+        const { data, error } = insertResult;
         if (error || !data) throw error ?? new Error("Evidence metadata was not returned");
         metadata = data as CaseEvidence;
       } catch (metadataError) {
         // An insert request can reject after PostgREST has committed it. Reconcile by
         // the unique path before removing the object so a committed row never points
         // at a file deleted during an ambiguous transport failure.
-        let persistedMetadata: CaseEvidence | null;
-        try {
-          const { data, error: reconciliationError } = await supabase
-            .from("case_evidence")
-            .select("*")
-            .eq("storage_path", storagePath)
-            .maybeSingle();
-          if (reconciliationError) throw reconciliationError;
-          persistedMetadata = data as CaseEvidence | null;
-        } catch {
-          if (isCurrentContext()) setMessage({ key: "vault-evidence-persistence-unknown", kind: "alert" });
-          return;
+        let persistedMetadata: CaseEvidence | null = null;
+        const reconciliationAttempts = insertOutcomeAmbiguous ? 3 : 1;
+        for (let attempt = 0; attempt < reconciliationAttempts; attempt += 1) {
+          try {
+            const { data, error: reconciliationError } = await supabase
+              .from("case_evidence")
+              .select("*")
+              .eq("storage_path", storagePath)
+              .maybeSingle();
+            if (reconciliationError) throw reconciliationError;
+            persistedMetadata = data as CaseEvidence | null;
+          } catch {
+            if (isCurrentContext()) setMessage({ key: "vault-evidence-persistence-unknown", kind: "alert" });
+            return;
+          }
+          if (persistedMetadata || !insertOutcomeAmbiguous) break;
+          if (attempt < reconciliationAttempts - 1) {
+            await new Promise((resolve) => setTimeout(resolve, 150));
+          }
         }
 
         if (persistedMetadata) {
           metadata = persistedMetadata;
+        } else if (insertOutcomeAmbiguous) {
+          // A request rejection has no ordering guarantee relative to the server-side
+          // transaction. Preserve the object even after bounded reconciliation misses.
+          if (isCurrentContext()) setMessage({ key: "vault-evidence-persistence-unknown", kind: "alert" });
+          return;
         } else {
           let cleanupSucceeded = false;
           for (let attempt = 0; attempt < 2; attempt += 1) {

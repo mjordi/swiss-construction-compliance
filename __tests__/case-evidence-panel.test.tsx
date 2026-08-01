@@ -229,7 +229,7 @@ describe("CaseEvidencePanel", () => {
     clickSpy.mockRestore();
   });
 
-  it("compensates the exact uploaded path when metadata insertion rejects", async () => {
+  it("preserves the uploaded object after bounded reconciliation misses on an ambiguous insert rejection", async () => {
     const metadataInsert = deferred<never>();
     insertMock.mockReset().mockReturnValue(metadataInsert.promise);
     render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
@@ -240,17 +240,18 @@ describe("CaseEvidencePanel", () => {
     await waitFor(() => expect(insertMock).toHaveBeenCalledTimes(1));
     await act(async () => metadataInsert.reject(new Error("metadata unavailable")));
 
-    await waitFor(() => expect(removeMock).toHaveBeenCalledTimes(1));
-    const uploadedPath = uploadMock.mock.calls[0][0];
-    expect(lookupMock).toHaveBeenCalledTimes(1);
-    expect(removeMock).toHaveBeenCalledWith([uploadedPath]);
+    expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-persistence-unknown");
+    expect(lookupMock).toHaveBeenCalledTimes(3);
+    expect(removeMock).not.toHaveBeenCalled();
     expect(rpcMock).not.toHaveBeenCalled();
-    expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-upload-error");
   });
 
-  it("keeps the object when reconciliation finds metadata after an ambiguous insert rejection", async () => {
+  it("retries reconciliation until delayed metadata appears after an ambiguous insert rejection", async () => {
     insertMock.mockReset().mockImplementation(() => Promise.reject(new Error("response lost")));
-    lookupMock.mockResolvedValue({ data: evidence, error: null });
+    lookupMock
+      .mockResolvedValueOnce({ data: null, error: null })
+      .mockResolvedValueOnce({ data: null, error: null })
+      .mockResolvedValueOnce({ data: evidence, error: null });
     render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
     fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
     fireEvent.change(await screen.findByLabelText("vault-evidence-file-label"), {
@@ -258,7 +259,7 @@ describe("CaseEvidencePanel", () => {
     });
 
     expect(await screen.findByText("vault-evidence-upload-success")).toBeTruthy();
-    expect(lookupMock).toHaveBeenCalledTimes(1);
+    expect(lookupMock).toHaveBeenCalledTimes(3);
     expect(removeMock).not.toHaveBeenCalled();
     expect(rpcMock).toHaveBeenCalledTimes(1);
   });

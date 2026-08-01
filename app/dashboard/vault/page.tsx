@@ -289,10 +289,12 @@ export default function TechVault() {
 
   const triggerRefresh = useCallback(() => {
     const fetchId = ++latestFetchIdRef.current;
-    setLoading(true);
+    if (!hasLoadedProjectsRef.current || lastSuccessfulUserIdRef.current !== user?.id) {
+      setLoading(true);
+    }
     setError(null);
     void runRefresh(fetchId);
-  }, [runRefresh]);
+  }, [runRefresh, user?.id]);
 
   useEffect(() => {
     queueMicrotask(() => {
