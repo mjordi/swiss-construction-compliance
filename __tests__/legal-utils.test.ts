@@ -13,6 +13,7 @@ import {
   serializeDeadlineReminderQueryParam,
   normalizeDeadlineReminderOffsets,
   getDaysRemaining,
+  getSwissCalendarDateInputValue,
   getMillisecondsUntilNextSwissCalendarDay,
   OR_REVISION_DATE,
 } from "../lib/legal-utils";
@@ -108,6 +109,11 @@ describe("addDays", () => {
 });
 
 describe("Swiss legal calendar day", () => {
+  it("formats date inputs from the Europe/Zurich day", () => {
+    expect(getSwissCalendarDateInputValue(new Date("2026-08-01T22:30:00.000Z"))).toBe("2026-08-02");
+    expect(getSwissCalendarDateInputValue(new Date("2026-12-31T23:30:00.000Z"))).toBe("2027-01-01");
+  });
+
   it("calculates remaining days from the Europe/Zurich calendar date", () => {
     vi.useFakeTimers();
 
@@ -201,6 +207,22 @@ describe("generateDeadlineCalendarICS", () => {
     expect(ics).toContain("TRIGGER;VALUE=DATE:20260416"); // -14 days
     expect(ics).toContain("TRIGGER;VALUE=DATE:20260423"); // -7 days
     expect(ics).toContain("TRIGGER;VALUE=DATE:20260429"); // -1 day
+  });
+
+  it("includes the calculated contract and discovery source dates when provided", () => {
+    const ics = generateDeadlineCalendarICS(
+      [{ key: "60-Tage-Rügefrist", date: new Date("2026-07-09") }],
+      "30 April 2026",
+      [7],
+      {
+        contractDateLabel: "15 January 2026",
+        discoveryDateLabel: "10 May 2026",
+      }
+    );
+
+    expect(ics).toContain("Abnahmedatum: 30 April 2026");
+    expect(ics).toContain("Vertragsdatum: 15 January 2026");
+    expect(ics).toContain("Mängel entdeckt: 10 May 2026");
   });
 });
 

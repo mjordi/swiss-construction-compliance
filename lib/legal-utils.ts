@@ -63,6 +63,12 @@ function getSwissCalendarDayIndex(date: Date): number {
   return Math.floor(Date.UTC(year, month - 1, day) / MILLISECONDS_PER_DAY);
 }
 
+/** YYYY-MM-DD for the legal calendar day in Europe/Zurich. */
+export function getSwissCalendarDateInputValue(now: Date = new Date()): string {
+  const { year, month, day } = getSwissCalendarParts(now);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 /** Milliseconds until the next legal calendar day begins in Europe/Zurich. */
 export function getMillisecondsUntilNextSwissCalendarDay(now: Date = new Date()): number {
   const current = getSwissCalendarParts(now);
@@ -376,10 +382,16 @@ export interface CalendarDeadlineInput {
   date: Date;
 }
 
+export interface DeadlineCalendarSourceContext {
+  contractDateLabel: string;
+  discoveryDateLabel: string;
+}
+
 export function generateDeadlineCalendarICS(
   deadlines: CalendarDeadlineInput[],
   acceptanceDateLabel: string,
-  reminderOffsets: number[] = [14, 7, 1]
+  reminderOffsets: number[] = [14, 7, 1],
+  sourceContext?: DeadlineCalendarSourceContext
 ): string {
   const now = new Date();
   const stamp = now.toISOString().replace(/[-:]/g, "").split(".")[0] + "Z";
@@ -401,13 +413,17 @@ export function generateDeadlineCalendarICS(
         })
         .join("\n");
 
+      const sourceDescription = sourceContext
+        ? `\nVertragsdatum: ${sourceContext.contractDateLabel}\nMängel entdeckt: ${sourceContext.discoveryDateLabel}`
+        : "";
+
       return `BEGIN:VEVENT
 UID:baucompliance-deadline-${index}-${stamp}@baucompliance.ch
 DTSTAMP:${stamp}
 DTSTART;VALUE=DATE:${dateStr}
 DTEND;VALUE=DATE:${endDateStr}
 SUMMARY:${escapeICSText(`BauCompliance: ${deadline.key} (Abnahme ${acceptanceDateLabel})`)}
-DESCRIPTION:${escapeICSText(`Fristablauf gemäss BauCompliance.ch\nAbnahmedatum: ${acceptanceDateLabel}`)}
+DESCRIPTION:${escapeICSText(`Fristablauf gemäss BauCompliance.ch\nAbnahmedatum: ${acceptanceDateLabel}${sourceDescription}`)}
 ${alarms}
 END:VEVENT`;
     })
