@@ -118,6 +118,16 @@ describe("case evidence migration", () => {
     expect(sql).toContain("reconcile_case_evidence_uploads");
     expect(sql).toMatch(/reconcile_case_evidence_uploads[\s\S]*?storage\.objects[\s\S]*?insert into public\.case_evidence[\s\S]*?delete from public\.case_evidence_upload_jobs/);
     expect(sql).toMatch(/select storage_path, created_at from public\.case_evidence_upload_jobs[\s\S]*?where case_id = target_case_id/);
+    expect(sql).toMatch(/with ready_jobs as[\s\S]*?cases\.status <> 'archived'[\s\S]*?storage\.objects/);
+  });
+
+  it("restricts cleanup-job creation and updates to the current case owner", () => {
+    const sql = migrationSql();
+
+    const insertPolicy = sql.match(/create policy "users can insert own case evidence cleanup jobs"[\s\S]*?;/)?.[0];
+    const updatePolicy = sql.match(/create policy "users can update own case evidence cleanup jobs"[\s\S]*?;/)?.[0];
+    expect(insertPolicy).toMatch(/auth\.uid\(\) = user_id[\s\S]*?public\.cases[\s\S]*?cases\.id = case_evidence_cleanup_jobs\.case_id[\s\S]*?cases\.user_id = auth\.uid\(\)/);
+    expect(updatePolicy).toMatch(/using \(auth\.uid\(\) = user_id\)[\s\S]*?public\.cases[\s\S]*?cases\.id = case_evidence_cleanup_jobs\.case_id[\s\S]*?cases\.user_id = auth\.uid\(\)/);
   });
 
   it("keeps read/insert case-bound but permits exact owner-path delete after case deletion", () => {

@@ -144,6 +144,24 @@ export default function CaseEvidencePanel({
     const storagePath = buildCaseEvidencePath(userId, caseId, file.type);
 
     try {
+      const uploadJob = {
+        storage_path: storagePath,
+        user_id: userId,
+        case_id: caseId,
+        original_name: file.name,
+        mime_type: file.type,
+        size_bytes: file.size,
+      };
+      const { error: uploadJobError } = await supabase.from("case_evidence_upload_jobs").insert(uploadJob);
+      if (uploadJobError) throw uploadJobError;
+
+      const clearUploadJob = async () => {
+        try {
+          await supabase.from("case_evidence_upload_jobs").delete().eq("storage_path", storagePath);
+        } catch {
+          // Retaining a completed intent is safe; a later reconciliation removes it.
+        }
+      };
       const bucket = supabase.storage.from(CASE_EVIDENCE_BUCKET);
       const removeUploadedObject = async () => {
         for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -155,21 +173,6 @@ export default function CaseEvidencePanel({
           }
         }
         return false;
-      };
-      const recordUploadForReconciliation = async () => {
-        const { data: recorded, error } = await supabase.rpc(
-          "record_case_evidence_upload_reconciliation",
-          {
-            target_case_id: caseId,
-            target_storage_path: storagePath,
-            target_original_name: file.name,
-            target_mime_type: file.type,
-            target_size_bytes: file.size,
-          }
-        );
-        if (error || recorded !== true) {
-          throw error ?? new Error("Upload reconciliation was not recorded");
-        }
       };
 
       let uploadError: unknown = null;
@@ -206,13 +209,15 @@ export default function CaseEvidencePanel({
           // A rejected upload has no ordering guarantee relative to Storage. Even a
           // successful remove of a currently absent path could run before the upload
           // commits, so preserve the generated path instead of creating a late orphan.
-          await recordUploadForReconciliation();
           if (isCurrentContext()) setMessage({ key: "vault-evidence-persistence-unknown", kind: "alert" });
           return;
         }
         uploadError = null;
       }
-      if (uploadError) throw uploadError;
+      if (uploadError) {
+        await clearUploadJob();
+        throw uploadError;
+      }
 
       let metadata: CaseEvidence;
       let insertOutcomeAmbiguous = false;
@@ -255,7 +260,6 @@ export default function CaseEvidencePanel({
             if (reconciliationError) throw reconciliationError;
             persistedMetadata = data as CaseEvidence | null;
           } catch {
-            await recordUploadForReconciliation();
             if (isCurrentContext()) setMessage({ key: "vault-evidence-persistence-unknown", kind: "alert" });
             return;
           }
@@ -270,19 +274,20 @@ export default function CaseEvidencePanel({
         } else if (insertOutcomeAmbiguous) {
           // A request rejection has no ordering guarantee relative to the server-side
           // transaction. Preserve the object and its path after bounded reconciliation misses.
-          await recordUploadForReconciliation();
           if (isCurrentContext()) setMessage({ key: "vault-evidence-persistence-unknown", kind: "alert" });
           return;
         } else {
           const cleanupSucceeded = await removeUploadedObject();
           if (!cleanupSucceeded) {
-            await recordUploadForReconciliation();
             if (isCurrentContext()) setMessage({ key: "vault-evidence-cleanup-warning", kind: "alert" });
             return;
           }
+          await clearUploadJob();
           throw metadataError;
         }
       }
+
+      await clearUploadJob();
 
       if (isCurrentContext()) {
         loadRequestRef.current += 1;

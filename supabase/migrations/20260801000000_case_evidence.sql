@@ -66,10 +66,37 @@ create table if not exists public.case_evidence_cleanup_jobs (
 alter table public.case_evidence_cleanup_jobs enable row level security;
 
 drop policy if exists "Users can manage own case evidence cleanup jobs" on public.case_evidence_cleanup_jobs;
-create policy "Users can manage own case evidence cleanup jobs"
-  on public.case_evidence_cleanup_jobs for all
+drop policy if exists "Users can read own case evidence cleanup jobs" on public.case_evidence_cleanup_jobs;
+drop policy if exists "Users can insert own case evidence cleanup jobs" on public.case_evidence_cleanup_jobs;
+drop policy if exists "Users can update own case evidence cleanup jobs" on public.case_evidence_cleanup_jobs;
+drop policy if exists "Users can delete own case evidence cleanup jobs" on public.case_evidence_cleanup_jobs;
+create policy "Users can read own case evidence cleanup jobs"
+  on public.case_evidence_cleanup_jobs for select
+  using (auth.uid() = user_id);
+create policy "Users can insert own case evidence cleanup jobs"
+  on public.case_evidence_cleanup_jobs for insert
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1 from public.cases
+      where cases.id = case_evidence_cleanup_jobs.case_id
+        and cases.user_id = auth.uid()
+    )
+  );
+create policy "Users can update own case evidence cleanup jobs"
+  on public.case_evidence_cleanup_jobs for update
   using (auth.uid() = user_id)
-  with check (auth.uid() = user_id);
+  with check (
+    auth.uid() = user_id
+    and exists (
+      select 1 from public.cases
+      where cases.id = case_evidence_cleanup_jobs.case_id
+        and cases.user_id = auth.uid()
+    )
+  );
+create policy "Users can delete own case evidence cleanup jobs"
+  on public.case_evidence_cleanup_jobs for delete
+  using (auth.uid() = user_id);
 
 create or replace function public.mark_case_evidence_attached(target_case_id uuid)
 returns boolean
@@ -179,6 +206,12 @@ begin
   with ready_jobs as (
     select job.* from public.case_evidence_upload_jobs job
     where job.case_id = target_case_id and job.user_id = auth.uid()
+      and exists (
+        select 1 from public.cases
+        where cases.id = job.case_id
+          and cases.user_id = auth.uid()
+          and cases.status <> 'archived'
+      )
       and exists (
         select 1 from storage.objects object
         where object.bucket_id = 'case-evidence' and object.name = job.storage_path

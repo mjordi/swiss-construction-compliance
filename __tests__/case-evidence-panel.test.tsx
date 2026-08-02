@@ -20,6 +20,8 @@ const removeMock = vi.fn();
 const insertMock = vi.fn();
 const lookupMock = vi.fn();
 const pendingUploadsMock = vi.fn();
+const uploadJobInsertMock = vi.fn();
+const uploadJobDeleteMock = vi.fn();
 const rpcMock = vi.fn();
 const signedUrlMock = vi.fn();
 
@@ -38,6 +40,8 @@ const supabaseMock = {
     if (table === "case_evidence_upload_jobs") {
       return {
         select: () => ({ eq: () => ({ eq: pendingUploadsMock }) }),
+        insert: uploadJobInsertMock,
+        delete: () => ({ eq: uploadJobDeleteMock }),
       };
     }
     if (table === "case_evidence") {
@@ -75,6 +79,8 @@ describe("CaseEvidencePanel", () => {
     insertMock.mockReset().mockReturnValue(Promise.resolve({ data: evidence, error: null }));
     lookupMock.mockReset().mockResolvedValue({ data: null, error: null });
     pendingUploadsMock.mockReset().mockResolvedValue({ data: [], error: null });
+    uploadJobInsertMock.mockReset().mockResolvedValue({ data: null, error: null });
+    uploadJobDeleteMock.mockReset().mockResolvedValue({ data: null, error: null });
     rpcMock.mockReset().mockResolvedValue({ data: true, error: null });
     signedUrlMock.mockReset().mockResolvedValue({ data: { signedUrl: "https://signed.test/file" }, error: null });
   });
@@ -145,6 +151,13 @@ describe("CaseEvidencePanel", () => {
     fireEvent.change(input, { target: { files: [file] } });
 
     await waitFor(() => expect(insertMock).toHaveBeenCalled());
+    expect(uploadJobInsertMock).toHaveBeenCalledWith(expect.objectContaining({
+      storage_path: uploadMock.mock.calls[0][0],
+      user_id: "user-1",
+      case_id: "case-1",
+      original_name: "report.weird",
+    }));
+    expect(uploadJobInsertMock.mock.invocationCallOrder[0]).toBeLessThan(uploadMock.mock.invocationCallOrder[0]);
     expect(uploadMock).toHaveBeenCalledWith(expect.stringMatching(/^user-1\/case-1\/.+\.pdf$/), file, {
       contentType: "application/pdf",
       upsert: false,
@@ -190,11 +203,11 @@ describe("CaseEvidencePanel", () => {
     expect(storageListMock).toHaveBeenCalledTimes(3);
     expect(removeMock).not.toHaveBeenCalled();
     expect(insertMock).not.toHaveBeenCalled();
-    expect(rpcMock).toHaveBeenCalledWith("record_case_evidence_upload_reconciliation", expect.objectContaining({
-      target_case_id: "case-1",
-      target_storage_path: uploadMock.mock.calls[0][0],
-      target_original_name: "report.pdf",
+    expect(uploadJobInsertMock).toHaveBeenCalledWith(expect.objectContaining({
+      storage_path: uploadMock.mock.calls[0][0],
+      original_name: "report.pdf",
     }));
+    expect(uploadJobDeleteMock).not.toHaveBeenCalled();
   });
 
   it("reconciles pending upload paths and refreshes the parent checklist before listing evidence", async () => {
@@ -313,11 +326,11 @@ describe("CaseEvidencePanel", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-persistence-unknown");
     expect(lookupMock).toHaveBeenCalledTimes(3);
     expect(removeMock).not.toHaveBeenCalled();
-    expect(rpcMock).toHaveBeenCalledWith("record_case_evidence_upload_reconciliation", expect.objectContaining({
-      target_case_id: "case-1",
-      target_storage_path: uploadMock.mock.calls[0][0],
-      target_original_name: "report.pdf",
+    expect(uploadJobInsertMock).toHaveBeenCalledWith(expect.objectContaining({
+      storage_path: uploadMock.mock.calls[0][0],
+      original_name: "report.pdf",
     }));
+    expect(uploadJobDeleteMock).not.toHaveBeenCalled();
   });
 
   it("retries reconciliation until delayed metadata appears after an ambiguous insert rejection", async () => {
@@ -349,9 +362,10 @@ describe("CaseEvidencePanel", () => {
 
     expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-persistence-unknown");
     expect(removeMock).not.toHaveBeenCalled();
-    expect(rpcMock).toHaveBeenCalledWith("record_case_evidence_upload_reconciliation", expect.objectContaining({
-      target_storage_path: uploadMock.mock.calls[0][0],
+    expect(uploadJobInsertMock).toHaveBeenCalledWith(expect.objectContaining({
+      storage_path: uploadMock.mock.calls[0][0],
     }));
+    expect(uploadJobDeleteMock).not.toHaveBeenCalled();
   });
 
   it("retries a returned compensation error and reports the metadata upload failure after cleanup succeeds", async () => {
@@ -383,11 +397,11 @@ describe("CaseEvidencePanel", () => {
 
     expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-cleanup-warning");
     expect(removeMock).toHaveBeenCalledTimes(2);
-    expect(rpcMock).toHaveBeenCalledWith("record_case_evidence_upload_reconciliation", expect.objectContaining({
-      target_case_id: "case-1",
-      target_storage_path: uploadMock.mock.calls[0][0],
-      target_original_name: "report.pdf",
+    expect(uploadJobInsertMock).toHaveBeenCalledWith(expect.objectContaining({
+      storage_path: uploadMock.mock.calls[0][0],
+      original_name: "report.pdf",
     }));
+    expect(uploadJobDeleteMock).not.toHaveBeenCalled();
   });
 
   it("does not publish old upload success or clear a new upload after case changes", async () => {
@@ -496,7 +510,7 @@ describe("CaseEvidencePanel", () => {
     const file = new File(["pdf"], "report.pdf", { type: "application/pdf" });
     fireEvent.change(input, { target: { files: [file] } });
     fireEvent.change(input, { target: { files: [file] } });
-    expect(uploadMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(uploadMock).toHaveBeenCalledTimes(1));
     await act(async () => {
       resolveUpload({ data: { path: evidence.storage_path }, error: null });
     });
