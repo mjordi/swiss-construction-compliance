@@ -29,6 +29,20 @@ const validationKey: Record<CaseEvidenceValidationError, TranslationKey> = {
   "unsupported-type": "vault-evidence-validation-type",
 };
 
+function isAmbiguousTransportOutcome(value: unknown) {
+  if (!value || typeof value !== "object") return false;
+  const candidate = value as {
+    status?: unknown;
+    statusCode?: unknown;
+    name?: unknown;
+    constructor?: { name?: unknown };
+  };
+  return candidate.status === 0
+    || candidate.statusCode === 0
+    || candidate.name === "StorageUnknownError"
+    || candidate.constructor?.name === "StorageUnknownError";
+}
+
 export default function CaseEvidencePanel({
   userId,
   caseId,
@@ -183,6 +197,7 @@ export default function CaseEvidencePanel({
           upsert: false,
         });
         uploadError = result.error;
+        uploadOutcomeAmbiguous = isAmbiguousTransportOutcome(result.error);
       } catch (error) {
         uploadError = error;
         uploadOutcomeAmbiguous = true;
@@ -242,6 +257,8 @@ export default function CaseEvidencePanel({
           throw error;
         }
         const { data, error } = insertResult;
+        insertOutcomeAmbiguous = isAmbiguousTransportOutcome(insertResult)
+          || isAmbiguousTransportOutcome(error);
         if (error || !data) throw error ?? new Error("Evidence metadata was not returned");
         metadata = data as CaseEvidence;
       } catch (metadataError) {

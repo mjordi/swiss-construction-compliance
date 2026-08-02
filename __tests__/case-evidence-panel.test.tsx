@@ -210,6 +210,24 @@ describe("CaseEvidencePanel", () => {
     expect(uploadJobDeleteMock).not.toHaveBeenCalled();
   });
 
+  it("reconciles a returned StorageUnknownError without retiring the upload job", async () => {
+    uploadMock.mockResolvedValue({
+      data: null,
+      error: { name: "StorageUnknownError", message: "upload response lost" },
+    });
+    render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
+    fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
+    fireEvent.change(await screen.findByLabelText("vault-evidence-file-label"), {
+      target: { files: [new File(["pdf"], "report.pdf", { type: "application/pdf" })] },
+    });
+
+    expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-persistence-unknown");
+    expect(storageListMock).toHaveBeenCalledTimes(3);
+    expect(insertMock).not.toHaveBeenCalled();
+    expect(removeMock).not.toHaveBeenCalled();
+    expect(uploadJobDeleteMock).not.toHaveBeenCalled();
+  });
+
   it("reconciles pending upload paths and refreshes the parent checklist before listing evidence", async () => {
     pendingUploadsMock.mockResolvedValue({ data: [{ storage_path: evidence.storage_path }], error: null });
     const onChecklistUpdated = vi.fn();
@@ -331,6 +349,24 @@ describe("CaseEvidencePanel", () => {
       storage_path: uploadMock.mock.calls[0][0],
       original_name: "report.pdf",
     }));
+    expect(uploadJobDeleteMock).not.toHaveBeenCalled();
+  });
+
+  it("retries reconciliation for a returned metadata transport error", async () => {
+    insertMock.mockReset().mockReturnValue(Promise.resolve({
+      data: null,
+      error: { message: "fetch failed" },
+      status: 0,
+    }));
+    render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
+    fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
+    fireEvent.change(await screen.findByLabelText("vault-evidence-file-label"), {
+      target: { files: [new File(["pdf"], "report.pdf", { type: "application/pdf" })] },
+    });
+
+    expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-persistence-unknown");
+    expect(lookupMock).toHaveBeenCalledTimes(3);
+    expect(removeMock).not.toHaveBeenCalled();
     expect(uploadJobDeleteMock).not.toHaveBeenCalled();
   });
 
