@@ -142,13 +142,17 @@ export default function DeadlinesPage() {
   const discoveryBeforeAcceptance = Boolean(
     parsedAcceptanceDate && parsedDiscoveryDate && parsedDiscoveryDate < parsedAcceptanceDate
   );
+  const discoveryInFuture = Boolean(
+    discoveryDate && discoveryDate > getTodayLocalDateInputValue()
+  );
   const inputIsValid = Boolean(
     parsedContractDate &&
       parsedAcceptanceDate &&
       parsedDiscoveryDate &&
       !discoveryValidation &&
       !acceptanceBeforeContract &&
-      !discoveryBeforeAcceptance
+      !discoveryBeforeAcceptance &&
+      !discoveryInFuture
   );
 
   useEffect(() => {
@@ -184,7 +188,8 @@ export default function DeadlinesPage() {
         discovery &&
         !validateRuegefristInput(contract, discovery) &&
         acceptance >= contract &&
-        discovery >= acceptance
+        discovery >= acceptance &&
+        sanitizedDates.discovery <= getTodayLocalDateInputValue()
     );
 
     const frame = window.requestAnimationFrame(() => {
@@ -389,8 +394,14 @@ export default function DeadlinesPage() {
             <input id="discovery-date" type="date" value={discoveryDate} onChange={(event) => { setDiscoveryDate(event.target.value); clearCalculatedResult("discovery"); }} max={getTodayLocalDateInputValue()} className={`${inputClass} mt-2`} />
           </label>
         </div>
-        {(discoveryValidation || acceptanceBeforeContract || discoveryBeforeAcceptance) && (
+        {(discoveryValidation || acceptanceBeforeContract) && (
           <p className="mt-3 text-sm text-red-400">{t("deadlines-date-order-error")}</p>
+        )}
+        {discoveryBeforeAcceptance && (
+          <p className="mt-3 text-sm text-red-400">{t("deadlines-discovery-order-error")}</p>
+        )}
+        {discoveryInFuture && (
+          <p className="mt-3 text-sm text-red-400">{t("deadlines-future-discovery-error")}</p>
         )}
         <div className="mt-4 flex gap-3">
           <button onClick={calculate} disabled={!inputIsValid} className="px-6 py-3 bg-accent hover:bg-accent/90 disabled:opacity-40 disabled:cursor-not-allowed text-white font-semibold rounded-lg transition-colors duration-300 flex items-center gap-2">
