@@ -1,3 +1,10 @@
+-- Cases predates the Vault archive workflow in the versioned schema. Add its
+-- persisted workflow status before evidence policies use it to reject writes
+-- to archived cases.
+alter table public.cases
+  add column if not exists status text not null default 'active'
+  check (status in ('active', 'review', 'archived'));
+
 -- Private per-case evidence metadata and Storage bucket.
 create table if not exists public.case_evidence (
   id uuid default gen_random_uuid() primary key,

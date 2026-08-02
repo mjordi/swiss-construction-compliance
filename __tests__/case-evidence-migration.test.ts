@@ -14,6 +14,16 @@ function storagePolicy(sql: string, verb: "read" | "insert" | "delete", operatio
 }
 
 describe("case evidence migration", () => {
+  it("adds the Cases workflow status before archived evidence guards reference it", () => {
+    const sql = migrationSql();
+    const statusColumn = sql.indexOf("add column if not exists status text not null default 'active'");
+    const firstArchivedGuard = sql.indexOf("cases.status <> 'archived'");
+
+    expect(statusColumn).toBeGreaterThan(-1);
+    expect(sql).toContain("check (status in ('active', 'review', 'archived'))");
+    expect(firstArchivedGuard).toBeGreaterThan(statusColumn);
+  });
+
   it("creates constrained owner/case/path-bound metadata with RLS and PostgreSQL-safe path regexes", () => {
     const sql = migrationSql();
 
