@@ -287,8 +287,6 @@ export default function CaseEvidencePanel({
         }
       }
 
-      await clearUploadJob();
-
       if (isCurrentContext()) {
         loadRequestRef.current += 1;
         loadPendingRef.current = false;
@@ -304,6 +302,7 @@ export default function CaseEvidencePanel({
         if (checklistError || checklistConfirmation !== true) {
           throw checklistError ?? new Error("Checklist update was not confirmed");
         }
+        await clearUploadJob();
 
         if (isCurrentContext()) {
           setMessage({ key: "vault-evidence-upload-success", kind: "status" });

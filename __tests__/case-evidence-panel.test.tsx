@@ -272,6 +272,7 @@ describe("CaseEvidencePanel", () => {
 
     expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-checklist-warning");
     expect(removeMock).not.toHaveBeenCalled();
+    expect(uploadJobDeleteMock).not.toHaveBeenCalled();
     expect(onChecklistUpdated).not.toHaveBeenCalled();
   });
 
