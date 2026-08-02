@@ -38,6 +38,15 @@ vi.mock("@/lib/legal-utils", async (importOriginal) => {
 
 import DeadlinesPage from "@/app/dashboard/deadlines/page";
 
+function fillRequiredDeadlineDates() {
+  fireEvent.change(screen.getByLabelText("deadlines-contract-date"), {
+    target: { value: "2026-01-15" },
+  });
+  fireEvent.change(screen.getByLabelText("deadlines-discovery-date"), {
+    target: { value: "2026-05-10" },
+  });
+}
+
 describe("deadlines share-link restoration", () => {
   const writeText = vi.fn<() => Promise<void>>();
   const createObjectURL = vi.fn(() => "blob:deadlines-ics");
@@ -71,7 +80,7 @@ describe("deadlines share-link restoration", () => {
   });
 
   it("hydrates shared acceptance links after the initial render", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10");
 
     render(<DeadlinesPage />);
 
@@ -108,7 +117,7 @@ describe("deadlines share-link restoration", () => {
   });
 
   it("restores custom reminder presets from shared links", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30&reminders=30,3");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10&reminders=30,3");
 
     render(<DeadlinesPage />);
 
@@ -125,12 +134,12 @@ describe("deadlines share-link restoration", () => {
     fireEvent.click(screen.getByRole("button", { name: "deadlines-share-link" }));
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30&reminders=30%2C3");
+      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10&reminders=30%2C3");
     });
   });
 
   it("round-trips empty reminder presets with the none sentinel", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30&reminders=none");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10&reminders=none");
 
     render(<DeadlinesPage />);
 
@@ -141,12 +150,12 @@ describe("deadlines share-link restoration", () => {
     fireEvent.click(screen.getByRole("button", { name: "deadlines-share-link" }));
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30&reminders=none");
+      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10&reminders=none");
     });
   });
 
   it("cleans invalid reminder presets from the shared URL", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30&reminders=foo,99,7,7");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10&reminders=foo,99,7,7");
 
     render(<DeadlinesPage />);
 
@@ -155,17 +164,21 @@ describe("deadlines share-link restoration", () => {
     });
 
     await waitFor(() => {
-      expect(window.location.search).toBe("?acceptance=2026-04-30&reminders=7");
+      expect(window.location.search).toBe(
+        "?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10&reminders=7"
+      );
     });
   });
 
   it("preserves valid reminder presets when the shared acceptance date is invalid", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=bad-date&reminders=30,3");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=bad-date&discovery=2026-05-10&reminders=30,3");
 
     render(<DeadlinesPage />);
 
     await waitFor(() => {
-      expect(window.location.search).toBe("?reminders=30%2C3");
+      expect(window.location.search).toBe(
+        "?contract=2026-01-15&discovery=2026-05-10&reminders=30%2C3"
+      );
     });
 
     await waitFor(() => {
@@ -182,13 +195,16 @@ describe("deadlines share-link restoration", () => {
     fireEvent.click(screen.getByRole("button", { name: "deadlines-share-link" }));
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?reminders=30%2C3&acceptance=2026-04-30");
+      expect(writeText).toHaveBeenCalledWith(
+        "http://localhost:3000/dashboard/deadlines?contract=2026-01-15&discovery=2026-05-10&reminders=30%2C3&acceptance=2026-04-30"
+      );
     });
   });
 
   it("clears stale calculated results when the acceptance input changes", async () => {
     render(<DeadlinesPage />);
 
+    fillRequiredDeadlineDates();
     const input = screen.getByLabelText("deadlines-input-label") as HTMLInputElement;
     fireEvent.change(input, {
       target: { value: "2026-04-30" },
@@ -207,11 +223,13 @@ describe("deadlines share-link restoration", () => {
     expect(screen.queryByText("deadlines-result-title")).toBeNull();
     expect(screen.queryByRole("button", { name: "deadlines-download-ics" })).toBeNull();
     expect(input.value).toBe("2026-05-01");
-    expect(window.location.search).toBe("?reminders=14%2C7%2C1");
+    expect(window.location.search).toBe(
+      "?contract=2026-01-15&discovery=2026-05-10&reminders=14%2C7%2C1"
+    );
   });
 
   it("removes hydrated acceptance query state when the acceptance input changes", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30&reminders=30,3");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10&reminders=30,3");
 
     render(<DeadlinesPage />);
 
@@ -226,11 +244,13 @@ describe("deadlines share-link restoration", () => {
 
     expect(screen.queryByText("deadlines-result-title")).toBeNull();
     expect(input.value).toBe("2026-05-01");
-    expect(window.location.search).toBe("?reminders=30%2C3");
+    expect(window.location.search).toBe(
+      "?contract=2026-01-15&discovery=2026-05-10&reminders=30%2C3"
+    );
   });
 
   it("shows localized feedback when copying the shared deadline link fails", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10");
     writeText.mockRejectedValueOnce(new Error("clipboard denied"));
 
     render(<DeadlinesPage />);
@@ -251,7 +271,7 @@ describe("deadlines share-link restoration", () => {
   });
 
   it("copies the shared deadline link and shows localized feedback", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10");
 
     render(<DeadlinesPage />);
 
@@ -263,7 +283,7 @@ describe("deadlines share-link restoration", () => {
     fireEvent.click(shareButton);
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30&reminders=14%2C7%2C1");
+      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10&reminders=14%2C7%2C1");
     });
 
     expect(screen.getByRole("button", { name: "deadlines-share-link-copied" })).toBeTruthy();
@@ -274,7 +294,7 @@ describe("deadlines share-link restoration", () => {
   });
 
   it("shows selected reminder summary beside deadline result actions", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30&reminders=30,3");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10&reminders=30,3");
 
     render(<DeadlinesPage />);
 
@@ -286,7 +306,7 @@ describe("deadlines share-link restoration", () => {
   });
 
   it("shows an explicit no-reminders summary beside deadline result actions", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30&reminders=none");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10&reminders=none");
 
     render(<DeadlinesPage />);
 
@@ -298,7 +318,7 @@ describe("deadlines share-link restoration", () => {
   });
 
   it("copies updated reminder presets after the user changes them", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10");
 
     render(<DeadlinesPage />);
 
@@ -312,12 +332,12 @@ describe("deadlines share-link restoration", () => {
     fireEvent.click(screen.getByRole("button", { name: "deadlines-share-link" }));
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30&reminders=30%2C7%2C1");
+      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10&reminders=30%2C7%2C1");
     });
   });
 
   it("reset restores default reminder presets and clears reminder query state", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30&reminders=30,3");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10&reminders=30,3");
 
     render(<DeadlinesPage />);
 
@@ -330,6 +350,7 @@ describe("deadlines share-link restoration", () => {
     expect(window.location.search).toBe("");
     expect(screen.queryByText("deadlines-result-title")).toBeNull();
 
+    fillRequiredDeadlineDates();
     fireEvent.change(screen.getByLabelText("deadlines-input-label"), {
       target: { value: "2026-04-30" },
     });
@@ -337,12 +358,12 @@ describe("deadlines share-link restoration", () => {
     fireEvent.click(screen.getByRole("button", { name: "deadlines-share-link" }));
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30&reminders=14%2C7%2C1");
+      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10&reminders=14%2C7%2C1");
     });
   });
 
   it("clears pending share-link feedback when reminder presets change", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10");
 
     render(<DeadlinesPage />);
 
@@ -362,7 +383,7 @@ describe("deadlines share-link restoration", () => {
   });
 
   it("clears pending share-link feedback when the input changes", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10");
 
     render(<DeadlinesPage />);
 
@@ -390,7 +411,7 @@ describe("deadlines share-link restoration", () => {
   });
 
   it("ignores in-flight clipboard results after the input changes", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10");
     let resolveWrite: (() => void) | undefined;
     writeText.mockImplementationOnce(
       () =>
@@ -416,7 +437,7 @@ describe("deadlines share-link restoration", () => {
     }
 
     await waitFor(() => {
-      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?acceptance=2026-04-30&reminders=14%2C7%2C1");
+      expect(writeText).toHaveBeenCalledWith("http://localhost:3000/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10&reminders=14%2C7%2C1");
     });
 
     expect(screen.queryByText("deadlines-result-title")).toBeNull();
@@ -426,7 +447,7 @@ describe("deadlines share-link restoration", () => {
   });
 
   it("keeps the exported acceptance-date label on the selected calendar day", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10");
     legalUtilsMocks.parseDateInputAsUTC.mockImplementationOnce((value: string) => {
       if (value === "2026-04-30") {
         return new Date("2026-04-29T22:00:00.000Z");
@@ -451,7 +472,7 @@ describe("deadlines share-link restoration", () => {
   });
 
   it("confirms when the dashboard deadline calendar file is prepared", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10");
 
     render(<DeadlinesPage />);
 
@@ -471,7 +492,7 @@ describe("deadlines share-link restoration", () => {
   });
 
   it("shows retry feedback when preparing the deadline calendar file fails", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10");
     createObjectURL.mockImplementationOnce(() => {
       throw new Error("blob unavailable");
     });
@@ -490,7 +511,7 @@ describe("deadlines share-link restoration", () => {
   });
 
   it("clears stale calendar download feedback when reminder presets change", async () => {
-    window.history.replaceState(null, "", "/dashboard/deadlines?acceptance=2026-04-30");
+    window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10");
 
     render(<DeadlinesPage />);
 
@@ -508,5 +529,48 @@ describe("deadlines share-link restoration", () => {
 
     expect(screen.getByRole("button", { name: "deadlines-download-ics" })).toBeTruthy();
     expect(screen.queryByRole("button", { name: "deadlines-download-ready" })).toBeNull();
+  });
+
+  it("derives the 60-day notice from discovery while keeping warranty dates on acceptance", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10"
+    );
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("deadlines-result-title")).toBeTruthy();
+    });
+
+    expect((screen.getByLabelText("deadlines-contract-date") as HTMLInputElement).value).toBe("2026-01-15");
+    expect((screen.getByLabelText("deadlines-input-label") as HTMLInputElement).value).toBe("2026-04-30");
+    expect((screen.getByLabelText("deadlines-discovery-date") as HTMLInputElement).value).toBe("2026-05-10");
+    expect(screen.getAllByText("9 July 2026")).toHaveLength(2);
+    expect(screen.getAllByText("30 April 2028")).toHaveLength(2);
+    expect(screen.getAllByText("30 April 2031")).toHaveLength(2);
+  });
+
+  it("shows immediate-notice guidance instead of a fixed 60-day deadline for old-law contracts", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/dashboard/deadlines?contract=2025-12-31&acceptance=2026-04-30&discovery=2026-05-10"
+    );
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByText("deadlines-result-title")).toBeTruthy();
+    });
+
+    expect(screen.getByText("deadlines-old-law-title")).toBeTruthy();
+    expect(screen.queryByText("deadlines-60day-title")).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "deadlines-download-ics" }));
+    const exportedDeadlines = legalUtilsMocks.generateDeadlineCalendarICS.mock.calls.at(-1)?.[0];
+    expect(exportedDeadlines).toHaveLength(2);
+    expect(exportedDeadlines?.some((deadline: { key: string }) => deadline.key.includes("60-Tage"))).toBe(false);
   });
 });

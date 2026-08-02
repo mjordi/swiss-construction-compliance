@@ -202,6 +202,22 @@ describe("generateDeadlineCalendarICS", () => {
     expect(ics).toContain("TRIGGER;VALUE=DATE:20260423"); // -7 days
     expect(ics).toContain("TRIGGER;VALUE=DATE:20260429"); // -1 day
   });
+
+  it("includes the calculated contract and discovery source dates when provided", () => {
+    const ics = generateDeadlineCalendarICS(
+      [{ key: "60-Tage-Rügefrist", date: new Date("2026-07-09") }],
+      "30 April 2026",
+      [7],
+      {
+        contractDateLabel: "15 January 2026",
+        discoveryDateLabel: "10 May 2026",
+      }
+    );
+
+    expect(ics).toContain("Abnahmedatum: 30 April 2026");
+    expect(ics).toContain("Vertragsdatum: 15 January 2026");
+    expect(ics).toContain("Mängel entdeckt: 10 May 2026");
+  });
 });
 
 describe("validateRuegefristInput", () => {
