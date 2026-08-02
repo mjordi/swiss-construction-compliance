@@ -88,11 +88,14 @@ export default function CaseEvidencePanel({
         .eq("case_id", caseId);
       if (pendingUploadsError) throw pendingUploadsError;
       if ((pendingUploads ?? []).length > 0) {
-        const { error: reconciliationError } = await supabase.rpc(
+        const { data: reconciled, error: reconciliationError } = await supabase.rpc(
           "reconcile_case_evidence_uploads",
           { target_case_id: caseId }
         );
         if (reconciliationError) throw reconciliationError;
+        if (reconciled === true && mountedRef.current && requestId === loadRequestRef.current) {
+          onChecklistUpdated?.();
+        }
       }
 
       const { data, error } = await supabase
@@ -111,7 +114,7 @@ export default function CaseEvidencePanel({
       if (requestId === loadRequestRef.current) loadPendingRef.current = false;
       if (mountedRef.current && requestId === loadRequestRef.current) setLoading(false);
     }
-  }, [caseId, supabase, userId]);
+  }, [caseId, onChecklistUpdated, supabase, userId]);
 
   const toggleExpanded = useCallback(() => {
     if (expanded) {
@@ -153,6 +156,21 @@ export default function CaseEvidencePanel({
         }
         return false;
       };
+      const recordUploadForReconciliation = async () => {
+        const { data: recorded, error } = await supabase.rpc(
+          "record_case_evidence_upload_reconciliation",
+          {
+            target_case_id: caseId,
+            target_storage_path: storagePath,
+            target_original_name: file.name,
+            target_mime_type: file.type,
+            target_size_bytes: file.size,
+          }
+        );
+        if (error || recorded !== true) {
+          throw error ?? new Error("Upload reconciliation was not recorded");
+        }
+      };
 
       let uploadError: unknown = null;
       let uploadOutcomeAmbiguous = false;
@@ -188,19 +206,7 @@ export default function CaseEvidencePanel({
           // A rejected upload has no ordering guarantee relative to Storage. Even a
           // successful remove of a currently absent path could run before the upload
           // commits, so preserve the generated path instead of creating a late orphan.
-          const { data: recorded, error: recordError } = await supabase.rpc(
-            "record_case_evidence_upload_reconciliation",
-            {
-              target_case_id: caseId,
-              target_storage_path: storagePath,
-              target_original_name: file.name,
-              target_mime_type: file.type,
-              target_size_bytes: file.size,
-            }
-          );
-          if (recordError || recorded !== true) {
-            throw recordError ?? new Error("Upload reconciliation was not recorded");
-          }
+          await recordUploadForReconciliation();
           if (isCurrentContext()) setMessage({ key: "vault-evidence-persistence-unknown", kind: "alert" });
           return;
         }
@@ -249,6 +255,7 @@ export default function CaseEvidencePanel({
             if (reconciliationError) throw reconciliationError;
             persistedMetadata = data as CaseEvidence | null;
           } catch {
+            await recordUploadForReconciliation();
             if (isCurrentContext()) setMessage({ key: "vault-evidence-persistence-unknown", kind: "alert" });
             return;
           }
@@ -262,12 +269,14 @@ export default function CaseEvidencePanel({
           metadata = persistedMetadata;
         } else if (insertOutcomeAmbiguous) {
           // A request rejection has no ordering guarantee relative to the server-side
-          // transaction. Preserve the object even after bounded reconciliation misses.
+          // transaction. Preserve the object and its path after bounded reconciliation misses.
+          await recordUploadForReconciliation();
           if (isCurrentContext()) setMessage({ key: "vault-evidence-persistence-unknown", kind: "alert" });
           return;
         } else {
           const cleanupSucceeded = await removeUploadedObject();
           if (!cleanupSucceeded) {
+            await recordUploadForReconciliation();
             if (isCurrentContext()) setMessage({ key: "vault-evidence-cleanup-warning", kind: "alert" });
             return;
           }

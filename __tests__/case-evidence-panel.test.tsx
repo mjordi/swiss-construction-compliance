@@ -197,14 +197,23 @@ describe("CaseEvidencePanel", () => {
     }));
   });
 
-  it("reconciles pending upload paths before listing evidence", async () => {
+  it("reconciles pending upload paths and refreshes the parent checklist before listing evidence", async () => {
     pendingUploadsMock.mockResolvedValue({ data: [{ storage_path: evidence.storage_path }], error: null });
-    render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
+    const onChecklistUpdated = vi.fn();
+    render(
+      <CaseEvidencePanel
+        userId="user-1"
+        caseId="case-1"
+        caseName="Alpine"
+        onChecklistUpdated={onChecklistUpdated}
+      />
+    );
     fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
 
     await screen.findByText("vault-evidence-empty");
     expect(rpcMock).toHaveBeenCalledWith("reconcile_case_evidence_uploads", { target_case_id: "case-1" });
     expect(rpcMock.mock.invocationCallOrder[0]).toBeLessThan(listMock.mock.invocationCallOrder[0]);
+    expect(onChecklistUpdated).toHaveBeenCalledTimes(1);
   });
 
   it("removes the new object and skips checklist updates when metadata persistence fails", async () => {
@@ -290,7 +299,7 @@ describe("CaseEvidencePanel", () => {
     clickSpy.mockRestore();
   });
 
-  it("preserves the uploaded object after bounded reconciliation misses on an ambiguous insert rejection", async () => {
+  it("records the uploaded object after bounded reconciliation misses on an ambiguous insert rejection", async () => {
     const metadataInsert = deferred<never>();
     insertMock.mockReset().mockReturnValue(metadataInsert.promise);
     render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
@@ -304,7 +313,11 @@ describe("CaseEvidencePanel", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-persistence-unknown");
     expect(lookupMock).toHaveBeenCalledTimes(3);
     expect(removeMock).not.toHaveBeenCalled();
-    expect(rpcMock).not.toHaveBeenCalled();
+    expect(rpcMock).toHaveBeenCalledWith("record_case_evidence_upload_reconciliation", expect.objectContaining({
+      target_case_id: "case-1",
+      target_storage_path: uploadMock.mock.calls[0][0],
+      target_original_name: "report.pdf",
+    }));
   });
 
   it("retries reconciliation until delayed metadata appears after an ambiguous insert rejection", async () => {
@@ -336,7 +349,9 @@ describe("CaseEvidencePanel", () => {
 
     expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-persistence-unknown");
     expect(removeMock).not.toHaveBeenCalled();
-    expect(rpcMock).not.toHaveBeenCalled();
+    expect(rpcMock).toHaveBeenCalledWith("record_case_evidence_upload_reconciliation", expect.objectContaining({
+      target_storage_path: uploadMock.mock.calls[0][0],
+    }));
   });
 
   it("retries a returned compensation error and reports the metadata upload failure after cleanup succeeds", async () => {
@@ -368,7 +383,11 @@ describe("CaseEvidencePanel", () => {
 
     expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-cleanup-warning");
     expect(removeMock).toHaveBeenCalledTimes(2);
-    expect(rpcMock).not.toHaveBeenCalled();
+    expect(rpcMock).toHaveBeenCalledWith("record_case_evidence_upload_reconciliation", expect.objectContaining({
+      target_case_id: "case-1",
+      target_storage_path: uploadMock.mock.calls[0][0],
+      target_original_name: "report.pdf",
+    }));
   });
 
   it("does not publish old upload success or clear a new upload after case changes", async () => {
