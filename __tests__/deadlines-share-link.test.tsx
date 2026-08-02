@@ -98,6 +98,25 @@ describe("deadlines share-link restoration", () => {
     expect(screen.getByText("deadlines-5year-title")).toBeTruthy();
   });
 
+  it("rejects shared deadlines when discovery precedes acceptance", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-05-10&discovery=2026-04-30"
+    );
+
+    render(<DeadlinesPage />);
+
+    await waitFor(() => {
+      expect((screen.getByLabelText("deadlines-input-label") as HTMLInputElement).value).toBe("2026-05-10");
+      expect((screen.getByLabelText("deadlines-discovery-date") as HTMLInputElement).value).toBe("2026-04-30");
+    });
+
+    expect(screen.queryByText("deadlines-result-title")).toBeNull();
+    expect(screen.getByText("deadlines-date-order-error")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "deadlines-calculate" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
   it("exposes selected reminder presets with aria-pressed and updates when toggled", () => {
     render(<DeadlinesPage />);
 

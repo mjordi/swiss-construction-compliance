@@ -139,12 +139,16 @@ export default function DeadlinesPage() {
   const acceptanceBeforeContract = Boolean(
     parsedContractDate && parsedAcceptanceDate && parsedAcceptanceDate < parsedContractDate
   );
+  const discoveryBeforeAcceptance = Boolean(
+    parsedAcceptanceDate && parsedDiscoveryDate && parsedDiscoveryDate < parsedAcceptanceDate
+  );
   const inputIsValid = Boolean(
     parsedContractDate &&
       parsedAcceptanceDate &&
       parsedDiscoveryDate &&
       !discoveryValidation &&
-      !acceptanceBeforeContract
+      !acceptanceBeforeContract &&
+      !discoveryBeforeAcceptance
   );
 
   useEffect(() => {
@@ -179,7 +183,8 @@ export default function DeadlinesPage() {
         acceptance &&
         discovery &&
         !validateRuegefristInput(contract, discovery) &&
-        acceptance >= contract
+        acceptance >= contract &&
+        discovery >= acceptance
     );
 
     const frame = window.requestAnimationFrame(() => {
@@ -384,7 +389,7 @@ export default function DeadlinesPage() {
             <input id="discovery-date" type="date" value={discoveryDate} onChange={(event) => { setDiscoveryDate(event.target.value); clearCalculatedResult("discovery"); }} max={getTodayLocalDateInputValue()} className={`${inputClass} mt-2`} />
           </label>
         </div>
-        {(discoveryValidation || acceptanceBeforeContract) && (
+        {(discoveryValidation || acceptanceBeforeContract || discoveryBeforeAcceptance) && (
           <p className="mt-3 text-sm text-red-400">{t("deadlines-date-order-error")}</p>
         )}
         <div className="mt-4 flex gap-3">
