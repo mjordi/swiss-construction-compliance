@@ -39,4 +39,13 @@ describe("case evidence helpers", () => {
     expect(sanitizeCaseEvidenceDownloadName("site #1 & plans?.pdf")).toBe("site _1 _ plans_.pdf");
     expect(sanitizeCaseEvidenceDownloadName("a".repeat(300))).toHaveLength(180);
   });
+
+  it("truncates download names without splitting astral Unicode characters", () => {
+    const name = `${"a".repeat(179)}😀${"b".repeat(20)}.pdf`;
+    const sanitized = sanitizeCaseEvidenceDownloadName(name);
+
+    expect(Array.from(sanitized)).toHaveLength(180);
+    expect(sanitized).toBe(`${"a".repeat(179)}😀`);
+    expect(() => encodeURI(sanitized)).not.toThrow();
+  });
 });

@@ -52,5 +52,5 @@ export function sanitizeCaseEvidenceDownloadName(name: string): string {
     .replace(/[\u0000-\u001f\u007f-\u009f]/g, "")
     .replace(/[:/?#[\]@!$&'()*+,;=%]/g, "_")
     .trim();
-  return (sanitized || "evidence").slice(0, 180);
+  return Array.from(sanitized || "evidence").slice(0, 180).join("");
 }
