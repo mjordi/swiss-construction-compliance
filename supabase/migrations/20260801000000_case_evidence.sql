@@ -34,11 +34,14 @@ alter table public.case_evidence enable row level security;
 create table if not exists public.case_evidence_upload_jobs (
   storage_path text primary key,
   user_id uuid references auth.users(id) on delete cascade not null,
-  case_id uuid references public.cases(id) on delete cascade not null,
+  -- Intents must outlive case deletion so abandoned clients can be reconciled
+  -- against Storage before the durable cleanup job is retired.
+  case_id uuid not null,
   original_name text not null check (char_length(original_name) between 1 and 255),
   mime_type text not null check (mime_type in ('application/pdf', 'image/jpeg', 'image/png')),
   size_bytes bigint not null check (size_bytes between 1 and 10485760),
   upload_completed_at timestamptz,
+  upload_lease_expires_at timestamptz not null default (now() + interval '1 hour'),
   created_at timestamptz not null default now(),
   constraint case_evidence_upload_job_path_matches_case check (
     cardinality(string_to_array(storage_path, '/')) = 3
@@ -273,6 +276,61 @@ $$;
 revoke all on function public.mark_case_evidence_upload_completed(text) from public;
 grant execute on function public.mark_case_evidence_upload_completed(text) to authenticated;
 
+-- Reconcile upload intents whose original browser disappeared. Existing
+-- Storage objects are terminal immediately. Missing objects become terminal
+-- only after their lease expires; the Storage insert policy below rejects a
+-- later commit after that lease, so cleanup cannot race a pre-authorized write.
+create or replace function public.reconcile_case_evidence_cleanup_uploads(target_case_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  cleanup_ready boolean;
+begin
+  if not exists (
+    select 1 from public.case_evidence_cleanup_jobs
+    where case_id = target_case_id and user_id = auth.uid()
+  ) then return false; end if;
+
+  update public.case_evidence_upload_jobs job
+  set upload_completed_at = now()
+  where job.case_id = target_case_id
+    and job.user_id = auth.uid()
+    and job.upload_completed_at is null
+    and (
+      job.upload_lease_expires_at <= now()
+      or exists (
+        select 1 from storage.objects object
+        where object.bucket_id = 'case-evidence'
+          and object.name = job.storage_path
+      )
+    );
+
+  update public.case_evidence_cleanup_jobs cleanup
+  set pending_upload_paths = coalesce((
+    select jsonb_agg(path)
+    from jsonb_array_elements_text(cleanup.pending_upload_paths) path
+    where exists (
+      select 1 from public.case_evidence_upload_jobs job
+      where job.storage_path = path
+        and job.case_id = target_case_id
+        and job.user_id = auth.uid()
+        and job.upload_completed_at is null
+    )
+  ), '[]'::jsonb)
+  where cleanup.case_id = target_case_id
+    and cleanup.user_id = auth.uid()
+  returning jsonb_array_length(pending_upload_paths) = 0 into cleanup_ready;
+
+  return coalesce(cleanup_ready, false);
+end;
+$$;
+
+revoke all on function public.reconcile_case_evidence_cleanup_uploads(uuid) from public;
+grant execute on function public.reconcile_case_evidence_cleanup_uploads(uuid) to authenticated;
+
 -- Lock the parent case while capturing evidence paths and deleting it. The
 -- foreign key's parent-row lock serializes concurrent metadata inserts with
 -- this lock: an insert that wins is included, while one that loses observes
@@ -364,6 +422,16 @@ as $$
 declare
   affected_rows integer;
 begin
+  delete from public.case_evidence_upload_jobs job
+  where job.case_id = target_case_id
+    and job.user_id = auth.uid()
+    and job.upload_completed_at is not null
+    and exists (
+      select 1 from public.case_evidence_cleanup_jobs cleanup
+      where cleanup.case_id = target_case_id
+        and cleanup.user_id = auth.uid()
+    );
+
   delete from public.case_evidence_cleanup_jobs
   where case_id = target_case_id
     and user_id = auth.uid()
@@ -439,6 +507,12 @@ create policy "Users can insert own case evidence objects"
     and cardinality(string_to_array(name, '/')) = 3
     and split_part(name, '/', 1) = auth.uid()::text
     and split_part(name, '/', 3) ~ '^[A-Za-z0-9_-]{1,128}[.](pdf|jpg|png)$'
+    and exists (
+      select 1 from public.case_evidence_upload_jobs job
+      where job.storage_path = name
+        and job.user_id = auth.uid()
+        and job.upload_lease_expires_at > now()
+    )
     and exists (
       select 1 from public.cases
       where cases.id::text = split_part(name, '/', 2)

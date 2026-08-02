@@ -407,7 +407,13 @@ export default function CasesPage() {
         if (error) return;
 
         for (const job of cleanupJobs ?? []) {
-          if (Array.isArray(job.pending_upload_paths) && job.pending_upload_paths.length > 0) continue;
+          if (Array.isArray(job.pending_upload_paths) && job.pending_upload_paths.length > 0) {
+            const { data: cleanupReady, error: reconciliationError } = await supabase.rpc(
+              "reconcile_case_evidence_cleanup_uploads",
+              { target_case_id: job.case_id }
+            );
+            if (reconciliationError || cleanupReady !== true) continue;
+          }
           try {
             const paths = Array.isArray(job.storage_paths)
               ? job.storage_paths.filter((path: unknown): path is string => typeof path === "string")

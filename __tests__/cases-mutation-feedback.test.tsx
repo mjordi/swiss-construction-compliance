@@ -5,6 +5,7 @@ const replaceMock = vi.fn();
 const insertMock = vi.fn();
 const deleteCaseWithEvidenceMock = vi.fn();
 const completeCaseEvidenceCleanupMock = vi.fn();
+const reconcileCleanupUploadsMock = vi.fn();
 const confirmMock = vi.fn(() => true);
 const removeCaseEvidenceObjectsMock = vi.hoisted(() => vi.fn());
 const storageMock = {};
@@ -141,6 +142,7 @@ vi.mock("@/lib/supabase", () => ({
     rpc: (name: string, args: { target_case_id: string }) => {
       if (name === "delete_case_with_evidence") return deleteCaseWithEvidenceMock(args);
       if (name === "complete_case_evidence_cleanup") return completeCaseEvidenceCleanupMock(args);
+      if (name === "reconcile_case_evidence_cleanup_uploads") return reconcileCleanupUploadsMock(args);
       throw new Error(`Unexpected RPC ${name}`);
     },
   }),
@@ -186,6 +188,7 @@ describe("cases mutation feedback", () => {
       error: null,
     });
     completeCaseEvidenceCleanupMock.mockReset().mockResolvedValue({ data: true, error: null });
+    reconcileCleanupUploadsMock.mockReset().mockResolvedValue({ data: false, error: null });
     removeCaseEvidenceObjectsMock.mockReset().mockResolvedValue(undefined);
     confirmMock.mockClear();
     casesData = [buildCase("case-1", "Alpine Tower")];
@@ -218,8 +221,26 @@ describe("cases mutation feedback", () => {
     render(<CasesPage />);
 
     expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+    expect(reconcileCleanupUploadsMock).toHaveBeenCalledWith({ target_case_id: "deleted-case" });
     expect(removeCaseEvidenceObjectsMock).not.toHaveBeenCalled();
     expect(completeCaseEvidenceCleanupMock).not.toHaveBeenCalled();
+  });
+
+  it("cleans up an abandoned upload after server-side lease reconciliation", async () => {
+    cleanupJobsData = [{
+      case_id: "deleted-case",
+      storage_paths: ["user-1/deleted-case/report.pdf"],
+      pending_upload_paths: ["user-1/deleted-case/report.pdf"],
+    }];
+    reconcileCleanupUploadsMock.mockResolvedValueOnce({ data: true, error: null });
+
+    render(<CasesPage />);
+
+    await waitFor(() => expect(removeCaseEvidenceObjectsMock).toHaveBeenCalledWith(
+      storageMock,
+      ["user-1/deleted-case/report.pdf"]
+    ));
+    expect(completeCaseEvidenceCleanupMock).toHaveBeenCalledWith({ target_case_id: "deleted-case" });
   });
 
   it("keeps the form open, preserves entered values, and shows localized feedback when create returns an error", async () => {

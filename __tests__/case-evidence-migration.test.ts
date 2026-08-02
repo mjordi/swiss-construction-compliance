@@ -135,6 +135,20 @@ describe("case evidence migration", () => {
     expect(sql).toContain("grant execute on function public.mark_case_evidence_upload_completed(text) to authenticated");
   });
 
+  it("reconciles abandoned upload intents under a server-enforced lease", () => {
+    const sql = migrationSql();
+    const reconciliationFn = sql.match(/create or replace function public\.reconcile_case_evidence_cleanup_uploads\(target_case_id uuid\)[\s\S]*?\$\$;/)?.[0];
+    const insertPolicy = storagePolicy(sql, "insert", "insert");
+
+    expect(sql).toContain("upload_lease_expires_at timestamptz not null default (now() + interval '1 hour')");
+    expect(sql).toMatch(/case_evidence_upload_jobs \([\s\S]*?case_id uuid not null/);
+    expect(reconciliationFn).toContain("security definer");
+    expect(reconciliationFn).toMatch(/upload_lease_expires_at <= now\(\)[\s\S]*?storage\.objects/);
+    expect(reconciliationFn).toMatch(/update public\.case_evidence_cleanup_jobs[\s\S]*?pending_upload_paths/);
+    expect(insertPolicy).toMatch(/public\.case_evidence_upload_jobs[\s\S]*?job\.storage_path = name[\s\S]*?job\.upload_lease_expires_at > now\(\)/);
+    expect(sql).toContain("grant execute on function public.reconcile_case_evidence_cleanup_uploads(uuid) to authenticated");
+  });
+
   it("restricts cleanup-job creation and updates to the current case owner", () => {
     const sql = migrationSql();
 
