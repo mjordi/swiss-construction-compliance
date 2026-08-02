@@ -101,6 +101,7 @@ describe("case evidence migration", () => {
     expect(sql).toMatch(/case_id uuid primary key[\s\S]*?storage_paths jsonb not null/);
     expect(fn).toMatch(/if not found then[\s\S]*?from public\.case_evidence_cleanup_jobs[\s\S]*?return jsonb_build_object\('deleted', true, 'storage_paths', evidence_paths\)/);
     expect(fn).toMatch(/insert into public\.case_evidence_cleanup_jobs[\s\S]*?delete from public\.cases/);
+    expect(fn).not.toContain("if jsonb_array_length(evidence_paths) > 0 then");
     expect(fn).toContain("jsonb_build_object('deleted', true, 'storage_paths', evidence_paths)");
     expect(sql).toContain("revoke all on function public.delete_case_with_evidence(uuid) from public");
     expect(sql).toContain("grant execute on function public.delete_case_with_evidence(uuid) to authenticated");

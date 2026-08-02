@@ -158,14 +158,12 @@ begin
   where case_id = target_case_id
     and user_id = auth.uid();
 
-  if jsonb_array_length(evidence_paths) > 0 then
-    insert into public.case_evidence_cleanup_jobs (case_id, user_id, storage_paths)
-    values (target_case_id, auth.uid(), evidence_paths)
-    on conflict (case_id) do update
-      set storage_paths = excluded.storage_paths,
-          user_id = excluded.user_id,
-          created_at = now();
-  end if;
+  insert into public.case_evidence_cleanup_jobs (case_id, user_id, storage_paths)
+  values (target_case_id, auth.uid(), evidence_paths)
+  on conflict (case_id) do update
+    set storage_paths = excluded.storage_paths,
+        user_id = excluded.user_id,
+        created_at = now();
 
   delete from public.cases
   where id = target_case_id

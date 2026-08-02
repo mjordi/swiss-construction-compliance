@@ -553,6 +553,28 @@ describe("vault follow-up links", () => {
     expect(screen.queryByText("Harbor Retrofit")).toBeNull();
   });
 
+  it("replaces an invalidated evidence refresh after archive persistence fails", async () => {
+    updateResponses.push({ error: { message: "boom" } });
+
+    render(<TechVault />);
+
+    const archiveButton = await waitFor(() =>
+      within(getProjectCard("Harbor Retrofit")).getByRole("button", { name: "vault-archive-project" })
+    );
+    mockCases = mockCases.map((item) =>
+      item.id === "case-warning"
+        ? { ...item, checklist: { ...item.checklist, evidenceAttached: true } }
+        : item
+    );
+
+    fireEvent.click(archiveButton);
+
+    await waitFor(() => {
+      expect(within(getProjectCard("Harbor Retrofit")).getByText("2/4 checklist items ready")).toBeTruthy();
+    });
+    expect((await screen.findByRole("alert")).textContent).toContain("vault-update-status-error");
+  });
+
   it("rolls back failed restore mutations and keeps the project in archived results", async () => {
     updateResponses.push({ error: { message: "restore failed" } });
 

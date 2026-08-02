@@ -504,6 +504,9 @@ export default function TechVault() {
       setStatusMutationFeedback((current) =>
         current?.projectId === projectId ? null : current
       );
+      if (currentUserIdRef.current === user.id) {
+        triggerRefresh();
+      }
     } finally {
       pendingStatusMutationProjectIdsRef.current.delete(projectId);
       setStatusMutationProjectIds((current) => current.filter((currentProjectId) => currentProjectId !== projectId));
