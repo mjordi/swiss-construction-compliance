@@ -23,6 +23,17 @@ export interface Case {
   updated_at: string;
 }
 
+export interface CaseEvidence {
+  id: string;
+  user_id: string;
+  case_id: string;
+  storage_path: string;
+  original_name: string;
+  mime_type: "application/pdf" | "image/jpeg" | "image/png";
+  size_bytes: number;
+  created_at: string;
+}
+
 export interface Protocol {
   id: string;
   user_id: string;

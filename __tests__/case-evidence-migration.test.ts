@@ -1,0 +1,210 @@
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
+import { describe, expect, it } from "vitest";
+
+const migrationPath = resolve("supabase/migrations/20260801000000_case_evidence.sql");
+const pathRegex = "'^[a-za-z0-9_-]{1,128}[.](pdf|jpg|png)$'";
+
+function migrationSql() {
+  return readFileSync(migrationPath, "utf8").toLowerCase();
+}
+
+function storagePolicy(sql: string, verb: "read" | "insert" | "delete", operation: "select" | "insert" | "delete") {
+  return sql.match(new RegExp(`create policy "users can ${verb} own case evidence objects"[\\s\\S]*?for ${operation}[\\s\\S]*?;`))?.[0];
+}
+
+describe("case evidence migration", () => {
+  it("adds the Cases workflow status before archived evidence guards reference it", () => {
+    const sql = migrationSql();
+    const statusColumn = sql.indexOf("add column if not exists status text not null default 'active'");
+    const firstArchivedGuard = sql.indexOf("cases.status <> 'archived'");
+
+    expect(statusColumn).toBeGreaterThan(-1);
+    expect(sql).toContain("check (status in ('active', 'review', 'archived'))");
+    expect(firstArchivedGuard).toBeGreaterThan(statusColumn);
+  });
+
+  it("creates constrained owner/case/path-bound metadata with RLS and PostgreSQL-safe path regexes", () => {
+    const sql = migrationSql();
+
+    expect(sql).toContain("create table if not exists public.case_evidence");
+    for (const column of ["user_id", "case_id", "storage_path", "original_name", "mime_type", "size_bytes", "created_at"]) {
+      expect(sql).toContain(column);
+    }
+    expect(sql).toContain("unique (storage_path)");
+    expect(sql).toMatch(/constraint case_evidence_storage_path_matches_case check\s*\([\s\S]*?cardinality\(string_to_array\(storage_path, '\/'\)\) = 3[\s\S]*?split_part\(storage_path, '\/', 1\) = user_id::text[\s\S]*?split_part\(storage_path, '\/', 2\) = case_id::text[\s\S]*?split_part\(storage_path, '\/', 3\) ~/);
+    expect(sql.match(new RegExp(pathRegex.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "g"))).toHaveLength(4);
+    expect(sql).not.toContain(String.raw`\\.(pdf|jpg|png)`);
+    expect(sql).toContain("size_bytes between 1 and 10485760");
+    expect(sql).toContain("application/pdf");
+    expect(sql).toContain("image/jpeg");
+    expect(sql).toContain("image/png");
+    expect(sql).toContain("enable row level security");
+
+    const selectPolicy = sql.match(/create policy "users can read own case_evidence"[\s\S]*?;/)?.[0];
+    expect(selectPolicy).toMatch(/auth\.uid\(\) = user_id[\s\S]*?exists\s*\([\s\S]*?cases\.id = case_evidence\.case_id[\s\S]*?cases\.user_id = auth\.uid\(\)/);
+    const insertPolicy = sql.match(/create policy "users can insert own case_evidence"[\s\S]*?;/)?.[0];
+    expect(insertPolicy).toMatch(/auth\.uid\(\) = user_id[\s\S]*?authorize_case_evidence_metadata_insert\(case_id\)/);
+    expect(sql).toContain("create index if not exists case_evidence_user_case_created_idx");
+  });
+
+  it("atomically marks only the authenticated owner's evidence checklist field", () => {
+    const sql = migrationSql();
+    const fn = sql.match(/create or replace function public\.mark_case_evidence_attached\(target_case_id uuid\)[\s\S]*?\$\$;/)?.[0];
+
+    expect(fn).toBeDefined();
+    expect(fn).toContain("returns boolean");
+    expect(fn).toContain("security invoker");
+    expect(fn).toContain("set search_path = ''");
+    expect(fn).toContain("update public.cases");
+    expect(fn).toContain("jsonb_set(");
+    expect(fn).toContain("coalesce(checklist, '{}'::jsonb)");
+    expect(fn).toContain("'{evidenceattached}'");
+    expect(fn).toContain("'true'::jsonb");
+    expect(fn).toContain("updated_at = now()");
+    expect(fn).toMatch(/where id = target_case_id\s+and user_id = auth\.uid\(\)/);
+    expect(fn).toContain("get diagnostics affected_rows = row_count");
+    expect(fn).toContain("return affected_rows > 0");
+    expect(sql).toContain("revoke all on function public.mark_case_evidence_attached(uuid) from public");
+    expect(sql).toContain("grant execute on function public.mark_case_evidence_attached(uuid) to authenticated");
+  });
+
+  it("persists Cases checklist toggles per key without replacing concurrent fields", () => {
+    const sql = migrationSql();
+    const fn = sql.match(/create or replace function public\.set_case_checklist_item\([\s\S]*?\$\$;/)?.[0];
+
+    expect(fn).toBeDefined();
+    expect(fn).toContain("target_key text");
+    expect(fn).toContain("target_value boolean");
+    expect(fn).toContain("'evidenceattached'");
+    expect(fn).toContain("array[target_key]");
+    expect(fn).toContain("to_jsonb(target_value)");
+    expect(fn).toMatch(/where id = target_case_id\s+and user_id = auth\.uid\(\)/);
+    expect(fn).toContain("returns jsonb");
+    expect(fn).toContain("returning checklist into persisted_checklist");
+    expect(fn).toContain("return persisted_checklist");
+    expect(sql).toContain("revoke all on function public.set_case_checklist_item(uuid, text, boolean) from public");
+    expect(sql).toContain("grant execute on function public.set_case_checklist_item(uuid, text, boolean) to authenticated");
+  });
+
+  it("serializes case deletion and durably preserves cleanup paths across ambiguous responses", () => {
+    const sql = migrationSql();
+    const fn = sql.match(/create or replace function public\.delete_case_with_evidence\(target_case_id uuid\)[\s\S]*?\$\$;/)?.[0];
+
+    expect(fn).toBeDefined();
+    expect(fn).toContain("returns jsonb");
+    expect(fn).toContain("security invoker");
+    expect(fn).toContain("set search_path = ''");
+    expect(fn).toMatch(/from public\.cases[\s\S]*?where id = target_case_id[\s\S]*?and user_id = auth\.uid\(\)[\s\S]*?for update/);
+    expect(fn).toMatch(/select coalesce\(jsonb_agg\(storage_path order by created_at\), '\[\]'::jsonb\)[\s\S]*?from public\.case_evidence[\s\S]*?delete from public\.cases/);
+    expect(sql).toContain("create table if not exists public.case_evidence_cleanup_jobs");
+    expect(sql).toMatch(/case_id uuid primary key[\s\S]*?storage_paths jsonb not null[\s\S]*?pending_upload_paths jsonb not null/);
+    expect(fn).toMatch(/if not found then[\s\S]*?select storage_paths, pending_upload_paths[\s\S]*?from public\.case_evidence_cleanup_jobs[\s\S]*?'cleanup_pending', jsonb_array_length\(pending_upload_paths\) > 0/);
+    expect(fn).toMatch(/insert into public\.case_evidence_cleanup_jobs[\s\S]*?delete from public\.cases/);
+    expect(fn).toMatch(/from public\.case_evidence_upload_jobs[\s\S]*?upload_completed_at is null/);
+    expect(fn).not.toContain("interval '15 minutes'");
+    expect(fn).toMatch(/insert into public\.case_evidence_cleanup_jobs \(case_id, user_id, storage_paths, pending_upload_paths\)/);
+    expect(fn).not.toContain("if jsonb_array_length(evidence_paths) > 0 then");
+    expect(fn).toContain("'cleanup_pending', jsonb_array_length(pending_upload_paths) > 0");
+    expect(sql).toContain("revoke all on function public.delete_case_with_evidence(uuid) from public");
+    expect(sql).toContain("grant execute on function public.delete_case_with_evidence(uuid) to authenticated");
+    const completeFn = sql.match(/create or replace function public\.complete_case_evidence_cleanup\(target_case_id uuid\)[\s\S]*?\$\$;/)?.[0];
+    expect(completeFn).toMatch(/delete from public\.case_evidence_cleanup_jobs[\s\S]*?user_id = auth\.uid\(\)[\s\S]*?jsonb_array_length\(pending_upload_paths\) = 0/);
+    expect(sql).toContain("grant execute on function public.complete_case_evidence_cleanup(uuid) to authenticated");
+  });
+
+  it("persists and later reconciles ambiguous upload paths", () => {
+    const sql = migrationSql();
+
+    expect(sql).toContain("create table if not exists public.case_evidence_upload_jobs");
+    expect(sql).toContain("record_case_evidence_upload_reconciliation");
+    expect(sql).toContain("reconcile_case_evidence_uploads");
+    expect(sql).toMatch(/reconcile_case_evidence_uploads[\s\S]*?storage\.objects[\s\S]*?insert into public\.case_evidence[\s\S]*?delete from public\.case_evidence_upload_jobs/);
+    expect(sql).toMatch(/select storage_path, created_at from public\.case_evidence_upload_jobs[\s\S]*?where case_id = target_case_id/);
+    expect(sql).toMatch(/with ready_jobs as[\s\S]*?cases\.status <> 'archived'[\s\S]*?storage\.objects/);
+    const reconciliationFn = sql.match(/create or replace function public\.reconcile_case_evidence_uploads\(target_case_id uuid\)[\s\S]*?\$\$;/)?.[0];
+    expect(reconciliationFn).toMatch(/perform 1[\s\S]*?public\.case_evidence_upload_jobs job[\s\S]*?for update of job/);
+    expect(reconciliationFn).toMatch(/upload_lease_expires_at <= clock_timestamp\(\)[\s\S]*?or exists/);
+    expect(reconciliationFn).toMatch(/from ready_jobs where object_exists/);
+    expect(reconciliationFn).toMatch(
+      /count\(\*\) filter \(where object_exists\)[\s\S]*?public\.mark_case_evidence_attached[\s\S]*?delete from public\.case_evidence_upload_jobs/
+    );
+    expect(reconciliationFn).toMatch(/mark_case_evidence_attached[\s\S]*?return false;[\s\S]*?delete from public\.case_evidence_upload_jobs/);
+  });
+
+  it("tracks terminal upload outcomes before releasing deletion cleanup", () => {
+    const sql = migrationSql();
+    const completionFn = sql.match(/create or replace function public\.mark_case_evidence_upload_completed\(target_storage_path text\)[\s\S]*?\$\$;/)?.[0];
+
+    expect(sql).toContain("upload_completed_at timestamptz");
+    expect(completionFn).toContain("security definer");
+    expect(completionFn).toMatch(/update public\.case_evidence_upload_jobs[\s\S]*?upload_completed_at = now\(\)[\s\S]*?user_id = auth\.uid\(\)/);
+    expect(completionFn).toMatch(/update public\.case_evidence_cleanup_jobs[\s\S]*?pending_upload_paths[\s\S]*?path <> target_storage_path[\s\S]*?user_id = auth\.uid\(\)/);
+    expect(sql).toContain("grant execute on function public.mark_case_evidence_upload_completed(text) to authenticated");
+  });
+
+  it("reconciles abandoned upload intents under a lock-serialized server lease", () => {
+    const sql = migrationSql();
+    const reconciliationFn = sql.match(/create or replace function public\.reconcile_case_evidence_cleanup_uploads\(target_case_id uuid\)[\s\S]*?\$\$;/)?.[0];
+    const authorizationFn = sql.match(/create or replace function public\.authorize_case_evidence_storage_insert\(target_storage_path text\)[\s\S]*?\$\$;/)?.[0];
+    const insertPolicy = storagePolicy(sql, "insert", "insert");
+
+    expect(sql).toContain("upload_lease_expires_at timestamptz not null default (now() + interval '1 hour')");
+    expect(sql).toMatch(/case_evidence_upload_jobs \([\s\S]*?case_id uuid not null/);
+    expect(reconciliationFn).toContain("security definer");
+    expect(reconciliationFn).toMatch(/upload_lease_expires_at <= now\(\)[\s\S]*?storage\.objects/);
+    expect(reconciliationFn).toMatch(/update public\.case_evidence_cleanup_jobs[\s\S]*?pending_upload_paths/);
+    expect(authorizationFn).toContain("security definer");
+    expect(authorizationFn).toMatch(/public\.case_evidence_upload_jobs job[\s\S]*?job\.storage_path = target_storage_path[\s\S]*?job\.upload_completed_at is null[\s\S]*?job\.upload_lease_expires_at > clock_timestamp\(\)[\s\S]*?for update of job, cases/);
+    expect(authorizationFn).toMatch(/join public\.cases cases[\s\S]*?cases\.user_id = auth\.uid\(\)[\s\S]*?cases\.status <> 'archived'/);
+    expect(insertPolicy).toContain("public.authorize_case_evidence_storage_insert(name)");
+    expect(sql).toContain("grant execute on function public.authorize_case_evidence_storage_insert(text) to authenticated");
+    expect(sql).toContain("grant execute on function public.reconcile_case_evidence_cleanup_uploads(uuid) to authenticated");
+  });
+
+  it("restricts cleanup-job creation and updates to the current case owner", () => {
+    const sql = migrationSql();
+
+    const insertPolicy = sql.match(/create policy "users can insert own case evidence cleanup jobs"[\s\S]*?;/)?.[0];
+    const updatePolicy = sql.match(/create policy "users can update own case evidence cleanup jobs"[\s\S]*?;/)?.[0];
+    expect(insertPolicy).toMatch(/auth\.uid\(\) = user_id[\s\S]*?public\.cases[\s\S]*?cases\.id = case_evidence_cleanup_jobs\.case_id[\s\S]*?cases\.user_id = auth\.uid\(\)/);
+    expect(updatePolicy).toMatch(/using \(auth\.uid\(\) = user_id\)[\s\S]*?public\.cases[\s\S]*?cases\.id = case_evidence_cleanup_jobs\.case_id[\s\S]*?cases\.user_id = auth\.uid\(\)/);
+  });
+
+  it("keeps read/insert case-bound but permits exact owner-path delete after case deletion", () => {
+    const sql = migrationSql();
+
+    expect(sql).toMatch(/insert into storage\.buckets[\s\S]+case-evidence/);
+    expect(sql).toContain("false");
+    expect(sql).toContain("10485760");
+
+    for (const [verb, operation] of [["read", "select"], ["insert", "insert"]] as const) {
+      const policy = storagePolicy(sql, verb, operation);
+      expect(policy, `${operation} policy missing`).toBeDefined();
+      expect(policy).toContain("bucket_id = 'case-evidence'");
+      expect(policy).toContain("cardinality(string_to_array(name, '/')) = 3");
+      expect(policy).toContain("split_part(name, '/', 1) = auth.uid()::text");
+      expect(policy).toContain(`split_part(name, '/', 3) ~ ${pathRegex}`);
+      if (operation === "select") {
+        expect(policy).toMatch(/exists\s*\([\s\S]*?public\.cases[\s\S]*?cases\.id::text = split_part\(name, '\/', 2\)[\s\S]*?cases\.user_id = auth\.uid\(\)/);
+      } else {
+        expect(policy).toContain("public.authorize_case_evidence_storage_insert(name)");
+      }
+    }
+
+    const metadataInsertPolicy = sql.match(/create policy "users can insert own case_evidence"[\s\S]*?;/)?.[0];
+    const metadataAuthorizationFn = sql.match(/create or replace function public\.authorize_case_evidence_metadata_insert\(target_case_id uuid\)[\s\S]*?\$\$;/)?.[0];
+    expect(metadataAuthorizationFn).toContain("security definer");
+    expect(metadataAuthorizationFn).toMatch(/public\.cases cases[\s\S]*?cases\.id = target_case_id[\s\S]*?cases\.user_id = auth\.uid\(\)[\s\S]*?cases\.status <> 'archived'[\s\S]*?for update of cases/);
+    expect(metadataInsertPolicy).toContain("public.authorize_case_evidence_metadata_insert(case_id)");
+    expect(sql).toContain("grant execute on function public.authorize_case_evidence_metadata_insert(uuid) to authenticated");
+
+    const deletePolicy = storagePolicy(sql, "delete", "delete");
+    expect(deletePolicy).toContain("bucket_id = 'case-evidence'");
+    expect(deletePolicy).toContain("cardinality(string_to_array(name, '/')) = 3");
+    expect(deletePolicy).toContain("split_part(name, '/', 1) = auth.uid()::text");
+    expect(deletePolicy).toContain(`split_part(name, '/', 3) ~ ${pathRegex}`);
+    expect(deletePolicy).not.toContain("public.cases");
+    expect(deletePolicy).not.toContain("exists (");
+  });
+});

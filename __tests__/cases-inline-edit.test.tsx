@@ -108,6 +108,29 @@ vi.mock("@/lib/case-timeline", () => ({
 
 vi.mock("@/lib/supabase", () => {
   const supabaseMock = {
+    rpc: async (
+      name: string,
+      params: { target_case_id: string; target_key?: string; target_value?: boolean }
+    ) => {
+      if (name === "delete_case_with_evidence") {
+        const result = await deleteEqMock("id", params.target_case_id);
+        return {
+          data: result?.error ? null : { deleted: true, storage_paths: [] },
+          error: result?.error ?? null,
+        };
+      }
+      if (name === "complete_case_evidence_cleanup") {
+        return { data: true, error: null };
+      }
+      expect(name).toBe("set_case_checklist_item");
+      const current = casesData.find((item) => item.id === params.target_case_id);
+      const checklist = {
+        ...(current?.checklist ?? {}),
+        [params.target_key as string]: params.target_value as boolean,
+      };
+      const result = await updateEqMock({ checklist }, "id", params.target_case_id);
+      return { data: result?.error ? null : checklist, error: result?.error ?? null };
+    },
     from: (table: string) => {
       if (table === "cases") {
         return {
@@ -150,6 +173,12 @@ vi.mock("@/lib/supabase", () => {
     getSupabase: () => supabaseMock,
   };
 });
+
+vi.mock("@/lib/case-evidence-cleanup", () => ({
+  listCaseEvidenceObjectPaths: vi.fn().mockResolvedValue([]),
+  removeCaseEvidenceObjects: vi.fn().mockResolvedValue(undefined),
+  scheduleCaseEvidenceCleanupRetry: vi.fn(() => () => undefined),
+}));
 
 import CasesPage from "@/app/dashboard/cases/page";
 

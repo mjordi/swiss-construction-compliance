@@ -11,6 +11,10 @@ import { CaseAuditDossierPDF } from "@/components/dashboard/CaseAuditDossierPDF"
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
+import {
+  removeCaseEvidenceObjects,
+  scheduleCaseEvidenceCleanupRetry,
+} from "@/lib/case-evidence-cleanup";
 import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { buildCaseAuditDossier } from "@/lib/case-audit-dossier";
 import { buildFinalizedProtocolReportFromRecord } from "@/lib/protocol-report";
@@ -245,6 +249,7 @@ export default function CasesPage() {
   const [formData, setFormData] = useState<CaseFormState>(EMPTY_CASE_FORM);
   const [createError, setCreateError] = useState<TranslationKey | null>(null);
   const [deleteError, setDeleteError] = useState<TranslationKey | null>(null);
+  const cleanupWarningCaseIdRef = useRef<string | null>(null);
   const [deletingCaseIds, setDeletingCaseIds] = useState<Record<string, boolean>>({});
   const [editingCaseId, setEditingCaseId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<CaseFormState>(EMPTY_CASE_FORM);
@@ -391,6 +396,75 @@ export default function CasesPage() {
       triggerCasesRefresh();
     });
   }, [triggerCasesRefresh]);
+
+  useEffect(() => {
+    const cleanupUserId = user?.id;
+    if (!cleanupUserId) return;
+
+    // Retry durable post-delete Storage cleanup independently of the deleted
+    // card, which is no longer available as a user-triggered retry surface.
+    let cleanupInFlight = false;
+    let disposed = false;
+    const retryEvidenceCleanup = async () => {
+      if (cleanupInFlight || disposed) return;
+      cleanupInFlight = true;
+      try {
+        const { data: cleanupJobs, error } = await supabase
+          .from("case_evidence_cleanup_jobs")
+          .select("case_id, storage_paths, pending_upload_paths")
+          .eq("user_id", cleanupUserId);
+        if (error) return;
+
+        for (const job of cleanupJobs ?? []) {
+          if (Array.isArray(job.pending_upload_paths) && job.pending_upload_paths.length > 0) {
+            const { data: cleanupReady, error: reconciliationError } = await supabase.rpc(
+              "reconcile_case_evidence_cleanup_uploads",
+              { target_case_id: job.case_id }
+            );
+            if (reconciliationError || cleanupReady !== true) continue;
+          }
+          try {
+            const paths = Array.isArray(job.storage_paths)
+              ? job.storage_paths.filter((path: unknown): path is string => typeof path === "string")
+              : [];
+            await removeCaseEvidenceObjects(supabase.storage, paths);
+            const { data: completed, error: completionError } = await supabase.rpc(
+              "complete_case_evidence_cleanup",
+              { target_case_id: job.case_id }
+            );
+            if (completionError || completed !== true) {
+              throw completionError ?? new Error("Evidence cleanup retry was not acknowledged");
+            }
+            if (cleanupWarningCaseIdRef.current === job.case_id) {
+              cleanupWarningCaseIdRef.current = null;
+              setDeleteError((current) =>
+                current === "cases-delete-evidence-cleanup-error" ? null : current
+              );
+            }
+          } catch {
+            // Continue with other jobs; this one remains durable for a later visit.
+          }
+        }
+      } catch {
+        // Keep unfinished durable jobs for the next authenticated page visit.
+      } finally {
+        cleanupInFlight = false;
+      }
+    };
+
+    void retryEvidenceCleanup();
+    // Upload completion can happen in another mounted Vault tab after the
+    // initial pass. Poll the durable queue so terminal uploads and expired
+    // leases are cleaned without requiring the user to revisit Cases.
+    const stopCleanupRetry = scheduleCaseEvidenceCleanupRetry(() => {
+      void retryEvidenceCleanup();
+    });
+
+    return () => {
+      disposed = true;
+      stopCleanupRetry();
+    };
+  }, [supabase, user?.id]);
 
   useEffect(() => {
     filterStateRef.current = {
@@ -852,17 +926,22 @@ export default function CasesPage() {
     setDbCases((current) => applyChecklistState(current, updated));
 
     try {
-      const { error } = await supabase
-        .from("cases")
-        .update({ checklist: updated, updated_at: new Date().toISOString() })
-        .eq("id", caseId);
+      const { data: persisted, error } = await supabase.rpc("set_case_checklist_item", {
+        target_case_id: caseId,
+        target_key: key,
+        target_value: value,
+      });
 
-      if (error) {
-        throw error;
+      if (error || !persisted || typeof persisted !== "object" || Array.isArray(persisted)) {
+        throw error ?? new Error("Checklist update was not confirmed");
       }
 
-      lastSuccessfulCasesRef.current = applyChecklistState(lastSuccessfulCasesRef.current, updated);
-      setDbCases((current) => applyChecklistState(current, updated));
+      const authoritativeChecklist = normalizeFollowUpChecklistState(persisted);
+      lastSuccessfulCasesRef.current = applyChecklistState(
+        lastSuccessfulCasesRef.current,
+        authoritativeChecklist
+      );
+      setDbCases((current) => applyChecklistState(current, authoritativeChecklist));
     } catch {
       setDbCases((current) => applyChecklistState(current, previous));
       setChecklistSaveErrorByCase((prev) => ({
@@ -1265,7 +1344,7 @@ export default function CasesPage() {
   }
 
   async function handleDeleteCase(caseId: string, projectName: string) {
-    if (updatingCaseId) return;
+    if (!user || updatingCaseId) return;
     const confirmText = t("cases-delete-confirm").replace("{projectName}", projectName);
     const confirmed = window.confirm(confirmText);
     if (!confirmed) return;
@@ -1273,12 +1352,52 @@ export default function CasesPage() {
     setDeletingCaseIds((current) => ({ ...current, [caseId]: true }));
 
     try {
-      const { error } = await supabase.from("cases").delete().eq("id", caseId);
-      if (error) {
-        throw error;
+      // Capture paths and delete under one parent-row lock so concurrent evidence
+      // metadata inserts are either included or fail against the deleted case.
+      const { data: deletion, error } = await supabase.rpc("delete_case_with_evidence", {
+        target_case_id: caseId,
+      });
+      if (error || !deletion || deletion.deleted !== true || !Array.isArray(deletion.storage_paths)) {
+        throw error ?? new Error("Case deletion was not confirmed");
       }
+      const evidencePaths = deletion.storage_paths.filter(
+        (path: unknown): path is string => typeof path === "string"
+      );
+      const cleanupReady = deletion.cleanup_pending !== true;
 
-      setDeleteError(null);
+      if (cleanupReady) {
+        try {
+          await removeCaseEvidenceObjects(supabase.storage, evidencePaths);
+          // A concurrent durable retry may already have removed this job after
+          // the same Storage cleanup. The RPC's false result then represents
+          // idempotent success for this foreground path; only an RPC error means
+          // cleanup acknowledgement itself failed.
+          const { error: cleanupCompletionError } = await supabase.rpc(
+            "complete_case_evidence_cleanup",
+            { target_case_id: caseId }
+          );
+          if (cleanupCompletionError) {
+            throw cleanupCompletionError;
+          }
+          if (cleanupWarningCaseIdRef.current === caseId) {
+            cleanupWarningCaseIdRef.current = null;
+            setDeleteError((current) =>
+              current === "cases-delete-evidence-cleanup-error" ? null : current
+            );
+          } else if (cleanupWarningCaseIdRef.current === null) {
+            setDeleteError(null);
+          }
+        } catch {
+          // The case is already deleted; preserve that successful UI result while
+          // surfacing the separate Storage cleanup failure for support follow-up.
+          cleanupWarningCaseIdRef.current = caseId;
+          setDeleteError("cases-delete-evidence-cleanup-error");
+        }
+      } else {
+        // A pre-authorized upload is still in flight. Its terminal signal releases
+        // the durable cleanup job for a later authenticated Cases-page visit.
+        if (cleanupWarningCaseIdRef.current === null) setDeleteError(null);
+      }
       setDbCases((current) => {
         const next = current.filter((item) => item.id !== caseId);
         lastSuccessfulCasesRef.current = next;
