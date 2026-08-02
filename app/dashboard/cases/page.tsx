@@ -1368,12 +1368,16 @@ export default function CasesPage() {
       if (cleanupReady) {
         try {
           await removeCaseEvidenceObjects(supabase.storage, evidencePaths);
-          const { data: cleanupCompleted, error: cleanupCompletionError } = await supabase.rpc(
+          // A concurrent durable retry may already have removed this job after
+          // the same Storage cleanup. The RPC's false result then represents
+          // idempotent success for this foreground path; only an RPC error means
+          // cleanup acknowledgement itself failed.
+          const { error: cleanupCompletionError } = await supabase.rpc(
             "complete_case_evidence_cleanup",
             { target_case_id: caseId }
           );
-          if (cleanupCompletionError || cleanupCompleted !== true) {
-            throw cleanupCompletionError ?? new Error("Evidence cleanup was not acknowledged");
+          if (cleanupCompletionError) {
+            throw cleanupCompletionError;
           }
           cleanupWarningCaseIdRef.current = null;
           setDeleteError(null);

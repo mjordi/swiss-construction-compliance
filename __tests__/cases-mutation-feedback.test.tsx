@@ -431,6 +431,25 @@ describe("cases mutation feedback", () => {
     expect(screen.queryByText("Alpine Tower")).toBeNull();
   });
 
+  it("treats cleanup already completed by the background retry as success", async () => {
+    deleteCaseWithEvidenceMock.mockImplementationOnce(async ({ target_case_id: caseId }: { target_case_id: string }) => {
+      casesData = casesData.filter((item) => item.id !== caseId);
+      return { data: { deleted: true, storage_paths: ["user-1/case-1/report.pdf"] }, error: null };
+    });
+    completeCaseEvidenceCleanupMock.mockResolvedValueOnce({ data: false, error: null });
+
+    render(<CasesPage />);
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+
+    fireEvent.click(screen.getByTitle("cases-delete"));
+
+    await waitFor(() => {
+      expect(completeCaseEvidenceCleanupMock).toHaveBeenCalledWith({ target_case_id: "case-1" });
+      expect(screen.queryByText("Alpine Tower")).toBeNull();
+    });
+    expect(screen.queryByText("cases-delete-evidence-cleanup-error")).toBeNull();
+  });
+
   it("defers deletion cleanup until the pending upload reports a terminal outcome", async () => {
     deleteCaseWithEvidenceMock.mockImplementationOnce(async ({ target_case_id: caseId }: { target_case_id: string }) => {
       casesData = casesData.filter((item) => item.id !== caseId);
