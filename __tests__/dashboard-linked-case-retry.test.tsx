@@ -11,8 +11,7 @@ let caseResponsesQueue: Array<{ data: Array<Record<string, unknown>> | null; err
 let allowRecovery = false;
 let lastComplianceRecordCaseId: string | null | undefined;
 let insertedProtocols: Array<Record<string, unknown>>;
-let caseChecklistResponse: Record<string, boolean> | null;
-let caseUpdatePayloads: Array<Record<string, unknown>>;
+let checklistRpcCalls: Array<{ name: string; args: Record<string, unknown> }>;
 let protocolInsertFactory: (payload: Record<string, unknown>) => Promise<{ error: null }> | { error: null };
 let signaturePadIsEmpty = true;
 let signaturePadEndStrokeHandler: (() => void) | null = null;
@@ -57,17 +56,15 @@ function createDeferredBlob(): DeferredBlob {
 }
 
 const supabaseMock = {
+  rpc: (name: string, args: Record<string, unknown>) => {
+    checklistRpcCalls.push({ name, args });
+    return Promise.resolve({ data: { defectDocumented: true }, error: null });
+  },
   from: (table: string) => {
     if (table === "cases") {
       return {
-        select: (columns?: string) => ({
+        select: () => ({
           eq: () => {
-            if (columns === "checklist") {
-              return {
-                single: () => Promise.resolve({ data: { checklist: caseChecklistResponse }, error: null }),
-              };
-            }
-
             return {
               order: () => {
                 if (caseResponsesQueue.length > 0) {
@@ -79,12 +76,6 @@ const supabaseMock = {
             };
           },
         }),
-        update: (payload: Record<string, unknown>) => {
-          caseUpdatePayloads.push(payload);
-          return {
-            eq: () => Promise.resolve({ error: null }),
-          };
-        },
       };
     }
 
@@ -249,8 +240,7 @@ describe("dashboard linked-case loading retry", () => {
     allowRecovery = false;
     lastComplianceRecordCaseId = undefined;
     insertedProtocols = [];
-    caseChecklistResponse = null;
-    caseUpdatePayloads = [];
+    checklistRpcCalls = [];
     protocolInsertFactory = () => Promise.resolve({ error: null });
     signaturePadIsEmpty = true;
     signaturePadEndStrokeHandler = null;
@@ -510,7 +500,7 @@ describe("dashboard linked-case loading retry", () => {
     });
   });
 
-  it("marks linked-case defect documentation when finalizing against an empty checklist", async () => {
+  it("marks linked-case defect documentation through the per-key RPC", async () => {
     window.localStorage.setItem(
       "baucompliance:wizard-project-draft",
       JSON.stringify({
@@ -521,7 +511,6 @@ describe("dashboard linked-case loading retry", () => {
         updatedAt: "2026-05-15T09:00:00.000Z",
       })
     );
-    caseChecklistResponse = null;
     caseResponseFactory = () => ({ data: [buildCase()], error: null });
 
     render(<DashboardPage />);
@@ -547,17 +536,19 @@ describe("dashboard linked-case loading retry", () => {
 
     await waitFor(() => {
       expect(insertedProtocols[0]?.case_id).toBe("case-1");
-      expect(caseUpdatePayloads).toHaveLength(1);
+      expect(checklistRpcCalls).toHaveLength(1);
     });
-    expect(caseUpdatePayloads[0]?.checklist).toEqual({
-      defectDocumented: true,
-      evidenceAttached: false,
-      noticeDrafted: false,
-      calendarReminderExported: false,
+    expect(checklistRpcCalls[0]).toEqual({
+      name: "set_case_checklist_item",
+      args: {
+        target_case_id: "case-1",
+        target_key: "defectDocumented",
+        target_value: true,
+      },
     });
   });
 
-  it("preserves sparse linked-case checklist values when marking defect documentation", async () => {
+  it("does not issue a whole-checklist write during linked protocol finalization", async () => {
     window.localStorage.setItem(
       "baucompliance:wizard-project-draft",
       JSON.stringify({
@@ -568,7 +559,6 @@ describe("dashboard linked-case loading retry", () => {
         updatedAt: "2026-05-15T09:00:00.000Z",
       })
     );
-    caseChecklistResponse = { evidenceAttached: true };
     caseResponseFactory = () => ({ data: [buildCase()], error: null });
 
     render(<DashboardPage />);
@@ -589,14 +579,13 @@ describe("dashboard linked-case loading retry", () => {
 
     await waitFor(() => {
       expect(insertedProtocols[0]?.case_id).toBe("case-1");
-      expect(caseUpdatePayloads).toHaveLength(1);
+      expect(checklistRpcCalls).toHaveLength(1);
     });
-    expect(caseUpdatePayloads[0]?.checklist).toEqual({
-      defectDocumented: true,
-      evidenceAttached: true,
-      noticeDrafted: false,
-      calendarReminderExported: false,
-    });
+    expect(checklistRpcCalls[0]?.name).toBe("set_case_checklist_item");
+    expect(checklistRpcCalls[0]?.args).toEqual(expect.objectContaining({
+      target_key: "defectDocumented",
+      target_value: true,
+    }));
   });
 
   it("shows a linked-case follow-up action after finalizing a linked protocol", async () => {

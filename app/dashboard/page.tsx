@@ -10,7 +10,6 @@ import { AuditReportPDF } from "@/components/dashboard/AuditReportPDF";
 import SignaturePad from 'signature_pad';
 import { useLanguage } from "@/context/LanguageContext";
 import type { TranslationKey } from "@/locales";
-import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { buildComplianceRecord } from "@/lib/compliance-record";
 import { getEffectiveSelectedCaseId, hasStaleLinkedCase as isStaleLinkedCase } from "@/lib/dashboard-linked-case";
 import { buildProtocolDefectDescription, buildWizardDraft, getProtocolFinalizeReadiness, type WizardDraft } from "@/lib/dashboard-protocol";
@@ -19,7 +18,7 @@ import { buildCaseVaultHref, buildVaultProjectCasesHref } from "@/lib/vault";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import type { Case } from "@/lib/database.types";
-import { toComplianceCaseViewModel, type CaseDeadlineStatus, type ComplianceCaseViewModel, type FollowUpChecklistState } from "@/lib/case-timeline";
+import { toComplianceCaseViewModel, type CaseDeadlineStatus, type ComplianceCaseViewModel } from "@/lib/case-timeline";
 
 const PROJECT_DRAFT_STORAGE_KEY = "baucompliance:wizard-project-draft";
 
@@ -466,34 +465,17 @@ export default function Dashboard() {
 
         // Auto-mark "defect documented" on the linked case.
         // This is a best-effort follow-up; do not fail finalization after the
-        // protocol row has already been written.
+        // protocol row has already been written. Use the per-key mutation so
+        // this stale tab cannot replace checklist fields updated concurrently.
         if (effectiveSelectedCaseId) {
           try {
-            const { data: caseData, error: caseLoadError } = await supabase
-              .from("cases")
-              .select("checklist")
-              .eq("id", effectiveSelectedCaseId)
-              .single();
-
-            if (caseLoadError) throw caseLoadError;
-
-            const persistedChecklist = (caseData?.checklist ?? null) as Partial<FollowUpChecklistState> | null;
-            const checklist = normalizeFollowUpChecklistState({
-              ...selectedCaseContext?.checklistDefaults,
-              ...(persistedChecklist ?? {}),
+            const { error: caseUpdateError } = await supabase.rpc("set_case_checklist_item", {
+              target_case_id: effectiveSelectedCaseId,
+              target_key: "defectDocumented",
+              target_value: true,
             });
 
-            if (!persistedChecklist?.defectDocumented) {
-              const { error: caseUpdateError } = await supabase
-                .from("cases")
-                .update({
-                  checklist: { ...checklist, defectDocumented: true },
-                  updated_at: new Date().toISOString(),
-                })
-                .eq("id", effectiveSelectedCaseId);
-
-              if (caseUpdateError) throw caseUpdateError;
-            }
+            if (caseUpdateError) throw caseUpdateError;
           } catch (caseSyncError) {
             console.warn("Protocol finalized but linked case checklist sync failed", caseSyncError);
           }
