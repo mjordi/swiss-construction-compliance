@@ -135,9 +135,10 @@ describe("case evidence migration", () => {
     expect(sql).toContain("grant execute on function public.mark_case_evidence_upload_completed(text) to authenticated");
   });
 
-  it("reconciles abandoned upload intents under a server-enforced lease", () => {
+  it("reconciles abandoned upload intents under a lock-serialized server lease", () => {
     const sql = migrationSql();
     const reconciliationFn = sql.match(/create or replace function public\.reconcile_case_evidence_cleanup_uploads\(target_case_id uuid\)[\s\S]*?\$\$;/)?.[0];
+    const authorizationFn = sql.match(/create or replace function public\.authorize_case_evidence_storage_insert\(target_storage_path text\)[\s\S]*?\$\$;/)?.[0];
     const insertPolicy = storagePolicy(sql, "insert", "insert");
 
     expect(sql).toContain("upload_lease_expires_at timestamptz not null default (now() + interval '1 hour')");
@@ -145,7 +146,11 @@ describe("case evidence migration", () => {
     expect(reconciliationFn).toContain("security definer");
     expect(reconciliationFn).toMatch(/upload_lease_expires_at <= now\(\)[\s\S]*?storage\.objects/);
     expect(reconciliationFn).toMatch(/update public\.case_evidence_cleanup_jobs[\s\S]*?pending_upload_paths/);
-    expect(insertPolicy).toMatch(/public\.case_evidence_upload_jobs[\s\S]*?job\.storage_path = name[\s\S]*?job\.upload_lease_expires_at > now\(\)/);
+    expect(authorizationFn).toContain("security definer");
+    expect(authorizationFn).toMatch(/public\.case_evidence_upload_jobs job[\s\S]*?job\.storage_path = target_storage_path[\s\S]*?job\.upload_completed_at is null[\s\S]*?job\.upload_lease_expires_at > clock_timestamp\(\)[\s\S]*?for update of job/);
+    expect(authorizationFn).toMatch(/join public\.cases cases[\s\S]*?cases\.user_id = auth\.uid\(\)[\s\S]*?cases\.status <> 'archived'/);
+    expect(insertPolicy).toContain("public.authorize_case_evidence_storage_insert(name)");
+    expect(sql).toContain("grant execute on function public.authorize_case_evidence_storage_insert(text) to authenticated");
     expect(sql).toContain("grant execute on function public.reconcile_case_evidence_cleanup_uploads(uuid) to authenticated");
   });
 
@@ -172,8 +177,11 @@ describe("case evidence migration", () => {
       expect(policy).toContain("cardinality(string_to_array(name, '/')) = 3");
       expect(policy).toContain("split_part(name, '/', 1) = auth.uid()::text");
       expect(policy).toContain(`split_part(name, '/', 3) ~ ${pathRegex}`);
-      expect(policy).toMatch(/exists\s*\([\s\S]*?public\.cases[\s\S]*?cases\.id::text = split_part\(name, '\/', 2\)[\s\S]*?cases\.user_id = auth\.uid\(\)/);
-      if (operation === "insert") expect(policy).toContain("cases.status <> 'archived'");
+      if (operation === "select") {
+        expect(policy).toMatch(/exists\s*\([\s\S]*?public\.cases[\s\S]*?cases\.id::text = split_part\(name, '\/', 2\)[\s\S]*?cases\.user_id = auth\.uid\(\)/);
+      } else {
+        expect(policy).toContain("public.authorize_case_evidence_storage_insert(name)");
+      }
     }
 
     const metadataInsertPolicy = sql.match(/create policy "users can insert own case_evidence"[\s\S]*?;/)?.[0];

@@ -150,6 +150,7 @@ vi.mock("@/lib/supabase", () => ({
 
 vi.mock("@/lib/case-evidence-cleanup", () => ({
   removeCaseEvidenceObjects: removeCaseEvidenceObjectsMock,
+  scheduleCaseEvidenceCleanupRetry: vi.fn(() => () => undefined),
 }));
 
 import CasesPage from "@/app/dashboard/cases/page";
@@ -225,6 +226,7 @@ describe("cases mutation feedback", () => {
     expect(removeCaseEvidenceObjectsMock).not.toHaveBeenCalled();
     expect(completeCaseEvidenceCleanupMock).not.toHaveBeenCalled();
   });
+
 
   it("cleans up an abandoned upload after server-side lease reconciliation", async () => {
     cleanupJobsData = [{

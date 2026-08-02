@@ -131,6 +131,7 @@ vi.mock("@/lib/supabase", () => ({
 vi.mock("@/lib/case-evidence-cleanup", () => ({
   listCaseEvidenceObjectPaths: vi.fn().mockResolvedValue([]),
   removeCaseEvidenceObjects: vi.fn().mockResolvedValue(undefined),
+  scheduleCaseEvidenceCleanupRetry: vi.fn(() => () => undefined),
 }));
 
 import CasesPage from "@/app/dashboard/cases/page";

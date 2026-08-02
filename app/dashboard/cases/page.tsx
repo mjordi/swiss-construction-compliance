@@ -11,7 +11,10 @@ import { CaseAuditDossierPDF } from "@/components/dashboard/CaseAuditDossierPDF"
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
-import { removeCaseEvidenceObjects } from "@/lib/case-evidence-cleanup";
+import {
+  removeCaseEvidenceObjects,
+  scheduleCaseEvidenceCleanupRetry,
+} from "@/lib/case-evidence-cleanup";
 import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { buildCaseAuditDossier } from "@/lib/case-audit-dossier";
 import { buildFinalizedProtocolReportFromRecord } from "@/lib/protocol-report";
@@ -394,16 +397,21 @@ export default function CasesPage() {
   }, [triggerCasesRefresh]);
 
   useEffect(() => {
-    if (!user) return;
+    const cleanupUserId = user?.id;
+    if (!cleanupUserId) return;
 
     // Retry durable post-delete Storage cleanup independently of the deleted
     // card, which is no longer available as a user-triggered retry surface.
-    void (async () => {
+    let cleanupInFlight = false;
+    let disposed = false;
+    const retryEvidenceCleanup = async () => {
+      if (cleanupInFlight || disposed) return;
+      cleanupInFlight = true;
       try {
         const { data: cleanupJobs, error } = await supabase
           .from("case_evidence_cleanup_jobs")
           .select("case_id, storage_paths, pending_upload_paths")
-          .eq("user_id", user.id);
+          .eq("user_id", cleanupUserId);
         if (error) return;
 
         for (const job of cleanupJobs ?? []) {
@@ -432,9 +440,24 @@ export default function CasesPage() {
         }
       } catch {
         // Keep unfinished durable jobs for the next authenticated page visit.
+      } finally {
+        cleanupInFlight = false;
       }
-    })();
-  }, [supabase, user]);
+    };
+
+    void retryEvidenceCleanup();
+    // Upload completion can happen in another mounted Vault tab after the
+    // initial pass. Poll the durable queue so terminal uploads and expired
+    // leases are cleaned without requiring the user to revisit Cases.
+    const stopCleanupRetry = scheduleCaseEvidenceCleanupRetry(() => {
+      void retryEvidenceCleanup();
+    });
+
+    return () => {
+      disposed = true;
+      stopCleanupRetry();
+    };
+  }, [supabase, user?.id]);
 
   useEffect(() => {
     filterStateRef.current = {

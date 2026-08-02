@@ -1,11 +1,33 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  CASE_EVIDENCE_CLEANUP_RETRY_MS,
   listCaseEvidenceObjectPaths,
   removeCaseEvidenceObjects,
+  scheduleCaseEvidenceCleanupRetry,
   type CaseEvidenceStorageClient,
 } from "@/lib/case-evidence-cleanup";
 
 describe("removeCaseEvidenceObjects", () => {
+  it("schedules recurring retries for cleanup jobs waiting on terminal uploads", () => {
+    const retry = vi.fn();
+    let scheduled: (() => void) | undefined;
+    const scheduler = {
+      setInterval: vi.fn((callback: () => void) => {
+        scheduled = callback;
+        return 42 as unknown as ReturnType<typeof setInterval>;
+      }),
+      clearInterval: vi.fn(),
+    };
+
+    const stop = scheduleCaseEvidenceCleanupRetry(retry, scheduler);
+
+    expect(scheduler.setInterval).toHaveBeenCalledWith(retry, CASE_EVIDENCE_CLEANUP_RETRY_MS);
+    scheduled?.();
+    expect(retry).toHaveBeenCalledOnce();
+    stop();
+    expect(scheduler.clearInterval).toHaveBeenCalledWith(42);
+  });
+
   it("lists every page and removes all case evidence before case deletion", async () => {
     const firstPage = Array.from({ length: 100 }, (_, index) => ({ name: `evidence-${index}.pdf` }));
     const secondPage = [{ name: "evidence-100.png" }];

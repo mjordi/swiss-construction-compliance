@@ -2,6 +2,20 @@ import { CASE_EVIDENCE_BUCKET } from "@/lib/case-evidence";
 
 const LIST_PAGE_SIZE = 100;
 const REMOVE_BATCH_SIZE = 100;
+export const CASE_EVIDENCE_CLEANUP_RETRY_MS = 30_000;
+
+interface CleanupRetryScheduler {
+  setInterval(callback: () => void, delay: number): ReturnType<typeof setInterval>;
+  clearInterval(timer: ReturnType<typeof setInterval>): void;
+}
+
+export function scheduleCaseEvidenceCleanupRetry(
+  retry: () => void,
+  scheduler: CleanupRetryScheduler = window
+): () => void {
+  const timer = scheduler.setInterval(retry, CASE_EVIDENCE_CLEANUP_RETRY_MS);
+  return () => scheduler.clearInterval(timer);
+}
 
 type StorageObject = { name: string };
 type StorageResult<T> = { data: T | null; error: unknown };

@@ -445,6 +445,39 @@ $$;
 revoke all on function public.complete_case_evidence_cleanup(uuid) from public;
 grant execute on function public.complete_case_evidence_cleanup(uuid) to authenticated;
 
+-- Storage evaluates insert policies inside the object-insert transaction. Lock
+-- the matching intent for that transaction so lease reconciliation cannot mark
+-- it terminal (and retire its cleanup path) while an authorized insert is still
+-- capable of committing. If reconciliation wins the lock first, the completed
+-- marker makes the later insert fail authorization after it resumes.
+create or replace function public.authorize_case_evidence_storage_insert(target_storage_path text)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  authorized boolean;
+begin
+  select true
+  into authorized
+  from public.case_evidence_upload_jobs job
+  join public.cases cases on cases.id = job.case_id
+  where job.storage_path = target_storage_path
+    and job.user_id = auth.uid()
+    and job.upload_completed_at is null
+    and job.upload_lease_expires_at > clock_timestamp()
+    and cases.user_id = auth.uid()
+    and cases.status <> 'archived'
+  for update of job;
+
+  return coalesce(authorized, false);
+end;
+$$;
+
+revoke all on function public.authorize_case_evidence_storage_insert(text) from public;
+grant execute on function public.authorize_case_evidence_storage_insert(text) to authenticated;
+
 drop policy if exists "Users can read own case_evidence" on public.case_evidence;
 create policy "Users can read own case_evidence"
   on public.case_evidence for select
@@ -507,18 +540,7 @@ create policy "Users can insert own case evidence objects"
     and cardinality(string_to_array(name, '/')) = 3
     and split_part(name, '/', 1) = auth.uid()::text
     and split_part(name, '/', 3) ~ '^[A-Za-z0-9_-]{1,128}[.](pdf|jpg|png)$'
-    and exists (
-      select 1 from public.case_evidence_upload_jobs job
-      where job.storage_path = name
-        and job.user_id = auth.uid()
-        and job.upload_lease_expires_at > now()
-    )
-    and exists (
-      select 1 from public.cases
-      where cases.id::text = split_part(name, '/', 2)
-        and cases.user_id = auth.uid()
-        and cases.status <> 'archived'
-    )
+    and public.authorize_case_evidence_storage_insert(name)
   );
 
 drop policy if exists "Users can delete own case evidence objects" on storage.objects;
