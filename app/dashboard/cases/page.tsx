@@ -402,11 +402,13 @@ export default function CasesPage() {
       try {
         const { data: cleanupJobs, error } = await supabase
           .from("case_evidence_cleanup_jobs")
-          .select("case_id, storage_paths")
+          .select("case_id, storage_paths, cleanup_after")
           .eq("user_id", user.id);
         if (error) return;
 
         for (const job of cleanupJobs ?? []) {
+          const cleanupAfter = typeof job.cleanup_after === "string" ? Date.parse(job.cleanup_after) : NaN;
+          if (Number.isFinite(cleanupAfter) && cleanupAfter > Date.now()) continue;
           try {
             const paths = Array.isArray(job.storage_paths)
               ? job.storage_paths.filter((path: unknown): path is string => typeof path === "string")
@@ -1326,21 +1328,30 @@ export default function CasesPage() {
       const evidencePaths = deletion.storage_paths.filter(
         (path: unknown): path is string => typeof path === "string"
       );
+      const cleanupAfter =
+        typeof deletion.cleanup_after === "string" ? Date.parse(deletion.cleanup_after) : NaN;
+      const cleanupReady = !Number.isFinite(cleanupAfter) || cleanupAfter <= Date.now();
 
-      try {
-        await removeCaseEvidenceObjects(supabase.storage, evidencePaths);
-        const { data: cleanupCompleted, error: cleanupCompletionError } = await supabase.rpc(
-          "complete_case_evidence_cleanup",
-          { target_case_id: caseId }
-        );
-        if (cleanupCompletionError || cleanupCompleted !== true) {
-          throw cleanupCompletionError ?? new Error("Evidence cleanup was not acknowledged");
+      if (cleanupReady) {
+        try {
+          await removeCaseEvidenceObjects(supabase.storage, evidencePaths);
+          const { data: cleanupCompleted, error: cleanupCompletionError } = await supabase.rpc(
+            "complete_case_evidence_cleanup",
+            { target_case_id: caseId }
+          );
+          if (cleanupCompletionError || cleanupCompleted !== true) {
+            throw cleanupCompletionError ?? new Error("Evidence cleanup was not acknowledged");
+          }
+          setDeleteError(null);
+        } catch {
+          // The case is already deleted; preserve that successful UI result while
+          // surfacing the separate Storage cleanup failure for support follow-up.
+          setDeleteError("cases-delete-evidence-cleanup-error");
         }
+      } else {
+        // A pre-authorized upload can still be in flight. Its durable cleanup job
+        // will be retried on a later authenticated Cases-page visit.
         setDeleteError(null);
-      } catch {
-        // The case is already deleted; preserve that successful UI result while
-        // surfacing the separate Storage cleanup failure for support follow-up.
-        setDeleteError("cases-delete-evidence-cleanup-error");
       }
       setDbCases((current) => {
         const next = current.filter((item) => item.id !== caseId);

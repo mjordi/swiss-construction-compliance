@@ -60,6 +60,7 @@ create table if not exists public.case_evidence_cleanup_jobs (
   case_id uuid primary key,
   user_id uuid references auth.users(id) on delete cascade not null,
   storage_paths jsonb not null check (jsonb_typeof(storage_paths) = 'array'),
+  cleanup_after timestamptz not null default now(),
   created_at timestamptz not null default now()
 );
 
@@ -245,6 +246,7 @@ set search_path = ''
 as $$
 declare
   evidence_paths jsonb;
+  cleanup_after_at timestamptz;
 begin
   perform 1
   from public.cases
@@ -255,14 +257,18 @@ begin
   if not found then
     -- A retry after an ambiguous transport failure recovers the durable paths
     -- written by the committed first call instead of losing them with metadata.
-    select storage_paths
-    into evidence_paths
+    select storage_paths, cleanup_after
+    into evidence_paths, cleanup_after_at
     from public.case_evidence_cleanup_jobs
     where case_id = target_case_id
       and user_id = auth.uid();
 
     if found then
-      return jsonb_build_object('deleted', true, 'storage_paths', evidence_paths);
+      return jsonb_build_object(
+        'deleted', true,
+        'storage_paths', evidence_paths,
+        'cleanup_after', cleanup_after_at
+      );
     end if;
 
     return jsonb_build_object('deleted', false, 'storage_paths', '[]'::jsonb);
@@ -278,18 +284,36 @@ begin
     where case_id = target_case_id and user_id = auth.uid()
   ) evidence_and_pending;
 
-  insert into public.case_evidence_cleanup_jobs (case_id, user_id, storage_paths)
-  values (target_case_id, auth.uid(), evidence_paths)
+  -- An upload authorized before the parent row is deleted may still commit after
+  -- an immediate Storage remove observes no object. Keep its path durable until
+  -- the bounded upload window has elapsed, then let the Cases-page retry worker
+  -- remove the path and acknowledge the cleanup job.
+  select greatest(
+    now(),
+    coalesce(max(created_at) + interval '15 minutes', now())
+  )
+  into cleanup_after_at
+  from public.case_evidence_upload_jobs
+  where case_id = target_case_id
+    and user_id = auth.uid();
+
+  insert into public.case_evidence_cleanup_jobs (case_id, user_id, storage_paths, cleanup_after)
+  values (target_case_id, auth.uid(), evidence_paths, cleanup_after_at)
   on conflict (case_id) do update
     set storage_paths = excluded.storage_paths,
         user_id = excluded.user_id,
+        cleanup_after = excluded.cleanup_after,
         created_at = now();
 
   delete from public.cases
   where id = target_case_id
     and user_id = auth.uid();
 
-  return jsonb_build_object('deleted', true, 'storage_paths', evidence_paths);
+  return jsonb_build_object(
+    'deleted', true,
+    'storage_paths', evidence_paths,
+    'cleanup_after', cleanup_after_at
+  );
 end;
 $$;
 
@@ -307,7 +331,8 @@ declare
 begin
   delete from public.case_evidence_cleanup_jobs
   where case_id = target_case_id
-    and user_id = auth.uid();
+    and user_id = auth.uid()
+    and cleanup_after <= now();
 
   get diagnostics affected_rows = row_count;
   return affected_rows > 0;

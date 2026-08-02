@@ -23,7 +23,7 @@ type CaseRecord = {
 };
 
 let casesData: CaseRecord[] = [];
-let cleanupJobsData: Array<{ case_id: string; storage_paths: string[] }> = [];
+let cleanupJobsData: Array<{ case_id: string; storage_paths: string[]; cleanup_after?: string }> = [];
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/cases",
@@ -208,6 +208,20 @@ describe("cases mutation feedback", () => {
     expect(completeCaseEvidenceCleanupMock).toHaveBeenCalledWith({ target_case_id: "deleted-case" });
   });
 
+  it("does not retire a cleanup job while a captured upload may still be in flight", async () => {
+    cleanupJobsData = [{
+      case_id: "deleted-case",
+      storage_paths: ["user-1/deleted-case/report.pdf"],
+      cleanup_after: "2999-01-01T00:00:00.000Z",
+    }];
+
+    render(<CasesPage />);
+
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+    expect(removeCaseEvidenceObjectsMock).not.toHaveBeenCalled();
+    expect(completeCaseEvidenceCleanupMock).not.toHaveBeenCalled();
+  });
+
   it("keeps the form open, preserves entered values, and shows localized feedback when create returns an error", async () => {
     insertMock.mockResolvedValueOnce({ error: { message: "insert failed" } });
 
@@ -361,6 +375,29 @@ describe("cases mutation feedback", () => {
       expect(completeCaseEvidenceCleanupMock).toHaveBeenCalledWith({ target_case_id: "case-1" });
     });
     expect(screen.queryByText("Alpine Tower")).toBeNull();
+  });
+
+  it("defers deletion cleanup until a pending upload's bounded window has elapsed", async () => {
+    deleteCaseWithEvidenceMock.mockImplementationOnce(async ({ target_case_id: caseId }: { target_case_id: string }) => {
+      casesData = casesData.filter((item) => item.id !== caseId);
+      return {
+        data: {
+          deleted: true,
+          storage_paths: ["user-1/case-1/report.pdf"],
+          cleanup_after: "2999-01-01T00:00:00.000Z",
+        },
+        error: null,
+      };
+    });
+    render(<CasesPage />);
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+
+    fireEvent.click(screen.getByTitle("cases-delete"));
+
+    await waitFor(() => expect(screen.queryByText("Alpine Tower")).toBeNull());
+    expect(removeCaseEvidenceObjectsMock).not.toHaveBeenCalled();
+    expect(completeCaseEvidenceCleanupMock).not.toHaveBeenCalled();
+    expect(screen.queryByText("cases-delete-evidence-cleanup-error")).toBeNull();
   });
 
   it("acknowledges the durable cleanup job when the deleted case has no evidence paths", async () => {

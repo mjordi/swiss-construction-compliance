@@ -98,15 +98,17 @@ describe("case evidence migration", () => {
     expect(fn).toMatch(/from public\.cases[\s\S]*?where id = target_case_id[\s\S]*?and user_id = auth\.uid\(\)[\s\S]*?for update/);
     expect(fn).toMatch(/select coalesce\(jsonb_agg\(storage_path order by created_at\), '\[\]'::jsonb\)[\s\S]*?from public\.case_evidence[\s\S]*?delete from public\.cases/);
     expect(sql).toContain("create table if not exists public.case_evidence_cleanup_jobs");
-    expect(sql).toMatch(/case_id uuid primary key[\s\S]*?storage_paths jsonb not null/);
-    expect(fn).toMatch(/if not found then[\s\S]*?from public\.case_evidence_cleanup_jobs[\s\S]*?return jsonb_build_object\('deleted', true, 'storage_paths', evidence_paths\)/);
+    expect(sql).toMatch(/case_id uuid primary key[\s\S]*?storage_paths jsonb not null[\s\S]*?cleanup_after timestamptz not null/);
+    expect(fn).toMatch(/if not found then[\s\S]*?select storage_paths, cleanup_after[\s\S]*?from public\.case_evidence_cleanup_jobs[\s\S]*?'cleanup_after', cleanup_after_at/);
     expect(fn).toMatch(/insert into public\.case_evidence_cleanup_jobs[\s\S]*?delete from public\.cases/);
+    expect(fn).toMatch(/max\(created_at\) \+ interval '15 minutes'[\s\S]*?from public\.case_evidence_upload_jobs/);
+    expect(fn).toMatch(/insert into public\.case_evidence_cleanup_jobs \(case_id, user_id, storage_paths, cleanup_after\)/);
     expect(fn).not.toContain("if jsonb_array_length(evidence_paths) > 0 then");
-    expect(fn).toContain("jsonb_build_object('deleted', true, 'storage_paths', evidence_paths)");
+    expect(fn).toContain("'cleanup_after', cleanup_after_at");
     expect(sql).toContain("revoke all on function public.delete_case_with_evidence(uuid) from public");
     expect(sql).toContain("grant execute on function public.delete_case_with_evidence(uuid) to authenticated");
     const completeFn = sql.match(/create or replace function public\.complete_case_evidence_cleanup\(target_case_id uuid\)[\s\S]*?\$\$;/)?.[0];
-    expect(completeFn).toMatch(/delete from public\.case_evidence_cleanup_jobs[\s\S]*?user_id = auth\.uid\(\)/);
+    expect(completeFn).toMatch(/delete from public\.case_evidence_cleanup_jobs[\s\S]*?user_id = auth\.uid\(\)[\s\S]*?cleanup_after <= now\(\)/);
     expect(sql).toContain("grant execute on function public.complete_case_evidence_cleanup(uuid) to authenticated");
   });
 
