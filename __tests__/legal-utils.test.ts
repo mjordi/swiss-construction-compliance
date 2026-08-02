@@ -13,6 +13,7 @@ import {
   serializeDeadlineReminderQueryParam,
   normalizeDeadlineReminderOffsets,
   getDaysRemaining,
+  getSwissCalendarDateInputValue,
   getMillisecondsUntilNextSwissCalendarDay,
   OR_REVISION_DATE,
 } from "../lib/legal-utils";
@@ -108,6 +109,11 @@ describe("addDays", () => {
 });
 
 describe("Swiss legal calendar day", () => {
+  it("formats date inputs from the Europe/Zurich day", () => {
+    expect(getSwissCalendarDateInputValue(new Date("2026-08-01T22:30:00.000Z"))).toBe("2026-08-02");
+    expect(getSwissCalendarDateInputValue(new Date("2026-12-31T23:30:00.000Z"))).toBe("2027-01-01");
+  });
+
   it("calculates remaining days from the Europe/Zurich calendar date", () => {
     vi.useFakeTimers();
 

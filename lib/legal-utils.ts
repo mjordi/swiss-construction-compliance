@@ -63,6 +63,12 @@ function getSwissCalendarDayIndex(date: Date): number {
   return Math.floor(Date.UTC(year, month - 1, day) / MILLISECONDS_PER_DAY);
 }
 
+/** YYYY-MM-DD for the legal calendar day in Europe/Zurich. */
+export function getSwissCalendarDateInputValue(now: Date = new Date()): string {
+  const { year, month, day } = getSwissCalendarParts(now);
+  return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
+}
+
 /** Milliseconds until the next legal calendar day begins in Europe/Zurich. */
 export function getMillisecondsUntilNextSwissCalendarDay(now: Date = new Date()): number {
   const current = getSwissCalendarParts(now);

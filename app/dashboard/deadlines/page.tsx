@@ -10,6 +10,7 @@ import {
   DEFAULT_DEADLINE_REMINDER_OFFSETS,
   generateDeadlineCalendarICS,
   getDaysRemaining,
+  getSwissCalendarDateInputValue,
   parseDateInputAsUTC,
   sanitizeDateQueryParam,
   sanitizeDeadlineReminderQueryParam,
@@ -85,14 +86,6 @@ function buildDeadlines(contractDate: Date, acceptanceDate: Date, discoveryDate:
   return { deadlines, regime: notice.regime };
 }
 
-function getTodayLocalDateInputValue() {
-  const now = new Date();
-  const year = now.getFullYear();
-  const month = String(now.getMonth() + 1).padStart(2, "0");
-  const day = String(now.getDate()).padStart(2, "0");
-  return `${year}-${month}-${day}`;
-}
-
 function formatLocalizedDate(date: Date, lang: string) {
   const locale = lang === "fr" ? "fr-CH" : lang === "it" ? "it-CH" : lang === "en" ? "en-CH" : "de-CH";
   return date.toLocaleDateString(locale, {
@@ -143,7 +136,7 @@ export default function DeadlinesPage() {
     parsedAcceptanceDate && parsedDiscoveryDate && parsedDiscoveryDate < parsedAcceptanceDate
   );
   const discoveryInFuture = Boolean(
-    discoveryDate && discoveryDate > getTodayLocalDateInputValue()
+    discoveryDate && discoveryDate > getSwissCalendarDateInputValue()
   );
   const inputIsValid = Boolean(
     parsedContractDate &&
@@ -189,7 +182,7 @@ export default function DeadlinesPage() {
         !validateRuegefristInput(contract, discovery) &&
         acceptance >= contract &&
         discovery >= acceptance &&
-        sanitizedDates.discovery <= getTodayLocalDateInputValue()
+        sanitizedDates.discovery <= getSwissCalendarDateInputValue()
     );
 
     const frame = window.requestAnimationFrame(() => {
@@ -387,11 +380,11 @@ export default function DeadlinesPage() {
           </label>
           <label htmlFor="acceptance-date" className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
             {t("deadlines-input-label")}
-            <input id="acceptance-date" type="date" value={acceptanceDate} onChange={(event) => { setAcceptanceDate(event.target.value); clearCalculatedResult("acceptance"); }} max={getTodayLocalDateInputValue()} className={`${inputClass} mt-2`} />
+            <input id="acceptance-date" type="date" value={acceptanceDate} onChange={(event) => { setAcceptanceDate(event.target.value); clearCalculatedResult("acceptance"); }} max={getSwissCalendarDateInputValue()} className={`${inputClass} mt-2`} />
           </label>
           <label className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
             {t("deadlines-discovery-date")}
-            <input id="discovery-date" type="date" value={discoveryDate} onChange={(event) => { setDiscoveryDate(event.target.value); clearCalculatedResult("discovery"); }} max={getTodayLocalDateInputValue()} className={`${inputClass} mt-2`} />
+            <input id="discovery-date" type="date" value={discoveryDate} onChange={(event) => { setDiscoveryDate(event.target.value); clearCalculatedResult("discovery"); }} max={getSwissCalendarDateInputValue()} className={`${inputClass} mt-2`} />
           </label>
         </div>
         {(discoveryValidation || acceptanceBeforeContract) && (
