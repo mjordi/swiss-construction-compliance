@@ -19,6 +19,7 @@ const storageListMock = vi.fn();
 const removeMock = vi.fn();
 const insertMock = vi.fn();
 const lookupMock = vi.fn();
+const pendingUploadsMock = vi.fn();
 const rpcMock = vi.fn();
 const signedUrlMock = vi.fn();
 
@@ -34,6 +35,11 @@ function deferred<T>() {
 
 const supabaseMock = {
   from: (table: string) => {
+    if (table === "case_evidence_upload_jobs") {
+      return {
+        select: () => ({ eq: () => ({ eq: pendingUploadsMock }) }),
+      };
+    }
     if (table === "case_evidence") {
       return {
         select: () => ({
@@ -68,6 +74,7 @@ describe("CaseEvidencePanel", () => {
     removeMock.mockReset().mockResolvedValue({ data: null, error: null });
     insertMock.mockReset().mockReturnValue(Promise.resolve({ data: evidence, error: null }));
     lookupMock.mockReset().mockResolvedValue({ data: null, error: null });
+    pendingUploadsMock.mockReset().mockResolvedValue({ data: [], error: null });
     rpcMock.mockReset().mockResolvedValue({ data: true, error: null });
     signedUrlMock.mockReset().mockResolvedValue({ data: { signedUrl: "https://signed.test/file" }, error: null });
   });
@@ -171,7 +178,7 @@ describe("CaseEvidencePanel", () => {
     expect(rpcMock).toHaveBeenCalledTimes(1);
   });
 
-  it("preserves the generated path when a rejected upload remains ambiguous after bounded lookups", async () => {
+  it("records the generated path when a rejected upload remains ambiguous after bounded lookups", async () => {
     uploadMock.mockRejectedValue(new Error("upload response lost"));
     render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
     fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
@@ -183,7 +190,21 @@ describe("CaseEvidencePanel", () => {
     expect(storageListMock).toHaveBeenCalledTimes(3);
     expect(removeMock).not.toHaveBeenCalled();
     expect(insertMock).not.toHaveBeenCalled();
-    expect(rpcMock).not.toHaveBeenCalled();
+    expect(rpcMock).toHaveBeenCalledWith("record_case_evidence_upload_reconciliation", expect.objectContaining({
+      target_case_id: "case-1",
+      target_storage_path: uploadMock.mock.calls[0][0],
+      target_original_name: "report.pdf",
+    }));
+  });
+
+  it("reconciles pending upload paths before listing evidence", async () => {
+    pendingUploadsMock.mockResolvedValue({ data: [{ storage_path: evidence.storage_path }], error: null });
+    render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
+    fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
+
+    await screen.findByText("vault-evidence-empty");
+    expect(rpcMock).toHaveBeenCalledWith("reconcile_case_evidence_uploads", { target_case_id: "case-1" });
+    expect(rpcMock.mock.invocationCallOrder[0]).toBeLessThan(listMock.mock.invocationCallOrder[0]);
   });
 
   it("removes the new object and skips checklist updates when metadata persistence fails", async () => {

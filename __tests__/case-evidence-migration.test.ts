@@ -110,6 +110,16 @@ describe("case evidence migration", () => {
     expect(sql).toContain("grant execute on function public.complete_case_evidence_cleanup(uuid) to authenticated");
   });
 
+  it("persists and later reconciles ambiguous upload paths", () => {
+    const sql = migrationSql();
+
+    expect(sql).toContain("create table if not exists public.case_evidence_upload_jobs");
+    expect(sql).toContain("record_case_evidence_upload_reconciliation");
+    expect(sql).toContain("reconcile_case_evidence_uploads");
+    expect(sql).toMatch(/reconcile_case_evidence_uploads[\s\S]*?storage\.objects[\s\S]*?insert into public\.case_evidence[\s\S]*?delete from public\.case_evidence_upload_jobs/);
+    expect(sql).toMatch(/select storage_path, created_at from public\.case_evidence_upload_jobs[\s\S]*?where case_id = target_case_id/);
+  });
+
   it("keeps read/insert case-bound but permits exact owner-path delete after case deletion", () => {
     const sql = migrationSql();
 

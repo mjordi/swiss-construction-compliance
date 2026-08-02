@@ -7,6 +7,7 @@ const deleteCaseWithEvidenceMock = vi.fn();
 const completeCaseEvidenceCleanupMock = vi.fn();
 const confirmMock = vi.fn(() => true);
 const removeCaseEvidenceObjectsMock = vi.hoisted(() => vi.fn());
+const storageMock = {};
 
 type CaseRecord = {
   id: string;
@@ -22,6 +23,7 @@ type CaseRecord = {
 };
 
 let casesData: CaseRecord[] = [];
+let cleanupJobsData: Array<{ case_id: string; storage_paths: string[] }> = [];
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/cases",
@@ -103,6 +105,7 @@ vi.mock("@/lib/case-timeline", () => ({
 
 vi.mock("@/lib/supabase", () => ({
   getSupabase: () => ({
+    storage: storageMock,
     from: (table: string) => {
       if (table === "cases") {
         return {
@@ -121,6 +124,14 @@ vi.mock("@/lib/supabase", () => ({
             eq: () => ({
               not: () => Promise.resolve({ data: [], error: null }),
             }),
+          }),
+        };
+      }
+
+      if (table === "case_evidence_cleanup_jobs") {
+        return {
+          select: () => ({
+            eq: () => Promise.resolve({ data: cleanupJobsData, error: null }),
           }),
         };
       }
@@ -178,7 +189,23 @@ describe("cases mutation feedback", () => {
     removeCaseEvidenceObjectsMock.mockReset().mockResolvedValue(undefined);
     confirmMock.mockClear();
     casesData = [buildCase("case-1", "Alpine Tower")];
+    cleanupJobsData = [];
     window.confirm = confirmMock;
+  });
+
+  it("retries durable evidence cleanup jobs when the Cases page opens", async () => {
+    cleanupJobsData = [{
+      case_id: "deleted-case",
+      storage_paths: ["user-1/deleted-case/report.pdf"],
+    }];
+
+    render(<CasesPage />);
+
+    await waitFor(() => expect(removeCaseEvidenceObjectsMock).toHaveBeenCalledWith(
+      storageMock,
+      ["user-1/deleted-case/report.pdf"]
+    ));
+    expect(completeCaseEvidenceCleanupMock).toHaveBeenCalledWith({ target_case_id: "deleted-case" });
   });
 
   it("keeps the form open, preserves entered values, and shows localized feedback when create returns an error", async () => {
@@ -314,7 +341,7 @@ describe("cases mutation feedback", () => {
     fireEvent.click(screen.getByTitle("cases-delete"));
 
     expect(await screen.findByText("cases-delete-evidence-cleanup-error")).toBeTruthy();
-    expect(removeCaseEvidenceObjectsMock).toHaveBeenCalledWith(undefined, ["user-1/case-1/report.pdf"]);
+    expect(removeCaseEvidenceObjectsMock).toHaveBeenCalledWith(storageMock, ["user-1/case-1/report.pdf"]);
     expect(completeCaseEvidenceCleanupMock).not.toHaveBeenCalled();
     expect(screen.queryByText("Alpine Tower")).toBeNull();
   });
@@ -330,7 +357,7 @@ describe("cases mutation feedback", () => {
     fireEvent.click(screen.getByTitle("cases-delete"));
 
     await waitFor(() => {
-      expect(removeCaseEvidenceObjectsMock).toHaveBeenCalledWith(undefined, ["user-1/case-1/report.pdf"]);
+      expect(removeCaseEvidenceObjectsMock).toHaveBeenCalledWith(storageMock, ["user-1/case-1/report.pdf"]);
       expect(completeCaseEvidenceCleanupMock).toHaveBeenCalledWith({ target_case_id: "case-1" });
     });
     expect(screen.queryByText("Alpine Tower")).toBeNull();
@@ -347,7 +374,7 @@ describe("cases mutation feedback", () => {
     fireEvent.click(screen.getByTitle("cases-delete"));
 
     await waitFor(() => {
-      expect(removeCaseEvidenceObjectsMock).toHaveBeenCalledWith(undefined, []);
+      expect(removeCaseEvidenceObjectsMock).toHaveBeenCalledWith(storageMock, []);
       expect(completeCaseEvidenceCleanupMock).toHaveBeenCalledWith({ target_case_id: "case-1" });
     });
     expect(screen.queryByText("Alpine Tower")).toBeNull();

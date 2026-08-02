@@ -29,6 +29,31 @@ create index if not exists case_evidence_user_case_created_idx
 
 alter table public.case_evidence enable row level security;
 
+-- Preserve generated upload paths whose Storage outcome is still unknown. A
+-- later Vault refresh can reconcile a late Storage commit into metadata.
+create table if not exists public.case_evidence_upload_jobs (
+  storage_path text primary key,
+  user_id uuid references auth.users(id) on delete cascade not null,
+  case_id uuid references public.cases(id) on delete cascade not null,
+  original_name text not null check (char_length(original_name) between 1 and 255),
+  mime_type text not null check (mime_type in ('application/pdf', 'image/jpeg', 'image/png')),
+  size_bytes bigint not null check (size_bytes between 1 and 10485760),
+  created_at timestamptz not null default now(),
+  constraint case_evidence_upload_job_path_matches_case check (
+    cardinality(string_to_array(storage_path, '/')) = 3
+    and split_part(storage_path, '/', 1) = user_id::text
+    and split_part(storage_path, '/', 2) = case_id::text
+  )
+);
+
+alter table public.case_evidence_upload_jobs enable row level security;
+
+drop policy if exists "Users can manage own case evidence upload jobs" on public.case_evidence_upload_jobs;
+create policy "Users can manage own case evidence upload jobs"
+  on public.case_evidence_upload_jobs for all
+  using (auth.uid() = user_id)
+  with check (auth.uid() = user_id);
+
 -- Keep cleanup paths durable across a lost delete RPC response. The case ID is
 -- intentionally not a foreign key because the queue must survive case deletion.
 create table if not exists public.case_evidence_cleanup_jobs (
@@ -117,6 +142,64 @@ $$;
 revoke all on function public.set_case_checklist_item(uuid, text, boolean) from public;
 grant execute on function public.set_case_checklist_item(uuid, text, boolean) to authenticated;
 
+create or replace function public.record_case_evidence_upload_reconciliation(
+  target_case_id uuid,
+  target_storage_path text,
+  target_original_name text,
+  target_mime_type text,
+  target_size_bytes bigint
+)
+returns boolean language plpgsql security invoker set search_path = '' as $$
+begin
+  if not exists (
+    select 1 from public.cases
+    where id = target_case_id and user_id = auth.uid() and status <> 'archived'
+  ) then return false; end if;
+
+  insert into public.case_evidence_upload_jobs (
+    storage_path, user_id, case_id, original_name, mime_type, size_bytes
+  ) values (
+    target_storage_path, auth.uid(), target_case_id,
+    target_original_name, target_mime_type, target_size_bytes
+  ) on conflict (storage_path) do update set
+    original_name = excluded.original_name,
+    mime_type = excluded.mime_type,
+    size_bytes = excluded.size_bytes;
+  return true;
+end;
+$$;
+
+revoke all on function public.record_case_evidence_upload_reconciliation(uuid, text, text, text, bigint) from public;
+grant execute on function public.record_case_evidence_upload_reconciliation(uuid, text, text, text, bigint) to authenticated;
+
+create or replace function public.reconcile_case_evidence_uploads(target_case_id uuid)
+returns boolean language plpgsql security invoker set search_path = '' as $$
+declare reconciled_count integer;
+begin
+  with ready_jobs as (
+    select job.* from public.case_evidence_upload_jobs job
+    where job.case_id = target_case_id and job.user_id = auth.uid()
+      and exists (
+        select 1 from storage.objects object
+        where object.bucket_id = 'case-evidence' and object.name = job.storage_path
+      )
+  ), inserted as (
+    insert into public.case_evidence (user_id, case_id, storage_path, original_name, mime_type, size_bytes)
+    select user_id, case_id, storage_path, original_name, mime_type, size_bytes from ready_jobs
+    on conflict (storage_path) do nothing returning storage_path
+  )
+  delete from public.case_evidence_upload_jobs job
+  where job.storage_path in (select storage_path from ready_jobs);
+
+  get diagnostics reconciled_count = row_count;
+  if reconciled_count > 0 then perform public.mark_case_evidence_attached(target_case_id); end if;
+  return reconciled_count > 0;
+end;
+$$;
+
+revoke all on function public.reconcile_case_evidence_uploads(uuid) from public;
+grant execute on function public.reconcile_case_evidence_uploads(uuid) to authenticated;
+
 -- Lock the parent case while capturing evidence paths and deleting it. The
 -- foreign key's parent-row lock serializes concurrent metadata inserts with
 -- this lock: an insert that wins is included, while one that loses observes
@@ -154,9 +237,13 @@ begin
 
   select coalesce(jsonb_agg(storage_path order by created_at), '[]'::jsonb)
   into evidence_paths
-  from public.case_evidence
-  where case_id = target_case_id
-    and user_id = auth.uid();
+  from (
+    select storage_path, created_at from public.case_evidence
+    where case_id = target_case_id and user_id = auth.uid()
+    union
+    select storage_path, created_at from public.case_evidence_upload_jobs
+    where case_id = target_case_id and user_id = auth.uid()
+  ) evidence_and_pending;
 
   insert into public.case_evidence_cleanup_jobs (case_id, user_id, storage_paths)
   values (target_case_id, auth.uid(), evidence_paths)

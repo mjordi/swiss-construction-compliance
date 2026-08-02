@@ -81,6 +81,20 @@ export default function CaseEvidencePanel({
     setMessage(null);
 
     try {
+      const { data: pendingUploads, error: pendingUploadsError } = await supabase
+        .from("case_evidence_upload_jobs")
+        .select("storage_path")
+        .eq("user_id", userId)
+        .eq("case_id", caseId);
+      if (pendingUploadsError) throw pendingUploadsError;
+      if ((pendingUploads ?? []).length > 0) {
+        const { error: reconciliationError } = await supabase.rpc(
+          "reconcile_case_evidence_uploads",
+          { target_case_id: caseId }
+        );
+        if (reconciliationError) throw reconciliationError;
+      }
+
       const { data, error } = await supabase
         .from("case_evidence")
         .select("*")
@@ -174,6 +188,19 @@ export default function CaseEvidencePanel({
           // A rejected upload has no ordering guarantee relative to Storage. Even a
           // successful remove of a currently absent path could run before the upload
           // commits, so preserve the generated path instead of creating a late orphan.
+          const { data: recorded, error: recordError } = await supabase.rpc(
+            "record_case_evidence_upload_reconciliation",
+            {
+              target_case_id: caseId,
+              target_storage_path: storagePath,
+              target_original_name: file.name,
+              target_mime_type: file.type,
+              target_size_bytes: file.size,
+            }
+          );
+          if (recordError || recorded !== true) {
+            throw recordError ?? new Error("Upload reconciliation was not recorded");
+          }
           if (isCurrentContext()) setMessage({ key: "vault-evidence-persistence-unknown", kind: "alert" });
           return;
         }

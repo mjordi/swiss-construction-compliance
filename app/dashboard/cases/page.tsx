@@ -394,6 +394,42 @@ export default function CasesPage() {
   }, [triggerCasesRefresh]);
 
   useEffect(() => {
+    if (!user) return;
+
+    // Retry durable post-delete Storage cleanup independently of the deleted
+    // card, which is no longer available as a user-triggered retry surface.
+    void (async () => {
+      try {
+        const { data: cleanupJobs, error } = await supabase
+          .from("case_evidence_cleanup_jobs")
+          .select("case_id, storage_paths")
+          .eq("user_id", user.id);
+        if (error) return;
+
+        for (const job of cleanupJobs ?? []) {
+          try {
+            const paths = Array.isArray(job.storage_paths)
+              ? job.storage_paths.filter((path: unknown): path is string => typeof path === "string")
+              : [];
+            await removeCaseEvidenceObjects(supabase.storage, paths);
+            const { data: completed, error: completionError } = await supabase.rpc(
+              "complete_case_evidence_cleanup",
+              { target_case_id: job.case_id }
+            );
+            if (completionError || completed !== true) {
+              throw completionError ?? new Error("Evidence cleanup retry was not acknowledged");
+            }
+          } catch {
+            // Continue with other jobs; this one remains durable for a later visit.
+          }
+        }
+      } catch {
+        // Keep unfinished durable jobs for the next authenticated page visit.
+      }
+    })();
+  }, [supabase, user]);
+
+  useEffect(() => {
     filterStateRef.current = {
       regimeFilter,
       statusFilter,
