@@ -207,10 +207,32 @@ grant execute on function public.record_case_evidence_upload_reconciliation(uuid
 
 create or replace function public.reconcile_case_evidence_uploads(target_case_id uuid)
 returns boolean language plpgsql security invoker set search_path = '' as $$
-declare reconciled_count integer;
+declare
+  reconciled_count integer;
+  retired_count integer;
 begin
+  -- Take the same row lock used by Storage insert authorization and deletion
+  -- cleanup reconciliation. A Storage insert that already acquired the lock
+  -- finishes before the next statement takes its fresh READ COMMITTED snapshot.
+  perform 1
+  from public.case_evidence_upload_jobs job
+  where job.case_id = target_case_id
+    and job.user_id = auth.uid()
+    and exists (
+      select 1 from public.cases
+      where cases.id = job.case_id
+        and cases.user_id = auth.uid()
+        and cases.status <> 'archived'
+    )
+  for update of job;
+
   with ready_jobs as (
-    select job.* from public.case_evidence_upload_jobs job
+    select job.*,
+      exists (
+        select 1 from storage.objects object
+        where object.bucket_id = 'case-evidence' and object.name = job.storage_path
+      ) as object_exists
+    from public.case_evidence_upload_jobs job
     where job.case_id = target_case_id and job.user_id = auth.uid()
       and exists (
         select 1 from public.cases
@@ -218,21 +240,30 @@ begin
           and cases.user_id = auth.uid()
           and cases.status <> 'archived'
       )
-      and exists (
-        select 1 from storage.objects object
-        where object.bucket_id = 'case-evidence' and object.name = job.storage_path
+      and (
+        job.upload_lease_expires_at <= clock_timestamp()
+        or exists (
+          select 1 from storage.objects object
+          where object.bucket_id = 'case-evidence' and object.name = job.storage_path
+        )
       )
   ), inserted as (
     insert into public.case_evidence (user_id, case_id, storage_path, original_name, mime_type, size_bytes)
-    select user_id, case_id, storage_path, original_name, mime_type, size_bytes from ready_jobs
+    select user_id, case_id, storage_path, original_name, mime_type, size_bytes
+    from ready_jobs where object_exists
     on conflict (storage_path) do nothing returning storage_path
+  ), retired as (
+    delete from public.case_evidence_upload_jobs job
+    where job.storage_path in (select storage_path from ready_jobs)
+    returning storage_path
   )
-  delete from public.case_evidence_upload_jobs job
-  where job.storage_path in (select storage_path from ready_jobs);
+  select
+    (select count(*) from inserted),
+    (select count(*) from retired)
+  into reconciled_count, retired_count;
 
-  get diagnostics reconciled_count = row_count;
   if reconciled_count > 0 then perform public.mark_case_evidence_attached(target_case_id); end if;
-  return reconciled_count > 0;
+  return retired_count > 0;
 end;
 $$;
 

@@ -249,6 +249,7 @@ export default function CasesPage() {
   const [formData, setFormData] = useState<CaseFormState>(EMPTY_CASE_FORM);
   const [createError, setCreateError] = useState<TranslationKey | null>(null);
   const [deleteError, setDeleteError] = useState<TranslationKey | null>(null);
+  const cleanupWarningCaseIdRef = useRef<string | null>(null);
   const [deletingCaseIds, setDeletingCaseIds] = useState<Record<string, boolean>>({});
   const [editingCaseId, setEditingCaseId] = useState<string | null>(null);
   const [editFormData, setEditFormData] = useState<CaseFormState>(EMPTY_CASE_FORM);
@@ -433,6 +434,12 @@ export default function CasesPage() {
             );
             if (completionError || completed !== true) {
               throw completionError ?? new Error("Evidence cleanup retry was not acknowledged");
+            }
+            if (cleanupWarningCaseIdRef.current === job.case_id) {
+              cleanupWarningCaseIdRef.current = null;
+              setDeleteError((current) =>
+                current === "cases-delete-evidence-cleanup-error" ? null : current
+              );
             }
           } catch {
             // Continue with other jobs; this one remains durable for a later visit.
@@ -1368,10 +1375,12 @@ export default function CasesPage() {
           if (cleanupCompletionError || cleanupCompleted !== true) {
             throw cleanupCompletionError ?? new Error("Evidence cleanup was not acknowledged");
           }
+          cleanupWarningCaseIdRef.current = null;
           setDeleteError(null);
         } catch {
           // The case is already deleted; preserve that successful UI result while
           // surfacing the separate Storage cleanup failure for support follow-up.
+          cleanupWarningCaseIdRef.current = caseId;
           setDeleteError("cases-delete-evidence-cleanup-error");
         }
       } else {

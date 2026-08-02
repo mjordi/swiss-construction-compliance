@@ -122,6 +122,11 @@ describe("case evidence migration", () => {
     expect(sql).toMatch(/reconcile_case_evidence_uploads[\s\S]*?storage\.objects[\s\S]*?insert into public\.case_evidence[\s\S]*?delete from public\.case_evidence_upload_jobs/);
     expect(sql).toMatch(/select storage_path, created_at from public\.case_evidence_upload_jobs[\s\S]*?where case_id = target_case_id/);
     expect(sql).toMatch(/with ready_jobs as[\s\S]*?cases\.status <> 'archived'[\s\S]*?storage\.objects/);
+    const reconciliationFn = sql.match(/create or replace function public\.reconcile_case_evidence_uploads\(target_case_id uuid\)[\s\S]*?\$\$;/)?.[0];
+    expect(reconciliationFn).toMatch(/perform 1[\s\S]*?public\.case_evidence_upload_jobs job[\s\S]*?for update of job/);
+    expect(reconciliationFn).toMatch(/upload_lease_expires_at <= clock_timestamp\(\)[\s\S]*?or exists/);
+    expect(reconciliationFn).toMatch(/from ready_jobs where object_exists/);
+    expect(reconciliationFn).toMatch(/retired as \([\s\S]*?delete from public\.case_evidence_upload_jobs/);
   });
 
   it("tracks terminal upload outcomes before releasing deletion cleanup", () => {

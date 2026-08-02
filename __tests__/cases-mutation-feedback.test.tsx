@@ -8,6 +8,7 @@ const completeCaseEvidenceCleanupMock = vi.fn();
 const reconcileCleanupUploadsMock = vi.fn();
 const confirmMock = vi.fn(() => true);
 const removeCaseEvidenceObjectsMock = vi.hoisted(() => vi.fn());
+const scheduleCaseEvidenceCleanupRetryMock = vi.hoisted(() => vi.fn());
 const storageMock = {};
 
 type CaseRecord = {
@@ -25,6 +26,7 @@ type CaseRecord = {
 
 let casesData: CaseRecord[] = [];
 let cleanupJobsData: Array<{ case_id: string; storage_paths: string[]; pending_upload_paths?: string[] }> = [];
+let scheduledCleanupRetry: (() => void) | null = null;
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/cases",
@@ -150,7 +152,7 @@ vi.mock("@/lib/supabase", () => ({
 
 vi.mock("@/lib/case-evidence-cleanup", () => ({
   removeCaseEvidenceObjects: removeCaseEvidenceObjectsMock,
-  scheduleCaseEvidenceCleanupRetry: vi.fn(() => () => undefined),
+  scheduleCaseEvidenceCleanupRetry: scheduleCaseEvidenceCleanupRetryMock,
 }));
 
 import CasesPage from "@/app/dashboard/cases/page";
@@ -191,6 +193,11 @@ describe("cases mutation feedback", () => {
     completeCaseEvidenceCleanupMock.mockReset().mockResolvedValue({ data: true, error: null });
     reconcileCleanupUploadsMock.mockReset().mockResolvedValue({ data: false, error: null });
     removeCaseEvidenceObjectsMock.mockReset().mockResolvedValue(undefined);
+    scheduleCaseEvidenceCleanupRetryMock.mockReset().mockImplementation((retry: () => void) => {
+      scheduledCleanupRetry = retry;
+      return () => undefined;
+    });
+    scheduledCleanupRetry = null;
     confirmMock.mockClear();
     casesData = [buildCase("case-1", "Alpine Tower")];
     cleanupJobsData = [];
@@ -381,6 +388,30 @@ describe("cases mutation feedback", () => {
     expect(removeCaseEvidenceObjectsMock).toHaveBeenCalledWith(storageMock, ["user-1/case-1/report.pdf"]);
     expect(completeCaseEvidenceCleanupMock).not.toHaveBeenCalled();
     expect(screen.queryByText("Alpine Tower")).toBeNull();
+  });
+
+  it("clears a matching cleanup warning after the durable retry succeeds", async () => {
+    deleteCaseWithEvidenceMock.mockImplementationOnce(async ({ target_case_id: caseId }: { target_case_id: string }) => {
+      casesData = casesData.filter((item) => item.id !== caseId);
+      return { data: { deleted: true, storage_paths: ["user-1/case-1/report.pdf"] }, error: null };
+    });
+    removeCaseEvidenceObjectsMock.mockRejectedValueOnce(new Error("storage cleanup failed"));
+
+    render(<CasesPage />);
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+    fireEvent.click(screen.getByTitle("cases-delete"));
+    expect(await screen.findByText("cases-delete-evidence-cleanup-error")).toBeTruthy();
+
+    cleanupJobsData = [{
+      case_id: "case-1",
+      storage_paths: ["user-1/case-1/report.pdf"],
+    }];
+    scheduledCleanupRetry?.();
+
+    await waitFor(() => {
+      expect(completeCaseEvidenceCleanupMock).toHaveBeenCalledWith({ target_case_id: "case-1" });
+      expect(screen.queryByText("cases-delete-evidence-cleanup-error")).toBeNull();
+    });
   });
 
   it("acknowledges the durable cleanup job only after Storage removal succeeds", async () => {
