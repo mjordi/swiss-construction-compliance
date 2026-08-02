@@ -477,10 +477,10 @@ revoke all on function public.complete_case_evidence_cleanup(uuid) from public;
 grant execute on function public.complete_case_evidence_cleanup(uuid) to authenticated;
 
 -- Storage evaluates insert policies inside the object-insert transaction. Lock
--- the matching intent for that transaction so lease reconciliation cannot mark
--- it terminal (and retire its cleanup path) while an authorized insert is still
--- capable of committing. If reconciliation wins the lock first, the completed
--- marker makes the later insert fail authorization after it resumes.
+-- both the matching intent and its case for that transaction so neither lease
+-- reconciliation nor archiving can invalidate an authorization while the
+-- Storage insert is still capable of committing. If reconciliation or archiving
+-- wins its lock first, the later insert fails authorization after it resumes.
 create or replace function public.authorize_case_evidence_storage_insert(target_storage_path text)
 returns boolean
 language plpgsql
@@ -500,7 +500,7 @@ begin
     and job.upload_lease_expires_at > clock_timestamp()
     and cases.user_id = auth.uid()
     and cases.status <> 'archived'
-  for update of job;
+  for update of job, cases;
 
   return coalesce(authorized, false);
 end;

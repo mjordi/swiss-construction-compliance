@@ -152,7 +152,7 @@ describe("case evidence migration", () => {
     expect(reconciliationFn).toMatch(/upload_lease_expires_at <= now\(\)[\s\S]*?storage\.objects/);
     expect(reconciliationFn).toMatch(/update public\.case_evidence_cleanup_jobs[\s\S]*?pending_upload_paths/);
     expect(authorizationFn).toContain("security definer");
-    expect(authorizationFn).toMatch(/public\.case_evidence_upload_jobs job[\s\S]*?job\.storage_path = target_storage_path[\s\S]*?job\.upload_completed_at is null[\s\S]*?job\.upload_lease_expires_at > clock_timestamp\(\)[\s\S]*?for update of job/);
+    expect(authorizationFn).toMatch(/public\.case_evidence_upload_jobs job[\s\S]*?job\.storage_path = target_storage_path[\s\S]*?job\.upload_completed_at is null[\s\S]*?job\.upload_lease_expires_at > clock_timestamp\(\)[\s\S]*?for update of job, cases/);
     expect(authorizationFn).toMatch(/join public\.cases cases[\s\S]*?cases\.user_id = auth\.uid\(\)[\s\S]*?cases\.status <> 'archived'/);
     expect(insertPolicy).toContain("public.authorize_case_evidence_storage_insert(name)");
     expect(sql).toContain("grant execute on function public.authorize_case_evidence_storage_insert(text) to authenticated");
