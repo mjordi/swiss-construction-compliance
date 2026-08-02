@@ -414,6 +414,26 @@ describe("cases mutation feedback", () => {
     });
   });
 
+  it("keeps another case's cleanup warning after a successful deletion", async () => {
+    casesData = [buildCase("case-1", "Alpine Tower"), buildCase("case-2", "Lake House")];
+    deleteCaseWithEvidenceMock.mockImplementation(async ({ target_case_id: caseId }: { target_case_id: string }) => {
+      casesData = casesData.filter((item) => item.id !== caseId);
+      return { data: { deleted: true, storage_paths: [`user-1/${caseId}/report.pdf`] }, error: null };
+    });
+    removeCaseEvidenceObjectsMock.mockRejectedValueOnce(new Error("case-1 cleanup failed"));
+
+    render(<CasesPage />);
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+    expect(screen.getByText("Lake House")).toBeTruthy();
+
+    fireEvent.click(screen.getAllByTitle("cases-delete")[0]);
+    expect(await screen.findByText("cases-delete-evidence-cleanup-error")).toBeTruthy();
+
+    fireEvent.click(screen.getByTitle("cases-delete"));
+    await waitFor(() => expect(screen.queryByText("Lake House")).toBeNull());
+    expect(screen.getByText("cases-delete-evidence-cleanup-error")).toBeTruthy();
+  });
+
   it("acknowledges the durable cleanup job only after Storage removal succeeds", async () => {
     deleteCaseWithEvidenceMock.mockImplementationOnce(async ({ target_case_id: caseId }: { target_case_id: string }) => {
       casesData = casesData.filter((item) => item.id !== caseId);

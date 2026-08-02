@@ -208,8 +208,9 @@ grant execute on function public.record_case_evidence_upload_reconciliation(uuid
 create or replace function public.reconcile_case_evidence_uploads(target_case_id uuid)
 returns boolean language plpgsql security invoker set search_path = '' as $$
 declare
-  reconciled_count integer;
+  object_backed_count integer;
   retired_count integer;
+  ready_paths text[];
 begin
   -- Take the same row lock used by Storage insert authorization and deletion
   -- cleanup reconciliation. A Storage insert that already acquired the lock
@@ -252,17 +253,24 @@ begin
     select user_id, case_id, storage_path, original_name, mime_type, size_bytes
     from ready_jobs where object_exists
     on conflict (storage_path) do nothing returning storage_path
-  ), retired as (
-    delete from public.case_evidence_upload_jobs job
-    where job.storage_path in (select storage_path from ready_jobs)
-    returning storage_path
   )
   select
-    (select count(*) from inserted),
-    (select count(*) from retired)
-  into reconciled_count, retired_count;
+    count(*) filter (where object_exists),
+    coalesce(array_agg(storage_path), array[]::text[])
+  from ready_jobs
+  into object_backed_count, ready_paths;
 
-  if reconciled_count > 0 then perform public.mark_case_evidence_attached(target_case_id); end if;
+  -- An existing metadata row makes the insert a no-op, but the durable upload
+  -- job still represents a pending checklist sync. Retry that sync before the
+  -- object-backed job is retired, not only when this call inserted metadata.
+  if object_backed_count > 0 and not coalesce(public.mark_case_evidence_attached(target_case_id), false) then
+    return false;
+  end if;
+
+  delete from public.case_evidence_upload_jobs
+  where storage_path = any(ready_paths);
+
+  get diagnostics retired_count = row_count;
   return retired_count > 0;
 end;
 $$;

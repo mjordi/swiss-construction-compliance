@@ -126,7 +126,10 @@ describe("case evidence migration", () => {
     expect(reconciliationFn).toMatch(/perform 1[\s\S]*?public\.case_evidence_upload_jobs job[\s\S]*?for update of job/);
     expect(reconciliationFn).toMatch(/upload_lease_expires_at <= clock_timestamp\(\)[\s\S]*?or exists/);
     expect(reconciliationFn).toMatch(/from ready_jobs where object_exists/);
-    expect(reconciliationFn).toMatch(/retired as \([\s\S]*?delete from public\.case_evidence_upload_jobs/);
+    expect(reconciliationFn).toMatch(
+      /count\(\*\) filter \(where object_exists\)[\s\S]*?public\.mark_case_evidence_attached[\s\S]*?delete from public\.case_evidence_upload_jobs/
+    );
+    expect(reconciliationFn).toMatch(/mark_case_evidence_attached[\s\S]*?return false;[\s\S]*?delete from public\.case_evidence_upload_jobs/);
   });
 
   it("tracks terminal upload outcomes before releasing deletion cleanup", () => {

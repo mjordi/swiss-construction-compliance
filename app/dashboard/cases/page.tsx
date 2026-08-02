@@ -1379,8 +1379,14 @@ export default function CasesPage() {
           if (cleanupCompletionError) {
             throw cleanupCompletionError;
           }
-          cleanupWarningCaseIdRef.current = null;
-          setDeleteError(null);
+          if (cleanupWarningCaseIdRef.current === caseId) {
+            cleanupWarningCaseIdRef.current = null;
+            setDeleteError((current) =>
+              current === "cases-delete-evidence-cleanup-error" ? null : current
+            );
+          } else if (cleanupWarningCaseIdRef.current === null) {
+            setDeleteError(null);
+          }
         } catch {
           // The case is already deleted; preserve that successful UI result while
           // surfacing the separate Storage cleanup failure for support follow-up.
@@ -1390,7 +1396,7 @@ export default function CasesPage() {
       } else {
         // A pre-authorized upload is still in flight. Its terminal signal releases
         // the durable cleanup job for a later authenticated Cases-page visit.
-        setDeleteError(null);
+        if (cleanupWarningCaseIdRef.current === null) setDeleteError(null);
       }
       setDbCases((current) => {
         const next = current.filter((item) => item.id !== caseId);
