@@ -119,6 +119,9 @@ vi.mock("@/lib/supabase", () => {
           error: result?.error ?? null,
         };
       }
+      if (name === "complete_case_evidence_cleanup") {
+        return { data: true, error: null };
+      }
       expect(name).toBe("set_case_checklist_item");
       const current = casesData.find((item) => item.id === params.target_case_id);
       const checklist = {

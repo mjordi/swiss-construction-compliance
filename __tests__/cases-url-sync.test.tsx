@@ -119,8 +119,11 @@ vi.mock("@/lib/supabase", () => ({
       throw new Error(`Unexpected table ${table}`);
     },
     rpc: (name: string, args: { target_case_id: string }) => {
-      if (name !== "delete_case_with_evidence") throw new Error(`Unexpected RPC ${name}`);
-      return deleteCaseWithEvidenceMock(args);
+      if (name === "delete_case_with_evidence") return deleteCaseWithEvidenceMock(args);
+      if (name === "complete_case_evidence_cleanup") {
+        return Promise.resolve({ data: true, error: null });
+      }
+      throw new Error(`Unexpected RPC ${name}`);
     },
   }),
 }));

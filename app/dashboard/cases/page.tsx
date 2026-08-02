@@ -1293,14 +1293,12 @@ export default function CasesPage() {
 
       try {
         await removeCaseEvidenceObjects(supabase.storage, evidencePaths);
-        if (evidencePaths.length > 0) {
-          const { data: cleanupCompleted, error: cleanupCompletionError } = await supabase.rpc(
-            "complete_case_evidence_cleanup",
-            { target_case_id: caseId }
-          );
-          if (cleanupCompletionError || cleanupCompleted !== true) {
-            throw cleanupCompletionError ?? new Error("Evidence cleanup was not acknowledged");
-          }
+        const { data: cleanupCompleted, error: cleanupCompletionError } = await supabase.rpc(
+          "complete_case_evidence_cleanup",
+          { target_case_id: caseId }
+        );
+        if (cleanupCompletionError || cleanupCompleted !== true) {
+          throw cleanupCompletionError ?? new Error("Evidence cleanup was not acknowledged");
         }
         setDeleteError(null);
       } catch {
