@@ -478,6 +478,35 @@ $$;
 revoke all on function public.authorize_case_evidence_storage_insert(text) from public;
 grant execute on function public.authorize_case_evidence_storage_insert(text) to authenticated;
 
+-- Hold the case row through metadata persistence so a concurrent archive cannot
+-- commit after the writable-state check but before the evidence row commits.
+-- Whichever transaction locks the case first wins: evidence that starts first
+-- completes before archiving, while an archive that starts first makes this
+-- authorization fail after the lock is released.
+create or replace function public.authorize_case_evidence_metadata_insert(target_case_id uuid)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  authorized boolean;
+begin
+  select true
+  into authorized
+  from public.cases cases
+  where cases.id = target_case_id
+    and cases.user_id = auth.uid()
+    and cases.status <> 'archived'
+  for update of cases;
+
+  return coalesce(authorized, false);
+end;
+$$;
+
+revoke all on function public.authorize_case_evidence_metadata_insert(uuid) from public;
+grant execute on function public.authorize_case_evidence_metadata_insert(uuid) to authenticated;
+
 drop policy if exists "Users can read own case_evidence" on public.case_evidence;
 create policy "Users can read own case_evidence"
   on public.case_evidence for select
@@ -495,12 +524,7 @@ create policy "Users can insert own case_evidence"
   on public.case_evidence for insert
   with check (
     auth.uid() = user_id
-    and exists (
-      select 1 from public.cases
-      where cases.id = case_evidence.case_id
-        and cases.user_id = auth.uid()
-        and cases.status <> 'archived'
-    )
+    and public.authorize_case_evidence_metadata_insert(case_id)
   );
 
 -- No metadata update/delete policy in phase 1.

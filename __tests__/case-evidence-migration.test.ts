@@ -44,7 +44,7 @@ describe("case evidence migration", () => {
     const selectPolicy = sql.match(/create policy "users can read own case_evidence"[\s\S]*?;/)?.[0];
     expect(selectPolicy).toMatch(/auth\.uid\(\) = user_id[\s\S]*?exists\s*\([\s\S]*?cases\.id = case_evidence\.case_id[\s\S]*?cases\.user_id = auth\.uid\(\)/);
     const insertPolicy = sql.match(/create policy "users can insert own case_evidence"[\s\S]*?;/)?.[0];
-    expect(insertPolicy).toMatch(/auth\.uid\(\) = user_id[\s\S]*?exists\s*\([\s\S]*?cases\.id = case_evidence\.case_id[\s\S]*?cases\.user_id = auth\.uid\(\)/);
+    expect(insertPolicy).toMatch(/auth\.uid\(\) = user_id[\s\S]*?authorize_case_evidence_metadata_insert\(case_id\)/);
     expect(sql).toContain("create index if not exists case_evidence_user_case_created_idx");
   });
 
@@ -185,7 +185,11 @@ describe("case evidence migration", () => {
     }
 
     const metadataInsertPolicy = sql.match(/create policy "users can insert own case_evidence"[\s\S]*?;/)?.[0];
-    expect(metadataInsertPolicy).toContain("cases.status <> 'archived'");
+    const metadataAuthorizationFn = sql.match(/create or replace function public\.authorize_case_evidence_metadata_insert\(target_case_id uuid\)[\s\S]*?\$\$;/)?.[0];
+    expect(metadataAuthorizationFn).toContain("security definer");
+    expect(metadataAuthorizationFn).toMatch(/public\.cases cases[\s\S]*?cases\.id = target_case_id[\s\S]*?cases\.user_id = auth\.uid\(\)[\s\S]*?cases\.status <> 'archived'[\s\S]*?for update of cases/);
+    expect(metadataInsertPolicy).toContain("public.authorize_case_evidence_metadata_insert(case_id)");
+    expect(sql).toContain("grant execute on function public.authorize_case_evidence_metadata_insert(uuid) to authenticated");
 
     const deletePolicy = storagePolicy(sql, "delete", "delete");
     expect(deletePolicy).toContain("bucket_id = 'case-evidence'");
