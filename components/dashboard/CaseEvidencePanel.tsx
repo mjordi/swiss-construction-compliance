@@ -176,6 +176,17 @@ export default function CaseEvidencePanel({
           // Retaining a completed intent is safe; a later reconciliation removes it.
         }
       };
+      const markUploadCompleted = async () => {
+        try {
+          const { data, error } = await supabase.rpc("mark_case_evidence_upload_completed", {
+            target_storage_path: storagePath,
+          });
+          return !error && data === true;
+        } catch {
+          // Retain the upload intent when completion cannot be durably recorded.
+          return false;
+        }
+      };
       const bucket = supabase.storage.from(CASE_EVIDENCE_BUCKET);
       const removeUploadedObject = async () => {
         for (let attempt = 0; attempt < 2; attempt += 1) {
@@ -228,11 +239,13 @@ export default function CaseEvidencePanel({
           return;
         }
         uploadError = null;
+        await markUploadCompleted();
       }
       if (uploadError) {
-        await clearUploadJob();
+        if (await markUploadCompleted()) await clearUploadJob();
         throw uploadError;
       }
+      if (!uploadOutcomeAmbiguous) await markUploadCompleted();
 
       let metadata: CaseEvidence;
       let insertOutcomeAmbiguous = false;

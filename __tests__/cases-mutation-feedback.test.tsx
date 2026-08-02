@@ -23,7 +23,7 @@ type CaseRecord = {
 };
 
 let casesData: CaseRecord[] = [];
-let cleanupJobsData: Array<{ case_id: string; storage_paths: string[]; cleanup_after?: string }> = [];
+let cleanupJobsData: Array<{ case_id: string; storage_paths: string[]; pending_upload_paths?: string[] }> = [];
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/cases",
@@ -212,7 +212,7 @@ describe("cases mutation feedback", () => {
     cleanupJobsData = [{
       case_id: "deleted-case",
       storage_paths: ["user-1/deleted-case/report.pdf"],
-      cleanup_after: "2999-01-01T00:00:00.000Z",
+      pending_upload_paths: ["user-1/deleted-case/report.pdf"],
     }];
 
     render(<CasesPage />);
@@ -377,14 +377,14 @@ describe("cases mutation feedback", () => {
     expect(screen.queryByText("Alpine Tower")).toBeNull();
   });
 
-  it("defers deletion cleanup until a pending upload's bounded window has elapsed", async () => {
+  it("defers deletion cleanup until the pending upload reports a terminal outcome", async () => {
     deleteCaseWithEvidenceMock.mockImplementationOnce(async ({ target_case_id: caseId }: { target_case_id: string }) => {
       casesData = casesData.filter((item) => item.id !== caseId);
       return {
         data: {
           deleted: true,
           storage_paths: ["user-1/case-1/report.pdf"],
-          cleanup_after: "2999-01-01T00:00:00.000Z",
+          cleanup_pending: true,
         },
         error: null,
       };

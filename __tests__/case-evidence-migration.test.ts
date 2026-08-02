@@ -98,17 +98,18 @@ describe("case evidence migration", () => {
     expect(fn).toMatch(/from public\.cases[\s\S]*?where id = target_case_id[\s\S]*?and user_id = auth\.uid\(\)[\s\S]*?for update/);
     expect(fn).toMatch(/select coalesce\(jsonb_agg\(storage_path order by created_at\), '\[\]'::jsonb\)[\s\S]*?from public\.case_evidence[\s\S]*?delete from public\.cases/);
     expect(sql).toContain("create table if not exists public.case_evidence_cleanup_jobs");
-    expect(sql).toMatch(/case_id uuid primary key[\s\S]*?storage_paths jsonb not null[\s\S]*?cleanup_after timestamptz not null/);
-    expect(fn).toMatch(/if not found then[\s\S]*?select storage_paths, cleanup_after[\s\S]*?from public\.case_evidence_cleanup_jobs[\s\S]*?'cleanup_after', cleanup_after_at/);
+    expect(sql).toMatch(/case_id uuid primary key[\s\S]*?storage_paths jsonb not null[\s\S]*?pending_upload_paths jsonb not null/);
+    expect(fn).toMatch(/if not found then[\s\S]*?select storage_paths, pending_upload_paths[\s\S]*?from public\.case_evidence_cleanup_jobs[\s\S]*?'cleanup_pending', jsonb_array_length\(pending_upload_paths\) > 0/);
     expect(fn).toMatch(/insert into public\.case_evidence_cleanup_jobs[\s\S]*?delete from public\.cases/);
-    expect(fn).toMatch(/max\(created_at\) \+ interval '15 minutes'[\s\S]*?from public\.case_evidence_upload_jobs/);
-    expect(fn).toMatch(/insert into public\.case_evidence_cleanup_jobs \(case_id, user_id, storage_paths, cleanup_after\)/);
+    expect(fn).toMatch(/from public\.case_evidence_upload_jobs[\s\S]*?upload_completed_at is null/);
+    expect(fn).not.toContain("interval '15 minutes'");
+    expect(fn).toMatch(/insert into public\.case_evidence_cleanup_jobs \(case_id, user_id, storage_paths, pending_upload_paths\)/);
     expect(fn).not.toContain("if jsonb_array_length(evidence_paths) > 0 then");
-    expect(fn).toContain("'cleanup_after', cleanup_after_at");
+    expect(fn).toContain("'cleanup_pending', jsonb_array_length(pending_upload_paths) > 0");
     expect(sql).toContain("revoke all on function public.delete_case_with_evidence(uuid) from public");
     expect(sql).toContain("grant execute on function public.delete_case_with_evidence(uuid) to authenticated");
     const completeFn = sql.match(/create or replace function public\.complete_case_evidence_cleanup\(target_case_id uuid\)[\s\S]*?\$\$;/)?.[0];
-    expect(completeFn).toMatch(/delete from public\.case_evidence_cleanup_jobs[\s\S]*?user_id = auth\.uid\(\)[\s\S]*?cleanup_after <= now\(\)/);
+    expect(completeFn).toMatch(/delete from public\.case_evidence_cleanup_jobs[\s\S]*?user_id = auth\.uid\(\)[\s\S]*?jsonb_array_length\(pending_upload_paths\) = 0/);
     expect(sql).toContain("grant execute on function public.complete_case_evidence_cleanup(uuid) to authenticated");
   });
 
@@ -121,6 +122,17 @@ describe("case evidence migration", () => {
     expect(sql).toMatch(/reconcile_case_evidence_uploads[\s\S]*?storage\.objects[\s\S]*?insert into public\.case_evidence[\s\S]*?delete from public\.case_evidence_upload_jobs/);
     expect(sql).toMatch(/select storage_path, created_at from public\.case_evidence_upload_jobs[\s\S]*?where case_id = target_case_id/);
     expect(sql).toMatch(/with ready_jobs as[\s\S]*?cases\.status <> 'archived'[\s\S]*?storage\.objects/);
+  });
+
+  it("tracks terminal upload outcomes before releasing deletion cleanup", () => {
+    const sql = migrationSql();
+    const completionFn = sql.match(/create or replace function public\.mark_case_evidence_upload_completed\(target_storage_path text\)[\s\S]*?\$\$;/)?.[0];
+
+    expect(sql).toContain("upload_completed_at timestamptz");
+    expect(completionFn).toContain("security definer");
+    expect(completionFn).toMatch(/update public\.case_evidence_upload_jobs[\s\S]*?upload_completed_at = now\(\)[\s\S]*?user_id = auth\.uid\(\)/);
+    expect(completionFn).toMatch(/update public\.case_evidence_cleanup_jobs[\s\S]*?pending_upload_paths[\s\S]*?path <> target_storage_path[\s\S]*?user_id = auth\.uid\(\)/);
+    expect(sql).toContain("grant execute on function public.mark_case_evidence_upload_completed(text) to authenticated");
   });
 
   it("restricts cleanup-job creation and updates to the current case owner", () => {

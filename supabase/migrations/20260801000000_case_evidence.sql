@@ -38,6 +38,7 @@ create table if not exists public.case_evidence_upload_jobs (
   original_name text not null check (char_length(original_name) between 1 and 255),
   mime_type text not null check (mime_type in ('application/pdf', 'image/jpeg', 'image/png')),
   size_bytes bigint not null check (size_bytes between 1 and 10485760),
+  upload_completed_at timestamptz,
   created_at timestamptz not null default now(),
   constraint case_evidence_upload_job_path_matches_case check (
     cardinality(string_to_array(storage_path, '/')) = 3
@@ -60,7 +61,8 @@ create table if not exists public.case_evidence_cleanup_jobs (
   case_id uuid primary key,
   user_id uuid references auth.users(id) on delete cascade not null,
   storage_paths jsonb not null check (jsonb_typeof(storage_paths) = 'array'),
-  cleanup_after timestamptz not null default now(),
+  pending_upload_paths jsonb not null default '[]'::jsonb
+    check (jsonb_typeof(pending_upload_paths) = 'array'),
   created_at timestamptz not null default now()
 );
 
@@ -234,6 +236,43 @@ $$;
 revoke all on function public.reconcile_case_evidence_uploads(uuid) from public;
 grant execute on function public.reconcile_case_evidence_uploads(uuid) to authenticated;
 
+-- Record a definitive Storage outcome separately from metadata reconciliation.
+-- If case deletion won the race, release this path from the cleanup job's
+-- pending set instead of relying on an elapsed-time guess.
+create or replace function public.mark_case_evidence_upload_completed(target_storage_path text)
+returns boolean
+language plpgsql
+security definer
+set search_path = ''
+as $$
+declare
+  affected_rows integer := 0;
+  cleanup_rows integer := 0;
+begin
+  update public.case_evidence_upload_jobs
+  set upload_completed_at = now()
+  where storage_path = target_storage_path
+    and user_id = auth.uid();
+
+  get diagnostics affected_rows = row_count;
+
+  update public.case_evidence_cleanup_jobs
+  set pending_upload_paths = coalesce((
+    select jsonb_agg(path)
+    from jsonb_array_elements_text(pending_upload_paths) path
+    where path <> target_storage_path
+  ), '[]'::jsonb)
+  where user_id = auth.uid()
+    and pending_upload_paths ? target_storage_path;
+
+  get diagnostics cleanup_rows = row_count;
+  return affected_rows > 0 or cleanup_rows > 0;
+end;
+$$;
+
+revoke all on function public.mark_case_evidence_upload_completed(text) from public;
+grant execute on function public.mark_case_evidence_upload_completed(text) to authenticated;
+
 -- Lock the parent case while capturing evidence paths and deleting it. The
 -- foreign key's parent-row lock serializes concurrent metadata inserts with
 -- this lock: an insert that wins is included, while one that loses observes
@@ -246,7 +285,7 @@ set search_path = ''
 as $$
 declare
   evidence_paths jsonb;
-  cleanup_after_at timestamptz;
+  pending_upload_paths jsonb;
 begin
   perform 1
   from public.cases
@@ -257,8 +296,8 @@ begin
   if not found then
     -- A retry after an ambiguous transport failure recovers the durable paths
     -- written by the committed first call instead of losing them with metadata.
-    select storage_paths, cleanup_after
-    into evidence_paths, cleanup_after_at
+    select storage_paths, pending_upload_paths
+    into evidence_paths, pending_upload_paths
     from public.case_evidence_cleanup_jobs
     where case_id = target_case_id
       and user_id = auth.uid();
@@ -267,7 +306,7 @@ begin
       return jsonb_build_object(
         'deleted', true,
         'storage_paths', evidence_paths,
-        'cleanup_after', cleanup_after_at
+        'cleanup_pending', jsonb_array_length(pending_upload_paths) > 0
       );
     end if;
 
@@ -284,25 +323,21 @@ begin
     where case_id = target_case_id and user_id = auth.uid()
   ) evidence_and_pending;
 
-  -- An upload authorized before the parent row is deleted may still commit after
-  -- an immediate Storage remove observes no object. Keep its path durable until
-  -- the bounded upload window has elapsed, then let the Cases-page retry worker
-  -- remove the path and acknowledge the cleanup job.
-  select greatest(
-    now(),
-    coalesce(max(created_at) + interval '15 minutes', now())
-  )
-  into cleanup_after_at
+  -- Only a Storage request with an explicitly recorded terminal outcome is safe
+  -- to clean up. A timeout cannot prove that a slow upload has terminated.
+  select coalesce(jsonb_agg(storage_path order by created_at), '[]'::jsonb)
+  into pending_upload_paths
   from public.case_evidence_upload_jobs
   where case_id = target_case_id
-    and user_id = auth.uid();
+    and user_id = auth.uid()
+    and upload_completed_at is null;
 
-  insert into public.case_evidence_cleanup_jobs (case_id, user_id, storage_paths, cleanup_after)
-  values (target_case_id, auth.uid(), evidence_paths, cleanup_after_at)
+  insert into public.case_evidence_cleanup_jobs (case_id, user_id, storage_paths, pending_upload_paths)
+  values (target_case_id, auth.uid(), evidence_paths, pending_upload_paths)
   on conflict (case_id) do update
     set storage_paths = excluded.storage_paths,
         user_id = excluded.user_id,
-        cleanup_after = excluded.cleanup_after,
+        pending_upload_paths = excluded.pending_upload_paths,
         created_at = now();
 
   delete from public.cases
@@ -312,7 +347,7 @@ begin
   return jsonb_build_object(
     'deleted', true,
     'storage_paths', evidence_paths,
-    'cleanup_after', cleanup_after_at
+    'cleanup_pending', jsonb_array_length(pending_upload_paths) > 0
   );
 end;
 $$;
@@ -332,7 +367,7 @@ begin
   delete from public.case_evidence_cleanup_jobs
   where case_id = target_case_id
     and user_id = auth.uid()
-    and cleanup_after <= now();
+    and jsonb_array_length(pending_upload_paths) = 0;
 
   get diagnostics affected_rows = row_count;
   return affected_rows > 0;

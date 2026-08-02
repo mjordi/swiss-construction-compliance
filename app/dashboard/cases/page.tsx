@@ -402,13 +402,12 @@ export default function CasesPage() {
       try {
         const { data: cleanupJobs, error } = await supabase
           .from("case_evidence_cleanup_jobs")
-          .select("case_id, storage_paths, cleanup_after")
+          .select("case_id, storage_paths, pending_upload_paths")
           .eq("user_id", user.id);
         if (error) return;
 
         for (const job of cleanupJobs ?? []) {
-          const cleanupAfter = typeof job.cleanup_after === "string" ? Date.parse(job.cleanup_after) : NaN;
-          if (Number.isFinite(cleanupAfter) && cleanupAfter > Date.now()) continue;
+          if (Array.isArray(job.pending_upload_paths) && job.pending_upload_paths.length > 0) continue;
           try {
             const paths = Array.isArray(job.storage_paths)
               ? job.storage_paths.filter((path: unknown): path is string => typeof path === "string")
@@ -1328,9 +1327,7 @@ export default function CasesPage() {
       const evidencePaths = deletion.storage_paths.filter(
         (path: unknown): path is string => typeof path === "string"
       );
-      const cleanupAfter =
-        typeof deletion.cleanup_after === "string" ? Date.parse(deletion.cleanup_after) : NaN;
-      const cleanupReady = !Number.isFinite(cleanupAfter) || cleanupAfter <= Date.now();
+      const cleanupReady = deletion.cleanup_pending !== true;
 
       if (cleanupReady) {
         try {
@@ -1349,8 +1346,8 @@ export default function CasesPage() {
           setDeleteError("cases-delete-evidence-cleanup-error");
         }
       } else {
-        // A pre-authorized upload can still be in flight. Its durable cleanup job
-        // will be retried on a later authenticated Cases-page visit.
+        // A pre-authorized upload is still in flight. Its terminal signal releases
+        // the durable cleanup job for a later authenticated Cases-page visit.
         setDeleteError(null);
       }
       setDbCases((current) => {

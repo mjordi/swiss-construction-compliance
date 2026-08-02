@@ -163,7 +163,9 @@ describe("CaseEvidencePanel", () => {
       upsert: false,
     });
     expect(rpcMock).toHaveBeenCalledWith("mark_case_evidence_attached", { target_case_id: "case-1" });
-    expect(rpcMock.mock.calls[0][1]).toEqual({ target_case_id: "case-1" });
+    expect(rpcMock).toHaveBeenCalledWith("mark_case_evidence_upload_completed", {
+      target_storage_path: uploadMock.mock.calls[0][0],
+    });
     expect(await screen.findByText("vault-evidence-upload-success")).toBeTruthy();
     expect(onChecklistUpdated).toHaveBeenCalledTimes(1);
   });
@@ -188,7 +190,7 @@ describe("CaseEvidencePanel", () => {
     });
     expect(insertMock).toHaveBeenCalledTimes(1);
     expect(removeMock).not.toHaveBeenCalled();
-    expect(rpcMock).toHaveBeenCalledTimes(1);
+    expect(rpcMock.mock.calls.filter(([name]) => name === "mark_case_evidence_attached")).toHaveLength(1);
   });
 
   it("records the generated path when a rejected upload remains ambiguous after bounded lookups", async () => {
@@ -208,6 +210,7 @@ describe("CaseEvidencePanel", () => {
       original_name: "report.pdf",
     }));
     expect(uploadJobDeleteMock).not.toHaveBeenCalled();
+    expect(rpcMock.mock.calls.some(([name]) => name === "mark_case_evidence_upload_completed")).toBe(false);
   });
 
   it("reconciles a returned StorageUnknownError without retiring the upload job", async () => {
@@ -256,7 +259,7 @@ describe("CaseEvidencePanel", () => {
     fireEvent.change(input, { target: { files: [new File(["pdf"], "report.pdf", { type: "application/pdf" })] } });
 
     await waitFor(() => expect(removeMock).toHaveBeenCalledWith([expect.stringMatching(/^user-1\/case-1\/.+\.pdf$/)]));
-    expect(rpcMock).not.toHaveBeenCalled();
+    expect(rpcMock.mock.calls.some(([name]) => name === "mark_case_evidence_attached")).toBe(false);
     expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-upload-error");
   });
 
@@ -269,7 +272,7 @@ describe("CaseEvidencePanel", () => {
     });
 
     await waitFor(() => expect(removeMock).toHaveBeenCalledWith([uploadMock.mock.calls[0][0]]));
-    expect(rpcMock).not.toHaveBeenCalled();
+    expect(rpcMock.mock.calls.some(([name]) => name === "mark_case_evidence_attached")).toBe(false);
     expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-upload-error");
   });
 
@@ -385,7 +388,7 @@ describe("CaseEvidencePanel", () => {
     expect(await screen.findByText("vault-evidence-upload-success")).toBeTruthy();
     expect(lookupMock).toHaveBeenCalledTimes(3);
     expect(removeMock).not.toHaveBeenCalled();
-    expect(rpcMock).toHaveBeenCalledTimes(1);
+    expect(rpcMock.mock.calls.filter(([name]) => name === "mark_case_evidence_attached")).toHaveLength(1);
   });
 
   it("does not delete the object when metadata reconciliation also fails", async () => {
@@ -418,7 +421,7 @@ describe("CaseEvidencePanel", () => {
 
     expect((await screen.findByRole("alert")).textContent).toContain("vault-evidence-upload-error");
     expect(removeMock).toHaveBeenCalledTimes(2);
-    expect(rpcMock).not.toHaveBeenCalled();
+    expect(rpcMock.mock.calls.some(([name]) => name === "mark_case_evidence_attached")).toBe(false);
   });
 
   it("reports a distinct cleanup warning after two failed compensation attempts", async () => {
