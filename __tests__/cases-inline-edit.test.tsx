@@ -126,7 +126,7 @@ vi.mock("@/lib/supabase", () => {
         [params.target_key as string]: params.target_value as boolean,
       };
       const result = await updateEqMock({ checklist }, "id", params.target_case_id);
-      return { data: !result?.error, error: result?.error ?? null };
+      return { data: result?.error ? null : checklist, error: result?.error ?? null };
     },
     from: (table: string) => {
       if (table === "cases") {

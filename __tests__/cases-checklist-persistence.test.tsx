@@ -28,6 +28,7 @@ let caseChecklistData: Record<string, boolean> | null = {
   noticeDrafted: false,
   calendarReminderExported: false,
 };
+let concurrentChecklistRpcData: Record<string, boolean> | null = null;
 let protocolSelectColumns: string[] = [];
 let protocolRows: Array<{
   id?: string;
@@ -143,10 +144,17 @@ vi.mock("@/lib/case-timeline", () => ({
 
 vi.mock("@/lib/supabase", () => ({
   getSupabase: () => ({
-    rpc: (name: string, params: { target_case_id: string; target_key: string; target_value: boolean }) => {
+    rpc: async (name: string, params: { target_case_id: string; target_key: string; target_value: boolean }) => {
       checklistRpcNames.push(name);
       updatePayloads.push({ checklist: { [params.target_key]: params.target_value } });
-      return updateEqMock(params.target_case_id);
+      const result = await updateEqMock(params.target_case_id);
+      if (result?.error) return { data: null, error: result.error };
+      caseChecklistData = {
+        ...(caseChecklistData ?? {}),
+        ...(concurrentChecklistRpcData ?? {}),
+        [params.target_key]: params.target_value,
+      };
+      return { data: caseChecklistData, error: null };
     },
     from: (table: string) => {
       if (table === "cases") {
@@ -246,6 +254,7 @@ describe("cases checklist persistence", () => {
       noticeDrafted: false,
       calendarReminderExported: false,
     };
+    concurrentChecklistRpcData = null;
     protocolRows = [];
     protocolSelectColumns = [];
     statusQueryParam = null;
@@ -757,6 +766,23 @@ describe("cases checklist persistence", () => {
 
     await waitFor(() => {
       expect((exportButton as HTMLButtonElement).disabled).toBe(false);
+    });
+  });
+
+  it("applies the authoritative merged checklist returned by the per-key mutation", async () => {
+    concurrentChecklistRpcData = { evidenceAttached: true };
+
+    render(<CasesPage />);
+
+    const evidenceCheckbox = await screen.findByLabelText("cases-checklist-evidence-attached");
+    const noticeCheckbox = screen.getByLabelText("cases-checklist-notice-drafted");
+    expect((evidenceCheckbox as HTMLInputElement).checked).toBe(false);
+
+    fireEvent.click(noticeCheckbox);
+
+    await waitFor(() => {
+      expect((noticeCheckbox as HTMLInputElement).checked).toBe(true);
+      expect((evidenceCheckbox as HTMLInputElement).checked).toBe(true);
     });
   });
 

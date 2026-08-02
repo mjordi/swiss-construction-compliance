@@ -80,6 +80,9 @@ describe("case evidence migration", () => {
     expect(fn).toContain("array[target_key]");
     expect(fn).toContain("to_jsonb(target_value)");
     expect(fn).toMatch(/where id = target_case_id\s+and user_id = auth\.uid\(\)/);
+    expect(fn).toContain("returns jsonb");
+    expect(fn).toContain("returning checklist into persisted_checklist");
+    expect(fn).toContain("return persisted_checklist");
     expect(sql).toContain("revoke all on function public.set_case_checklist_item(uuid, text, boolean) from public");
     expect(sql).toContain("grant execute on function public.set_case_checklist_item(uuid, text, boolean) to authenticated");
   });

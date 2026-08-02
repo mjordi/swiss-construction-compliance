@@ -81,13 +81,13 @@ create or replace function public.set_case_checklist_item(
   target_key text,
   target_value boolean
 )
-returns boolean
+returns jsonb
 language plpgsql
 security invoker
 set search_path = ''
 as $$
 declare
-  affected_rows integer;
+  persisted_checklist jsonb;
 begin
   if target_key not in (
     'defectDocumented',
@@ -107,10 +107,10 @@ begin
   ),
   updated_at = now()
   where id = target_case_id
-    and user_id = auth.uid();
+    and user_id = auth.uid()
+  returning checklist into persisted_checklist;
 
-  get diagnostics affected_rows = row_count;
-  return affected_rows > 0;
+  return persisted_checklist;
 end;
 $$;
 

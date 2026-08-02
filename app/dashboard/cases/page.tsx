@@ -859,12 +859,16 @@ export default function CasesPage() {
         target_value: value,
       });
 
-      if (error || persisted !== true) {
+      if (error || !persisted || typeof persisted !== "object" || Array.isArray(persisted)) {
         throw error ?? new Error("Checklist update was not confirmed");
       }
 
-      lastSuccessfulCasesRef.current = applyChecklistState(lastSuccessfulCasesRef.current, updated);
-      setDbCases((current) => applyChecklistState(current, updated));
+      const authoritativeChecklist = normalizeFollowUpChecklistState(persisted);
+      lastSuccessfulCasesRef.current = applyChecklistState(
+        lastSuccessfulCasesRef.current,
+        authoritativeChecklist
+      );
+      setDbCases((current) => applyChecklistState(current, authoritativeChecklist));
     } catch {
       setDbCases((current) => applyChecklistState(current, previous));
       setChecklistSaveErrorByCase((prev) => ({
