@@ -11,7 +11,7 @@ import {
   validateCaseEvidenceFile,
   type CaseEvidenceValidationError,
 } from "@/lib/case-evidence";
-import type { CaseEvidence } from "@/lib/database.types";
+import type { CaseActivityEvent, CaseEvidence } from "@/lib/database.types";
 import { getSupabase } from "@/lib/supabase";
 import type { TranslationKey } from "@/locales";
 
@@ -50,10 +50,13 @@ export default function CaseEvidencePanel({
   readOnly = false,
   onChecklistUpdated,
 }: CaseEvidencePanelProps) {
-  const { t } = useLanguage();
+  const { lang, t } = useLanguage();
   const supabase = useMemo(() => getSupabase(), []);
   const [expanded, setExpanded] = useState(false);
   const [evidence, setEvidence] = useState<CaseEvidence[]>([]);
+  const [activity, setActivity] = useState<CaseActivityEvent[]>([]);
+  const [activityLoading, setActivityLoading] = useState(false);
+  const [activityError, setActivityError] = useState(false);
   const [loading, setLoading] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [message, setMessage] = useState<{ key: TranslationKey; kind: "status" | "alert" } | null>(null);
@@ -81,11 +84,37 @@ export default function CaseEvidencePanel({
     downloadPendingRef.current.clear();
     setExpanded(false);
     setEvidence([]);
+    setActivity([]);
+    setActivityLoading(false);
+    setActivityError(false);
     setLoading(false);
     setUploading(false);
     setDownloadingPaths([]);
     setMessage(null);
   }, [caseId, userId]);
+
+  const loadActivity = useCallback(async (requestId: number) => {
+    setActivityLoading(true);
+    setActivityError(false);
+
+    try {
+      const { data, error } = await supabase
+        .from("case_activity_events")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("case_id", caseId)
+        .order("occurred_at", { ascending: false });
+      if (error) throw error;
+      if (!mountedRef.current || requestId !== loadRequestRef.current) return;
+      setActivity((data ?? []) as CaseActivityEvent[]);
+      setActivityLoading(false);
+    } catch {
+      if (!mountedRef.current || requestId !== loadRequestRef.current) return;
+      setActivity([]);
+      setActivityLoading(false);
+      setActivityError(true);
+    }
+  }, [caseId, supabase, userId]);
 
   const loadEvidence = useCallback(async () => {
     if (loadPendingRef.current) return;
@@ -93,6 +122,7 @@ export default function CaseEvidencePanel({
     const requestId = ++loadRequestRef.current;
     setLoading(true);
     setMessage(null);
+    setActivityError(false);
 
     try {
       const { data: pendingUploads, error: pendingUploadsError } = await supabase
@@ -121,6 +151,9 @@ export default function CaseEvidencePanel({
       if (error) throw error;
       if (!mountedRef.current || requestId !== loadRequestRef.current) return;
       setEvidence((data ?? []) as CaseEvidence[]);
+      setLoading(false);
+      loadPendingRef.current = false;
+      await loadActivity(requestId);
     } catch {
       if (!mountedRef.current || requestId !== loadRequestRef.current) return;
       setMessage({ key: "vault-evidence-list-error", kind: "alert" });
@@ -128,7 +161,7 @@ export default function CaseEvidencePanel({
       if (requestId === loadRequestRef.current) loadPendingRef.current = false;
       if (mountedRef.current && requestId === loadRequestRef.current) setLoading(false);
     }
-  }, [caseId, onChecklistUpdated, supabase, userId]);
+  }, [caseId, loadActivity, onChecklistUpdated, supabase, userId]);
 
   const toggleExpanded = useCallback(() => {
     if (expanded) {
@@ -136,6 +169,7 @@ export default function CaseEvidencePanel({
       loadPendingRef.current = false;
       setExpanded(false);
       setLoading(false);
+      setActivityLoading(false);
       return;
     }
     setExpanded(true);
@@ -318,10 +352,11 @@ export default function CaseEvidencePanel({
       }
 
       if (isCurrentContext()) {
-        loadRequestRef.current += 1;
+        const activityRequestId = ++loadRequestRef.current;
         loadPendingRef.current = false;
         setLoading(false);
         setEvidence((current) => [metadata as CaseEvidence, ...current.filter((item) => item.id !== metadata.id)]);
+        void loadActivity(activityRequestId);
       }
 
       try {
@@ -349,7 +384,7 @@ export default function CaseEvidencePanel({
         setUploading(false);
       }
     }
-  }, [caseId, onChecklistUpdated, readOnly, supabase, userId]);
+  }, [caseId, loadActivity, onChecklistUpdated, readOnly, supabase, userId]);
 
   const handleDownload = useCallback(async (item: CaseEvidence) => {
     if (downloadPendingRef.current.has(item.storage_path)) return;
@@ -446,6 +481,41 @@ export default function CaseEvidencePanel({
               })}
             </ul>
           )}
+
+          <section
+            role="region"
+            aria-label={t("vault-evidence-activity-title")}
+            className="border-t border-white/10 pt-3"
+          >
+            <h5 className="text-xs font-semibold uppercase tracking-wide text-slate-300">
+              {t("vault-evidence-activity-title")}
+            </h5>
+            {activityLoading ? (
+              <p role="status" className="mt-2 flex items-center gap-2 text-xs text-slate-400">
+                <Loader2 className="h-3 w-3 animate-spin" />
+                {t("vault-evidence-activity-loading")}
+              </p>
+            ) : activityError ? (
+              <p className="mt-2 text-xs text-amber-300">{t("vault-evidence-activity-error")}</p>
+            ) : activity.length === 0 ? (
+              <p className="mt-2 text-xs text-slate-400">{t("vault-evidence-activity-empty")}</p>
+            ) : (
+              <ul className="mt-2 space-y-2">
+                {activity.map((event) => (
+                  <li key={event.id} className="rounded-lg border border-white/5 bg-white/[0.03] p-2 text-xs text-slate-300">
+                    <p className="font-medium text-slate-200">{t("vault-evidence-activity-uploaded")}</p>
+                    <p className="mt-1 break-all">{event.source_name}</p>
+                    <time className="mt-1 block text-slate-400" dateTime={event.occurred_at}>
+                      {new Intl.DateTimeFormat(lang, {
+                        dateStyle: "medium",
+                        timeStyle: "short",
+                      }).format(new Date(event.occurred_at))}
+                    </time>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
         </div>
       ) : null}
     </section>

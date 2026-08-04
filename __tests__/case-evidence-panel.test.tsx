@@ -14,6 +14,7 @@ const evidence = {
 };
 
 const listMock = vi.fn();
+const activityListMock = vi.fn();
 const uploadMock = vi.fn();
 const storageListMock = vi.fn();
 const removeMock = vi.fn();
@@ -24,6 +25,18 @@ const uploadJobInsertMock = vi.fn();
 const uploadJobDeleteMock = vi.fn();
 const rpcMock = vi.fn();
 const signedUrlMock = vi.fn();
+
+const activity = {
+  id: "activity-1",
+  user_id: "user-1",
+  case_id: "case-1",
+  evidence_id: evidence.id,
+  event_type: "evidence_uploaded" as const,
+  source_name: evidence.original_name,
+  source_mime_type: evidence.mime_type,
+  source_size_bytes: evidence.size_bytes,
+  occurred_at: evidence.created_at,
+};
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -57,6 +70,11 @@ const supabaseMock = {
         },
       };
     }
+    if (table === "case_activity_events") {
+      return {
+        select: () => ({ eq: () => ({ eq: () => ({ order: activityListMock }) }) }),
+      };
+    }
     throw new Error(`Unexpected table ${table}`);
   },
   rpc: rpcMock,
@@ -67,12 +85,13 @@ const supabaseMock = {
 
 vi.mock("@/lib/supabase", () => ({ getSupabase: () => supabaseMock }));
 vi.mock("@/context/LanguageContext", () => ({
-  useLanguage: () => ({ t: (key: string) => key }),
+  useLanguage: () => ({ lang: "en", t: (key: string) => key }),
 }));
 
 describe("CaseEvidencePanel", () => {
   beforeEach(() => {
     listMock.mockReset().mockResolvedValue({ data: [], error: null });
+    activityListMock.mockReset().mockResolvedValue({ data: [], error: null });
     uploadMock.mockReset().mockResolvedValue({ data: { path: evidence.storage_path }, error: null });
     storageListMock.mockReset().mockResolvedValue({ data: [], error: null });
     removeMock.mockReset().mockResolvedValue({ data: null, error: null });
@@ -93,6 +112,103 @@ describe("CaseEvidencePanel", () => {
 
     expect(await screen.findByText("vault-evidence-empty")).toBeTruthy();
     expect(listMock).toHaveBeenCalledTimes(1);
+    expect(activityListMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows trigger-recorded evidence activity with its source name and server timestamp", async () => {
+    listMock.mockResolvedValue({ data: [evidence], error: null });
+    activityListMock.mockResolvedValue({ data: [activity], error: null });
+    const { container } = render(
+      <CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
+
+    const activityRegion = await screen.findByRole("region", { name: "vault-evidence-activity-title" });
+    expect(activityRegion.textContent).toContain("vault-evidence-activity-uploaded");
+    expect(activityRegion.textContent).toContain("report.pdf");
+    expect(container.querySelector(`time[datetime="${activity.occurred_at}"]`)).toBeTruthy();
+  });
+
+  it("does not block the evidence file list while activity is still loading", async () => {
+    const pendingActivity = deferred<{ data: (typeof activity)[]; error: null }>();
+    listMock.mockResolvedValue({ data: [evidence], error: null });
+    activityListMock.mockReturnValue(pendingActivity.promise);
+    render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
+
+    expect(await screen.findByRole("button", { name: "vault-evidence-download report.pdf" })).toBeTruthy();
+    expect(screen.getByText("vault-evidence-activity-loading")).toBeTruthy();
+    await act(async () => pendingActivity.resolve({ data: [activity], error: null }));
+  });
+
+  it("refreshes activity after upload without leaving a superseded load spinning", async () => {
+    const pendingActivity = deferred<{ data: (typeof activity)[]; error: null }>();
+    const pendingActivityRefresh = deferred<{ data: (typeof activity)[]; error: null }>();
+    const uploadedActivity = {
+      ...activity,
+      id: "activity-2",
+      source_name: "uploaded.pdf",
+      occurred_at: "2026-08-04T07:30:00.000Z",
+    };
+    activityListMock
+      .mockReturnValueOnce(pendingActivity.promise)
+      .mockReturnValueOnce(pendingActivityRefresh.promise);
+    render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
+    const input = await screen.findByLabelText("vault-evidence-file-label");
+    await waitFor(() => expect(activityListMock).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(input, {
+      target: { files: [new File(["pdf"], "uploaded.pdf", { type: "application/pdf" })] },
+    });
+
+    expect(await screen.findByText("vault-evidence-upload-success")).toBeTruthy();
+    expect(activityListMock).toHaveBeenCalledTimes(2);
+    expect((screen.getByLabelText("vault-evidence-file-label") as HTMLInputElement).disabled).toBe(false);
+    expect(uploadJobDeleteMock).toHaveBeenCalled();
+    expect(screen.getByText("vault-evidence-activity-loading")).toBeTruthy();
+
+    await act(async () => pendingActivityRefresh.resolve({ data: [uploadedActivity], error: null }));
+    const activityRegion = screen.getByRole("region", { name: "vault-evidence-activity-title" });
+    expect(activityRegion.textContent).toContain("uploaded.pdf");
+    expect(screen.queryByText("vault-evidence-activity-loading")).toBeNull();
+
+    await act(async () => pendingActivity.resolve({ data: [activity], error: null }));
+    expect(activityRegion.textContent).toContain("uploaded.pdf");
+  });
+
+  it("keeps the evidence list usable when activity loading fails", async () => {
+    listMock.mockResolvedValue({ data: [evidence], error: null });
+    activityListMock.mockResolvedValue({ data: null, error: { message: "activity failed" } });
+    render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
+
+    expect(await screen.findByRole("button", { name: "vault-evidence-download report.pdf" })).toBeTruthy();
+    expect(screen.getByText("vault-evidence-activity-error")).toBeTruthy();
+    expect(screen.queryByText("vault-evidence-list-error")).toBeNull();
+  });
+
+  it("ignores activity returned for an old case context", async () => {
+    const oldActivity = deferred<{ data: (typeof activity)[]; error: null }>();
+    activityListMock
+      .mockReturnValueOnce(oldActivity.promise)
+      .mockResolvedValueOnce({ data: [], error: null });
+    const { rerender } = render(
+      <CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />
+    );
+    fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
+    await waitFor(() => expect(activityListMock).toHaveBeenCalledTimes(1));
+
+    rerender(<CaseEvidencePanel userId="user-1" caseId="case-2" caseName="Bern" />);
+    fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
+    await waitFor(() => expect(activityListMock).toHaveBeenCalledTimes(2));
+    await act(async () => oldActivity.resolve({ data: [activity], error: null }));
+
+    expect(screen.queryByText("report.pdf")).toBeNull();
   });
 
   it("does not claim the evidence list is empty when loading fails", async () => {
