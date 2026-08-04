@@ -93,6 +93,29 @@ export default function CaseEvidencePanel({
     setMessage(null);
   }, [caseId, userId]);
 
+  const loadActivity = useCallback(async (requestId: number) => {
+    setActivityLoading(true);
+    setActivityError(false);
+
+    try {
+      const { data, error } = await supabase
+        .from("case_activity_events")
+        .select("*")
+        .eq("user_id", userId)
+        .eq("case_id", caseId)
+        .order("occurred_at", { ascending: false });
+      if (error) throw error;
+      if (!mountedRef.current || requestId !== loadRequestRef.current) return;
+      setActivity((data ?? []) as CaseActivityEvent[]);
+      setActivityLoading(false);
+    } catch {
+      if (!mountedRef.current || requestId !== loadRequestRef.current) return;
+      setActivity([]);
+      setActivityLoading(false);
+      setActivityError(true);
+    }
+  }, [caseId, supabase, userId]);
+
   const loadEvidence = useCallback(async () => {
     if (loadPendingRef.current) return;
     loadPendingRef.current = true;
@@ -130,25 +153,7 @@ export default function CaseEvidencePanel({
       setEvidence((data ?? []) as CaseEvidence[]);
       setLoading(false);
       loadPendingRef.current = false;
-      setActivityLoading(true);
-
-      try {
-        const { data: activityData, error: activityLoadError } = await supabase
-          .from("case_activity_events")
-          .select("*")
-          .eq("user_id", userId)
-          .eq("case_id", caseId)
-          .order("occurred_at", { ascending: false });
-        if (activityLoadError) throw activityLoadError;
-        if (!mountedRef.current || requestId !== loadRequestRef.current) return;
-        setActivity((activityData ?? []) as CaseActivityEvent[]);
-        setActivityLoading(false);
-      } catch {
-        if (!mountedRef.current || requestId !== loadRequestRef.current) return;
-        setActivity([]);
-        setActivityLoading(false);
-        setActivityError(true);
-      }
+      await loadActivity(requestId);
     } catch {
       if (!mountedRef.current || requestId !== loadRequestRef.current) return;
       setMessage({ key: "vault-evidence-list-error", kind: "alert" });
@@ -156,7 +161,7 @@ export default function CaseEvidencePanel({
       if (requestId === loadRequestRef.current) loadPendingRef.current = false;
       if (mountedRef.current && requestId === loadRequestRef.current) setLoading(false);
     }
-  }, [caseId, onChecklistUpdated, supabase, userId]);
+  }, [caseId, loadActivity, onChecklistUpdated, supabase, userId]);
 
   const toggleExpanded = useCallback(() => {
     if (expanded) {
@@ -347,10 +352,11 @@ export default function CaseEvidencePanel({
       }
 
       if (isCurrentContext()) {
-        loadRequestRef.current += 1;
+        const activityRequestId = ++loadRequestRef.current;
         loadPendingRef.current = false;
         setLoading(false);
         setEvidence((current) => [metadata as CaseEvidence, ...current.filter((item) => item.id !== metadata.id)]);
+        await loadActivity(activityRequestId);
       }
 
       try {
@@ -378,7 +384,7 @@ export default function CaseEvidencePanel({
         setUploading(false);
       }
     }
-  }, [caseId, onChecklistUpdated, readOnly, supabase, userId]);
+  }, [caseId, loadActivity, onChecklistUpdated, readOnly, supabase, userId]);
 
   const handleDownload = useCallback(async (item: CaseEvidence) => {
     if (downloadPendingRef.current.has(item.storage_path)) return;

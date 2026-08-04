@@ -143,6 +143,37 @@ describe("CaseEvidencePanel", () => {
     await act(async () => pendingActivity.resolve({ data: [activity], error: null }));
   });
 
+  it("refreshes activity after upload without leaving a superseded load spinning", async () => {
+    const pendingActivity = deferred<{ data: (typeof activity)[]; error: null }>();
+    const uploadedActivity = {
+      ...activity,
+      id: "activity-2",
+      source_name: "uploaded.pdf",
+      occurred_at: "2026-08-04T07:30:00.000Z",
+    };
+    activityListMock
+      .mockReturnValueOnce(pendingActivity.promise)
+      .mockResolvedValueOnce({ data: [uploadedActivity], error: null });
+    render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
+
+    fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
+    const input = await screen.findByLabelText("vault-evidence-file-label");
+    await waitFor(() => expect(activityListMock).toHaveBeenCalledTimes(1));
+
+    fireEvent.change(input, {
+      target: { files: [new File(["pdf"], "uploaded.pdf", { type: "application/pdf" })] },
+    });
+
+    expect(await screen.findByText("vault-evidence-upload-success")).toBeTruthy();
+    expect(activityListMock).toHaveBeenCalledTimes(2);
+    const activityRegion = screen.getByRole("region", { name: "vault-evidence-activity-title" });
+    expect(activityRegion.textContent).toContain("uploaded.pdf");
+    expect(screen.queryByText("vault-evidence-activity-loading")).toBeNull();
+
+    await act(async () => pendingActivity.resolve({ data: [activity], error: null }));
+    expect(activityRegion.textContent).toContain("uploaded.pdf");
+  });
+
   it("keeps the evidence list usable when activity loading fails", async () => {
     listMock.mockResolvedValue({ data: [evidence], error: null });
     activityListMock.mockResolvedValue({ data: null, error: { message: "activity failed" } });
