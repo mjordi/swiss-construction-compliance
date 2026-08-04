@@ -356,7 +356,7 @@ export default function CaseEvidencePanel({
         loadPendingRef.current = false;
         setLoading(false);
         setEvidence((current) => [metadata as CaseEvidence, ...current.filter((item) => item.id !== metadata.id)]);
-        await loadActivity(activityRequestId);
+        void loadActivity(activityRequestId);
       }
 
       try {

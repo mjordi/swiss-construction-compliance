@@ -52,6 +52,8 @@ describe("case evidence activity migration", () => {
     expect(triggerFunction).toContain("security definer");
     expect(triggerFunction).toContain("set search_path = ''");
     expect(triggerFunction).toMatch(/insert into public\.case_activity_events[\s\S]*?new\.user_id[\s\S]*?new\.case_id[\s\S]*?new\.id[\s\S]*?new\.original_name[\s\S]*?new\.mime_type[\s\S]*?new\.size_bytes/);
+    expect(triggerFunction).toContain("clock_timestamp()");
+    expect(triggerFunction).not.toContain("new.created_at");
     expect(triggerFunction).toContain("on conflict (event_type, evidence_id) do nothing");
     expect(triggerFunction).toContain("return new");
     expect(sql).toMatch(/create trigger record_case_evidence_upload_activity[\s\S]*?after insert on public\.case_evidence[\s\S]*?for each row execute function public\.record_case_evidence_upload_activity\(\)/);

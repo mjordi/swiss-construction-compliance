@@ -145,6 +145,7 @@ describe("CaseEvidencePanel", () => {
 
   it("refreshes activity after upload without leaving a superseded load spinning", async () => {
     const pendingActivity = deferred<{ data: (typeof activity)[]; error: null }>();
+    const pendingActivityRefresh = deferred<{ data: (typeof activity)[]; error: null }>();
     const uploadedActivity = {
       ...activity,
       id: "activity-2",
@@ -153,7 +154,7 @@ describe("CaseEvidencePanel", () => {
     };
     activityListMock
       .mockReturnValueOnce(pendingActivity.promise)
-      .mockResolvedValueOnce({ data: [uploadedActivity], error: null });
+      .mockReturnValueOnce(pendingActivityRefresh.promise);
     render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
 
     fireEvent.click(screen.getByRole("button", { name: "vault-evidence-show" }));
@@ -166,6 +167,11 @@ describe("CaseEvidencePanel", () => {
 
     expect(await screen.findByText("vault-evidence-upload-success")).toBeTruthy();
     expect(activityListMock).toHaveBeenCalledTimes(2);
+    expect((screen.getByLabelText("vault-evidence-file-label") as HTMLInputElement).disabled).toBe(false);
+    expect(uploadJobDeleteMock).toHaveBeenCalled();
+    expect(screen.getByText("vault-evidence-activity-loading")).toBeTruthy();
+
+    await act(async () => pendingActivityRefresh.resolve({ data: [uploadedActivity], error: null }));
     const activityRegion = screen.getByRole("region", { name: "vault-evidence-activity-title" });
     expect(activityRegion.textContent).toContain("uploaded.pdf");
     expect(screen.queryByText("vault-evidence-activity-loading")).toBeNull();

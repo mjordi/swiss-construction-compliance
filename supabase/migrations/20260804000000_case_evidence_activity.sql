@@ -62,7 +62,7 @@ begin
     new.original_name,
     new.mime_type,
     new.size_bytes,
-    new.created_at
+    clock_timestamp()
   )
   on conflict (event_type, evidence_id) do nothing;
 
