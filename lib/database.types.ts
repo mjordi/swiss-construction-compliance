@@ -34,6 +34,18 @@ export interface CaseEvidence {
   created_at: string;
 }
 
+export interface CaseActivityEvent {
+  id: string;
+  user_id: string;
+  case_id: string;
+  evidence_id: string;
+  event_type: "evidence_uploaded";
+  source_name: string;
+  source_mime_type: "application/pdf" | "image/jpeg" | "image/png";
+  source_size_bytes: number;
+  occurred_at: string;
+}
+
 export interface Protocol {
   id: string;
   user_id: string;
