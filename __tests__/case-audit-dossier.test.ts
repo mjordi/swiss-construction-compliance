@@ -40,6 +40,7 @@ const labels: CaseAuditDossierLabels = {
   milestones: {
     contract: "Contract concluded",
     discovery: "Defect discovered",
+    "evidence-uploaded": "Evidence uploaded",
     "protocol-finalized": "Linked protocol finalized",
     "notice-deadline": "Notice deadline",
   },

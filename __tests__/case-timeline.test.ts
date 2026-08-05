@@ -112,6 +112,53 @@ describe("case timeline view model", () => {
     });
   });
 
+  it("orders source-bound evidence uploads with legal and protocol milestones", () => {
+    const vm = toComplianceCaseViewModel({
+      id: "timeline-evidence",
+      projectName: "Evidence Timeline Project",
+      canton: "ZH",
+      contractDate: new Date("2026-01-10"),
+      discoveryDate: new Date("2026-03-01"),
+    });
+
+    const milestones = deriveCaseLegalMilestones(
+      vm,
+      [{ id: "protocol-1", status: "finalized", createdAt: "2026-03-20T10:00:00.000Z" }],
+      [
+        {
+          id: "activity-later",
+          evidenceId: "evidence-later",
+          eventType: "evidence_uploaded",
+          sourceName: "crack-detail.jpg",
+          occurredAt: "2026-03-15T23:30:00.000Z",
+        },
+        {
+          id: "activity-invalid",
+          evidenceId: "evidence-invalid",
+          eventType: "evidence_uploaded",
+          sourceName: "invalid.pdf",
+          occurredAt: "not-a-date",
+        },
+      ]
+    );
+
+    expect(milestones.map((milestone) => milestone.kind)).toEqual([
+      "contract",
+      "discovery",
+      "evidence-uploaded",
+      "protocol-finalized",
+      "notice-deadline",
+    ]);
+    expect(milestones.find((milestone) => milestone.kind === "evidence-uploaded")).toEqual({
+      id: "evidence-uploaded-activity-later",
+      kind: "evidence-uploaded",
+      date: new Date("2026-03-15T23:30:00.000Z"),
+      dateLabel: "16. März 2026",
+      sourceId: "evidence-later",
+      sourceName: "crack-detail.jpg",
+    });
+  });
+
   it("rejects impossible timelines where discovery is before contract", () => {
     const input = {
       id: "invalid-1",
@@ -172,9 +219,11 @@ describe("case legal chronology CSV", () => {
     date: "Date",
     milestone: "Milestone",
     sourceId: "Protocol source ID",
+    sourceName: "Source name",
     milestones: {
       contract: "Contract concluded",
       discovery: "Defect discovered",
+      "evidence-uploaded": "Evidence uploaded",
       "protocol-finalized": "Protocol finalized",
       "notice-deadline": "Notice deadline",
     },
@@ -191,6 +240,13 @@ describe("case legal chronology CSV", () => {
     const csv = buildCaseLegalChronologyCsv(
       vm,
       [{ id: "protocol-7", status: "finalized", createdAt: "2026-03-15T10:30:00.000Z" }],
+      [{
+        id: "activity-8",
+        evidenceId: "evidence-8",
+        eventType: "evidence_uploaded",
+        sourceName: "balcony crack.jpg",
+        occurredAt: "2026-03-18T10:30:00.000Z",
+      }],
       labels,
       new Date("2026-07-26T12:34:56.000Z")
     );
@@ -203,11 +259,12 @@ describe("case legal chronology CSV", () => {
         '"Project","Tower, ""West"""\r\n' +
         '"Canton","ZH"\r\n' +
         '""\r\n' +
-        '"Date","Milestone","Protocol source ID"\r\n' +
-        '"2026-01-10","Contract concluded",""\r\n' +
-        '"2026-03-01","Defect discovered",""\r\n' +
-        '"2026-03-15","Protocol finalized","protocol-7"\r\n' +
-        '"2026-04-30","Notice deadline",""'
+        '"Date","Milestone","Protocol source ID","Source name"\r\n' +
+        '"2026-01-10","Contract concluded","",""\r\n' +
+        '"2026-03-01","Defect discovered","",""\r\n' +
+        '"2026-03-15","Protocol finalized","protocol-7",""\r\n' +
+        '"2026-03-18","Evidence uploaded","evidence-8","balcony crack.jpg"\r\n' +
+        '"2026-04-30","Notice deadline","",""'
     );
   });
 
@@ -227,6 +284,7 @@ describe("case legal chronology CSV", () => {
         status: "finalized" as const,
         createdAt: `2026-03-${String(index + 10).padStart(2, "0")}T10:30:00.000Z`,
       })),
+      [],
       labels,
       new Date("2026-07-26T12:34:56.000Z")
     );
@@ -251,6 +309,7 @@ describe("case legal chronology CSV", () => {
     const csv = buildCaseLegalChronologyCsv(
       vm,
       [{ id: "protocol-late", status: "finalized", createdAt: "2026-07-15T22:30:00.000Z" }],
+      [],
       labels,
       new Date("2026-07-26T12:34:56.000Z")
     );

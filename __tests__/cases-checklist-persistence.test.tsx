@@ -41,6 +41,19 @@ let protocolRows: Array<{
   defect_description?: string | null;
   signature_data?: string | null;
 }> = [];
+let activityRows: Array<{
+  id: string;
+  user_id: string;
+  case_id: string;
+  evidence_id: string;
+  event_type: "evidence_uploaded";
+  source_name: string;
+  source_mime_type: "application/pdf" | "image/jpeg" | "image/png";
+  source_size_bytes: number;
+  occurred_at: string;
+}> = [];
+let activityQueryError = false;
+let activityQueryPending = false;
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/cases",
@@ -120,7 +133,14 @@ vi.mock("@/lib/case-timeline", () => ({
   buildCaseLegalChronologyCsv: buildCaseLegalChronologyCsvMock,
   deriveCaseLegalMilestones: (
     _item: unknown,
-    protocols: Array<{ id: string; status: string; createdAt: string }> = []
+    protocols: Array<{ id: string; status: string; createdAt: string }> = [],
+    evidenceEvents: Array<{
+      id: string;
+      evidenceId: string;
+      eventType: "evidence_uploaded";
+      sourceName: string;
+      occurredAt: string;
+    }> = []
   ) => [
     { kind: "contract", date: new Date("2026-03-01"), dateLabel: "01.03.2026" },
     { kind: "discovery", date: new Date("2026-03-21"), dateLabel: "21.03.2026" },
@@ -132,6 +152,14 @@ vi.mock("@/lib/case-timeline", () => ({
         date: new Date(protocol.createdAt),
         dateLabel: "25.03.2026",
       })),
+    ...evidenceEvents.map((event) => ({
+      id: `evidence-uploaded-${event.id}`,
+      kind: "evidence-uploaded",
+      date: new Date(event.occurredAt),
+      dateLabel: "26.03.2026",
+      sourceId: event.evidenceId,
+      sourceName: event.sourceName,
+    })),
     { kind: "notice-deadline", date: new Date("2026-05-20"), dateLabel: "20.05.2026" },
   ].sort((a, b) => a.date.getTime() - b.date.getTime()),
   deriveChecklistProgress: (checklist: Record<string, boolean>) => ({
@@ -219,6 +247,21 @@ vi.mock("@/lib/supabase", () => ({
         };
       }
 
+      if (table === "case_activity_events") {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => activityQueryPending
+                ? new Promise(() => undefined)
+                : Promise.resolve({
+                    data: activityQueryError ? null : activityRows,
+                    error: activityQueryError ? { message: "activity unavailable" } : null,
+                  }),
+            }),
+          }),
+        };
+      }
+
       throw new Error(`Unexpected table ${table}`);
     },
   }),
@@ -256,6 +299,9 @@ describe("cases checklist persistence", () => {
     };
     concurrentChecklistRpcData = null;
     protocolRows = [];
+    activityRows = [];
+    activityQueryError = false;
+    activityQueryPending = false;
     protocolSelectColumns = [];
     statusQueryParam = null;
     timelineStatus = "warning";
@@ -387,6 +433,52 @@ describe("cases checklist persistence", () => {
     ]);
   });
 
+  it("shows source-bound evidence uploads in the ordered legal timeline", async () => {
+    activityRows = [
+      {
+        id: "activity-1",
+        user_id: "user-1",
+        case_id: "case-1",
+        evidence_id: "evidence-1",
+        event_type: "evidence_uploaded",
+        source_name: "balcony-crack.jpg",
+        source_mime_type: "image/jpeg",
+        source_size_bytes: 2048,
+        occurred_at: "2026-03-25T23:30:00.000Z",
+      },
+    ];
+
+    render(<CasesPage />);
+
+    const timeline = await screen.findByTestId("cases-legal-timeline-case-1");
+    expect(timeline.textContent).toContain("cases-legal-milestone-evidence-uploaded");
+    expect(timeline.textContent).toContain("balcony-crack.jpg");
+    const evidenceMilestone = Array.from(timeline.querySelectorAll("li")).find((item) =>
+      item.textContent?.includes("balcony-crack.jpg")
+    );
+    expect(evidenceMilestone?.querySelector("time")?.getAttribute("datetime")).toBe("2026-03-26");
+  });
+
+  it("keeps case chronology available when evidence activity loading fails", async () => {
+    activityQueryError = true;
+
+    render(<CasesPage />);
+
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+    const timeline = await screen.findByTestId("cases-legal-timeline-case-1");
+    expect(timeline.textContent).toContain("cases-legal-milestone-contract");
+    expect(timeline.textContent).not.toContain("cases-legal-milestone-evidence-uploaded");
+  });
+
+  it("does not block case chronology while evidence activity is still loading", async () => {
+    activityQueryPending = true;
+
+    render(<CasesPage />);
+
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+    expect(await screen.findByTestId("cases-legal-timeline-case-1")).toBeTruthy();
+  });
+
   it("lists only finalized linked protocols and regenerates their source-bound PDF", async () => {
     protocolRows = [
       {
@@ -508,6 +600,19 @@ describe("cases checklist persistence", () => {
         created_at: "2026-03-25T10:00:00.000Z",
       },
     ];
+    activityRows = [
+      {
+        id: "activity-1",
+        user_id: "user-1",
+        case_id: "case-1",
+        evidence_id: "evidence-1",
+        event_type: "evidence_uploaded",
+        source_name: "balcony-crack.jpg",
+        source_mime_type: "image/jpeg",
+        source_size_bytes: 2048,
+        occurred_at: "2026-03-25T23:30:00.000Z",
+      },
+    ];
     const anchorClickMock = vi
       .spyOn(HTMLAnchorElement.prototype, "click")
       .mockImplementation(() => {});
@@ -532,6 +637,15 @@ describe("cases checklist persistence", () => {
             createdAt: "2026-03-25T10:00:00.000Z",
           },
         ],
+        [
+          {
+            id: "activity-1",
+            evidenceId: "evidence-1",
+            eventType: "evidence_uploaded",
+            sourceName: "balcony-crack.jpg",
+            occurredAt: "2026-03-25T23:30:00.000Z",
+          },
+        ],
         {
           title: "cases-chronology-title",
           generatedAt: "cases-chronology-generated-at",
@@ -541,9 +655,11 @@ describe("cases checklist persistence", () => {
           date: "cases-chronology-date",
           milestone: "cases-chronology-milestone",
           sourceId: "cases-chronology-source-id",
+          sourceName: "cases-chronology-source-name",
           milestones: {
             contract: "cases-legal-milestone-contract",
             discovery: "cases-legal-milestone-discovery",
+            "evidence-uploaded": "cases-legal-milestone-evidence-uploaded",
             "protocol-finalized": "cases-legal-milestone-protocol-finalized",
             "notice-deadline": "cases-legal-milestone-notice-deadline",
           },

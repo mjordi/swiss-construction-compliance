@@ -18,7 +18,7 @@ import {
 import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { buildCaseAuditDossier } from "@/lib/case-audit-dossier";
 import { buildFinalizedProtocolReportFromRecord } from "@/lib/protocol-report";
-import type { Case, Protocol } from "@/lib/database.types";
+import type { Case, CaseActivityEvent, Protocol } from "@/lib/database.types";
 import {
   applyComplianceCaseView,
   buildCaseAuditRegisterCsv,
@@ -33,6 +33,7 @@ import {
   type FollowUpChecklistKey,
   type FollowUpChecklistState,
   type CaseLegalMilestoneKind,
+  type LinkedCaseEvidenceEvent,
   type LinkedCaseProtocolEvent,
   type CaseRegimeFilter,
   type CaseSortMode,
@@ -98,9 +99,27 @@ const countdownClass: Record<ComplianceCaseViewModel["deadlineCountdownTone"], s
   expired: "text-red-300 font-semibold",
 };
 
+const milestoneDateTimeFormatter = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Europe/Zurich",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+});
+
+function formatMilestoneDateTime(date: Date): string {
+  const parts = Object.fromEntries(
+    milestoneDateTimeFormatter
+      .formatToParts(date)
+      .filter((part) => part.type === "year" || part.type === "month" || part.type === "day")
+      .map((part) => [part.type, part.value])
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
 const legalMilestoneLabelKey: Record<CaseLegalMilestoneKind, TranslationKey> = {
   contract: "cases-legal-milestone-contract",
   discovery: "cases-legal-milestone-discovery",
+  "evidence-uploaded": "cases-legal-milestone-evidence-uploaded",
   "protocol-finalized": "cases-legal-milestone-protocol-finalized",
   "notice-deadline": "cases-legal-milestone-notice-deadline",
 };
@@ -289,11 +308,14 @@ export default function CasesPage() {
   const [checklistSavingByCase, setChecklistSavingByCase] = useState<Record<string, boolean>>({});
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
   const [linkedProtocols, setLinkedProtocols] = useState<LinkedProtocolRow[]>([]);
+  const [caseActivityEvents, setCaseActivityEvents] = useState<CaseActivityEvent[]>([]);
   const latestFetchIdRef = useRef(0);
   const hasLoadedInitialCasesRef = useRef(false);
   const lastSuccessfulCasesRef = useRef<Case[]>([]);
   const lastSuccessfulProtocolCountsRef = useRef<Record<string, number>>({});
   const lastSuccessfulLinkedProtocolsRef = useRef<LinkedProtocolRow[]>([]);
+  const lastSuccessfulCaseActivityEventsRef = useRef<CaseActivityEvent[]>([]);
+  const lastSuccessfulCaseActivityUserIdRef = useRef<string | null>(null);
   const filterStateRef = useRef({
     regimeFilter,
     statusFilter,
@@ -308,15 +330,42 @@ export default function CasesPage() {
       lastSuccessfulCasesRef.current = [];
       lastSuccessfulProtocolCountsRef.current = {};
       lastSuccessfulLinkedProtocolsRef.current = [];
+      lastSuccessfulCaseActivityEventsRef.current = [];
+      lastSuccessfulCaseActivityUserIdRef.current = null;
       setDbCases([]);
       setProtocolCounts({});
       setLinkedProtocols([]);
+      setCaseActivityEvents([]);
       setInitialLoadError(null);
       setLoading(false);
       return;
     }
 
+    if (
+      lastSuccessfulCaseActivityUserIdRef.current !== null
+      && lastSuccessfulCaseActivityUserIdRef.current !== user.id
+    ) {
+      lastSuccessfulCaseActivityEventsRef.current = [];
+      lastSuccessfulCaseActivityUserIdRef.current = null;
+      setCaseActivityEvents([]);
+    }
+
     try {
+      const loadActivityEvents = async () => {
+        try {
+          const result = await supabase
+            .from("case_activity_events")
+            .select("id, user_id, case_id, evidence_id, event_type, source_name, source_mime_type, source_size_bytes, occurred_at")
+            .eq("user_id", user.id)
+            .order("occurred_at", { ascending: false });
+          return { data: (result.data ?? []) as CaseActivityEvent[], failed: Boolean(result.error) };
+        } catch {
+          // Activity provenance is additive; never hide established case/protocol data
+          // when an older deployment or a transient request cannot provide it.
+          return { data: [] as CaseActivityEvent[], failed: true };
+        }
+      };
+      const activityResultPromise = loadActivityEvents();
       const [casesResult, protocolsResult] = await Promise.all([
         supabase
           .from("cases")
@@ -368,6 +417,19 @@ export default function CasesPage() {
       }
       lastSuccessfulCasesRef.current = (casesResult.data as Case[]) ?? [];
       setLoading(false);
+
+      // Core case review remains usable even if provenance is slow or unavailable.
+      const activityResult = await activityResultPromise;
+      if (fetchId !== latestFetchIdRef.current) return;
+      if (!activityResult.failed) {
+        lastSuccessfulCaseActivityEventsRef.current = activityResult.data;
+        lastSuccessfulCaseActivityUserIdRef.current = user.id;
+        setCaseActivityEvents(activityResult.data);
+      } else if (lastSuccessfulCaseActivityUserIdRef.current === user.id) {
+        setCaseActivityEvents(lastSuccessfulCaseActivityEventsRef.current);
+      } else {
+        setCaseActivityEvents([]);
+      }
     } catch {
       if (fetchId !== latestFetchIdRef.current) return;
       if (!hasLoadedInitialCasesRef.current) {
@@ -688,6 +750,26 @@ export default function CasesPage() {
 
     return result;
   }, [linkedProtocols]);
+
+  const evidenceEventsByCase = useMemo(() => {
+    const result: Record<string, LinkedCaseEvidenceEvent[]> = {};
+
+    for (const event of caseActivityEvents) {
+      if (!event.case_id || !event.id || !event.evidence_id || !event.source_name || !event.occurred_at) continue;
+
+      const events = result[event.case_id] ?? [];
+      events.push({
+        id: event.id,
+        evidenceId: event.evidence_id,
+        eventType: event.event_type,
+        sourceName: event.source_name,
+        occurredAt: event.occurred_at,
+      });
+      result[event.case_id] = events;
+    }
+
+    return result;
+  }, [caseActivityEvents]);
 
   const finalizedProtocolsByCase = useMemo(() => {
     const result: Record<string, FinalizedLinkedProtocolRow[]> = {};
@@ -1054,6 +1136,7 @@ export default function CasesPage() {
     const content = buildCaseLegalChronologyCsv(
       item,
       linkedProtocolEventsByCase[item.id] ?? [],
+      evidenceEventsByCase[item.id] ?? [],
       {
         title: t("cases-chronology-title"),
         generatedAt: t("cases-chronology-generated-at"),
@@ -1063,9 +1146,11 @@ export default function CasesPage() {
         date: t("cases-chronology-date"),
         milestone: t("cases-chronology-milestone"),
         sourceId: t("cases-chronology-source-id"),
+        sourceName: t("cases-chronology-source-name"),
         milestones: {
           contract: t("cases-legal-milestone-contract"),
           discovery: t("cases-legal-milestone-discovery"),
+          "evidence-uploaded": t("cases-legal-milestone-evidence-uploaded"),
           "protocol-finalized": t("cases-legal-milestone-protocol-finalized"),
           "notice-deadline": t("cases-legal-milestone-notice-deadline"),
         },
@@ -1241,6 +1326,7 @@ export default function CasesPage() {
           milestones: {
             contract: t("cases-legal-milestone-contract"),
             discovery: t("cases-legal-milestone-discovery"),
+            "evidence-uploaded": t("cases-legal-milestone-evidence-uploaded"),
             "protocol-finalized": t("cases-legal-milestone-protocol-finalized"),
             "notice-deadline": t("cases-legal-milestone-notice-deadline"),
           },
@@ -2020,13 +2106,22 @@ export default function CasesPage() {
                       {t("cases-legal-timeline-desc")}
                     </p>
                     <ol className="mt-3 space-y-2 border-l border-blue-400/30 pl-4">
-                      {deriveCaseLegalMilestones(item, linkedProtocolEventsByCase[item.id] ?? []).map((milestone) => (
+                      {deriveCaseLegalMilestones(
+                        item,
+                        linkedProtocolEventsByCase[item.id] ?? [],
+                        evidenceEventsByCase[item.id] ?? []
+                      ).map((milestone) => (
                         <li
                           key={milestone.id ?? milestone.kind}
                           className="flex items-center justify-between gap-4 text-sm"
                         >
-                          <span className="text-cream">{t(legalMilestoneLabelKey[milestone.kind])}</span>
-                          <time dateTime={milestone.date.toISOString().slice(0, 10)} className="text-blue-100">
+                          <span className="text-cream">
+                            {t(legalMilestoneLabelKey[milestone.kind])}
+                            {milestone.sourceName && (
+                              <span className="ml-2 font-mono text-xs text-blue-100">{milestone.sourceName}</span>
+                            )}
+                          </span>
+                          <time dateTime={formatMilestoneDateTime(milestone.date)} className="text-blue-100">
                             {milestone.dateLabel}
                           </time>
                         </li>
