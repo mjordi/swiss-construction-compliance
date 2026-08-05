@@ -94,6 +94,7 @@ export interface ComplianceCaseViewModel {
 export type CaseLegalMilestoneKind =
   | "contract"
   | "discovery"
+  | "evidence-uploaded"
   | "protocol-finalized"
   | "notice-deadline";
 
@@ -103,11 +104,21 @@ export interface LinkedCaseProtocolEvent {
   createdAt: string | Date;
 }
 
+export interface LinkedCaseEvidenceEvent {
+  id: string;
+  evidenceId: string;
+  eventType: "evidence_uploaded";
+  sourceName: string;
+  occurredAt: string | Date;
+}
+
 export interface CaseLegalMilestone {
   id?: string;
   kind: CaseLegalMilestoneKind;
   date: Date;
   dateLabel: string;
+  sourceId?: string;
+  sourceName?: string;
 }
 
 export interface CaseLegalChronologyCsvLabels {
@@ -119,6 +130,7 @@ export interface CaseLegalChronologyCsvLabels {
   date: string;
   milestone: string;
   sourceId: string;
+  sourceName: string;
   milestones: Record<CaseLegalMilestoneKind, string>;
 }
 
@@ -250,7 +262,8 @@ export function buildComplianceCaseTimeline(
 
 export function deriveCaseLegalMilestones(
   item: ComplianceCaseViewModel,
-  linkedProtocols: LinkedCaseProtocolEvent[] = []
+  linkedProtocols: LinkedCaseProtocolEvent[] = [],
+  evidenceEvents: LinkedCaseEvidenceEvent[] = []
 ): CaseLegalMilestone[] {
   const milestones: CaseLegalMilestone[] = [
     {
@@ -287,11 +300,28 @@ export function deriveCaseLegalMilestones(
     });
   }
 
+  for (const event of evidenceEvents) {
+    if (event.eventType !== "evidence_uploaded") continue;
+
+    const occurredAt = new Date(event.occurredAt);
+    if (Number.isNaN(occurredAt.getTime())) continue;
+
+    milestones.push({
+      id: `evidence-uploaded-${event.id}`,
+      kind: "evidence-uploaded",
+      date: occurredAt,
+      dateLabel: formatTimestampDateCH(occurredAt),
+      sourceId: event.evidenceId,
+      sourceName: event.sourceName,
+    });
+  }
+
   const milestoneOrder: Record<CaseLegalMilestoneKind, number> = {
     contract: 0,
     discovery: 1,
-    "protocol-finalized": 2,
-    "notice-deadline": 3,
+    "evidence-uploaded": 2,
+    "protocol-finalized": 3,
+    "notice-deadline": 4,
   };
 
   return milestones.sort(
@@ -352,6 +382,7 @@ export function buildCaseAuditRegisterCsv(
 export function buildCaseLegalChronologyCsv(
   item: ComplianceCaseViewModel,
   linkedProtocols: LinkedCaseProtocolEvent[],
+  evidenceEvents: LinkedCaseEvidenceEvent[],
   labels: CaseLegalChronologyCsvLabels,
   generatedAt: Date
 ): string {
@@ -365,11 +396,12 @@ export function buildCaseLegalChronologyCsv(
     [labels.projectName, item.projectName],
     [labels.canton, item.canton],
     [""],
-    [labels.date, labels.milestone, labels.sourceId],
-    ...deriveCaseLegalMilestones(item, linkedProtocols).map((milestone) => [
+    [labels.date, labels.milestone, labels.sourceId, labels.sourceName],
+    ...deriveCaseLegalMilestones(item, linkedProtocols, evidenceEvents).map((milestone) => [
       formatSwissCalendarDate(milestone.date),
       labels.milestones[milestone.kind],
-      milestone.id ? (protocolSourceIds.get(milestone.id) ?? "") : "",
+      milestone.sourceId ?? (milestone.id ? (protocolSourceIds.get(milestone.id) ?? "") : ""),
+      milestone.sourceName ?? "",
     ]),
   ];
 
