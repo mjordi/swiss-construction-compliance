@@ -141,7 +141,7 @@ export default function Login() {
     try {
       const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(
         submittedEmail,
-        { redirectTo: `${window.location.origin}/dashboard/settings?recovery=1` }
+        { redirectTo: `${window.location.origin}/auth/recovery` }
       );
       if (recoveryError) {
         setError({ kind: "translation", key: "login-recovery-error" });

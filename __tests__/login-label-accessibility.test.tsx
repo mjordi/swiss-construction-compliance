@@ -159,7 +159,7 @@ describe("login form label accessibility", () => {
 
     expect(resetPasswordForEmailMock).toHaveBeenCalledTimes(1);
     expect(resetPasswordForEmailMock).toHaveBeenCalledWith("owner@example.ch", {
-      redirectTo: `${window.location.origin}/dashboard/settings?recovery=1`,
+      redirectTo: `${window.location.origin}/auth/recovery`,
     });
 
     await act(async () => {
