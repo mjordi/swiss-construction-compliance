@@ -5,10 +5,15 @@ import { NextResponse } from "next/server";
 const RECOVERY_CONFIRMATION_DESTINATION = "/auth/recovery/confirm";
 const RECOVERY_DESTINATION = "/dashboard/settings?recovery=1";
 const RECOVERY_FAILURE_DESTINATION = "/login?recovery_error=1";
-const RECOVERY_TOKEN_COOKIE = "baucompliance-recovery-token";
+const RECOVERY_TOKEN_COOKIE_PREFIX = "baucompliance-recovery-token";
+const CONFIRMATION_ID_PATTERN = /^[a-f0-9]{32}$/;
 
-function clearRecoveryToken(response: NextResponse) {
-  response.cookies.set(RECOVERY_TOKEN_COOKIE, "", {
+function recoveryTokenCookie(confirmationId: string) {
+  return `${RECOVERY_TOKEN_COOKIE_PREFIX}-${confirmationId}`;
+}
+
+function clearRecoveryToken(response: NextResponse, confirmationId: string) {
+  response.cookies.set(recoveryTokenCookie(confirmationId), "", {
     httpOnly: true,
     maxAge: 0,
     path: "/auth/recovery",
@@ -25,15 +30,14 @@ export async function GET(request: Request) {
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
   if (!tokenHash || type !== "recovery" || !supabaseUrl || !supabaseAnonKey) {
-    return clearRecoveryToken(
-      NextResponse.redirect(new URL(RECOVERY_FAILURE_DESTINATION, requestUrl.origin))
-    );
+    return NextResponse.redirect(new URL(RECOVERY_FAILURE_DESTINATION, requestUrl.origin));
   }
 
-  const response = NextResponse.redirect(
-    new URL(RECOVERY_CONFIRMATION_DESTINATION, requestUrl.origin)
-  );
-  response.cookies.set(RECOVERY_TOKEN_COOKIE, tokenHash, {
+  const confirmationId = crypto.randomUUID().replaceAll("-", "");
+  const confirmationUrl = new URL(RECOVERY_CONFIRMATION_DESTINATION, requestUrl.origin);
+  confirmationUrl.searchParams.set("confirmation_id", confirmationId);
+  const response = NextResponse.redirect(confirmationUrl);
+  response.cookies.set(recoveryTokenCookie(confirmationId), tokenHash, {
     httpOnly: true,
     maxAge: 10 * 60,
     path: "/auth/recovery",
@@ -46,15 +50,26 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   const requestUrl = new URL(request.url);
+  const formData = await request.formData();
+  const confirmationIdValue = formData.get("confirmation_id");
+  const confirmationId =
+    typeof confirmationIdValue === "string" &&
+    CONFIRMATION_ID_PATTERN.test(confirmationIdValue)
+      ? confirmationIdValue
+      : null;
   const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
   const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
   const cookieStore = await cookies();
-  const tokenHash = cookieStore.get(RECOVERY_TOKEN_COOKIE)?.value;
+  const tokenHash = confirmationId
+    ? cookieStore.get(recoveryTokenCookie(confirmationId))?.value
+    : null;
 
-  if (!tokenHash || !supabaseUrl || !supabaseAnonKey) {
-    return clearRecoveryToken(
-      NextResponse.redirect(new URL(RECOVERY_FAILURE_DESTINATION, requestUrl.origin), 303)
+  if (!confirmationId || !tokenHash || !supabaseUrl || !supabaseAnonKey) {
+    const response = NextResponse.redirect(
+      new URL(RECOVERY_FAILURE_DESTINATION, requestUrl.origin),
+      303
     );
+    return confirmationId ? clearRecoveryToken(response, confirmationId) : response;
   }
 
   const response = NextResponse.redirect(
@@ -80,12 +95,13 @@ export async function POST(request: Request) {
       type: "recovery",
     });
 
-    if (!error) return clearRecoveryToken(response);
+    if (!error) return clearRecoveryToken(response, confirmationId);
   } catch {
     // Keep provider/network details out of the URL and return to generic recovery guidance.
   }
 
   return clearRecoveryToken(
-    NextResponse.redirect(new URL(RECOVERY_FAILURE_DESTINATION, requestUrl.origin), 303)
+    NextResponse.redirect(new URL(RECOVERY_FAILURE_DESTINATION, requestUrl.origin), 303),
+    confirmationId
   );
 }
