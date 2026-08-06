@@ -5,6 +5,15 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 let currentLang: "de" | "en" = "de";
 const logoutMock = vi.fn();
 const updateUserMock = vi.fn();
+const replaceMock = vi.fn();
+const routerMock = { replace: replaceMock };
+let searchParamString = "";
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/dashboard/settings",
+  useRouter: () => routerMock,
+  useSearchParams: () => new URLSearchParams(searchParamString),
+}));
 
 vi.mock("@/context/LanguageContext", () => ({
   useLanguage: () => ({
@@ -25,6 +34,7 @@ vi.mock("@/context/LanguageContext", () => ({
           "settings-password-min": "Mindestens 6 Zeichen",
           "settings-update-password": "Passwort aktualisieren",
           "settings-password-updated": "Passwort aktualisiert",
+          "settings-password-recovery-guidance": "Legen Sie jetzt ein neues Passwort fest, um die Wiederherstellung abzuschliessen.",
           "settings-signout-all": "Abmelden",
         },
         en: {
@@ -42,6 +52,7 @@ vi.mock("@/context/LanguageContext", () => ({
           "settings-password-min": "Minimum 6 characters",
           "settings-update-password": "Update password",
           "settings-password-updated": "Password updated",
+          "settings-password-recovery-guidance": "Set a new password now to complete account recovery.",
           "settings-signout-all": "Sign out",
         },
       } as const;
@@ -97,6 +108,8 @@ describe("settings password feedback", () => {
     logoutMock.mockReset();
     updateUserMock.mockReset();
     updateUserMock.mockResolvedValue({ error: null });
+    replaceMock.mockReset();
+    searchParamString = "";
   });
 
   it("associates settings field labels with their inputs", () => {
@@ -181,5 +194,26 @@ describe("settings password feedback", () => {
 
     const updateButton = screen.getByRole("button", { name: "Passwort aktualisieren" });
     expect(updateButton.getAttribute("disabled")).toBeNull();
+  });
+
+  it("guides password recovery, focuses the password field, and preserves unrelated URL params", async () => {
+    searchParamString = "recovery=1&utm_source=recovery-email";
+    render(<SettingsPage />);
+
+    expect(
+      screen.getByText("Legen Sie jetzt ein neues Passwort fest, um die Wiederherstellung abzuschliessen.")
+    ).toBeTruthy();
+    const passwordInput = screen.getByLabelText("Neues Passwort") as HTMLInputElement;
+    await waitFor(() => expect(document.activeElement).toBe(passwordInput));
+
+    fireEvent.change(passwordInput, { target: { value: "new-secure-password" } });
+    fireEvent.click(screen.getByRole("button", { name: "Passwort aktualisieren" }));
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith(
+        "/dashboard/settings?utm_source=recovery-email",
+        { scroll: false }
+      );
+    });
   });
 });

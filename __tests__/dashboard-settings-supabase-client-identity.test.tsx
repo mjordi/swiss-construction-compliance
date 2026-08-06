@@ -52,9 +52,11 @@ const mocks = vi.hoisted(() => {
   return { casesOrderMock, getSupabaseMock, profilesMaybeSingleMock, user };
 });
 
+const routerMock = { replace: vi.fn() };
+
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard",
-  useRouter: () => ({ replace: vi.fn() }),
+  useRouter: () => routerMock,
   useSearchParams: () => {
     const params = new URLSearchParams("");
     return {

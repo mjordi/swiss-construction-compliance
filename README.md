@@ -68,6 +68,16 @@ This project is optimized for **Vercel**. Push to `main` and it deploys automati
 npx vercel --prod
 ```
 
+### Supabase password-recovery email
+
+The recovery flow verifies the emailed token on the server so that links also work when opened in a different browser or device. Add the production origin plus `/auth/recovery` to Supabase's allowed redirect URLs, and configure the recovery email template to link to:
+
+```html
+<a href="{{ .RedirectTo }}?token_hash={{ .TokenHash }}&type=recovery">Reset password</a>
+```
+
+The callback exchanges that one-time token for an authenticated cookie-backed session, then forwards the user to the password editor.
+
 ---
 
 ## Daily Product Improvement Pipeline

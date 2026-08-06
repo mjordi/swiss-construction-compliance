@@ -4,6 +4,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 const logoutMock = vi.fn();
 const updateUserMock = vi.fn();
 const profileUpdateEqMock = vi.fn();
+const routerMock = { replace: vi.fn() };
+
+vi.mock("next/navigation", () => ({
+  usePathname: () => "/dashboard/settings",
+  useRouter: () => routerMock,
+  useSearchParams: () => new URLSearchParams(""),
+}));
 
 vi.mock("@/context/LanguageContext", () => ({
   useLanguage: () => ({

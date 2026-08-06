@@ -54,6 +54,7 @@ function createPlaceholderClient() {
     onAuthStateChange: () => ({ data: { subscription: { unsubscribe: () => {} } } }),
     signInWithPassword: () => Promise.resolve({ data: { user: null, session: null }, error: createConfigError() }),
     signUp: () => Promise.resolve({ data: { user: null, session: null }, error: createConfigError() }),
+    resetPasswordForEmail: () => Promise.resolve({ data: {}, error: createConfigError() }),
     signOut: () => Promise.resolve({ error: null }),
     updateUser: () => Promise.resolve({ data: { user: null }, error: createConfigError() }),
   };
