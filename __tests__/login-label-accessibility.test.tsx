@@ -1,8 +1,11 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act } from "react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const loginMock = vi.fn();
 const signUpMock = vi.fn();
+const resetPasswordForEmailMock = vi.fn();
+const supabaseMock = { auth: { resetPasswordForEmail: resetPasswordForEmailMock } };
 
 const translations: Record<string, string> = {
   "btn-login": "Log in",
@@ -11,6 +14,11 @@ const translations: Record<string, string> = {
   "login-email-placeholder": "name@example.ch",
   "login-password-label": "Password",
   "login-password-placeholder": "••••••••",
+  "login-forgot-password": "Forgot password?",
+  "login-recovery-sending": "Sending recovery link...",
+  "login-recovery-email-required": "Enter your work email first.",
+  "login-recovery-sent": "If an account exists, a recovery link has been sent.",
+  "login-recovery-error": "We couldn't send the recovery link. Please try again.",
   "login-authenticating": "Authenticating...",
   "login-encryption": "Protected by 256-bit Swiss banking-grade encryption",
   "login-demo-divider": "or",
@@ -47,6 +55,7 @@ vi.mock("@/components/SiteHeader", () => ({
 vi.mock("@/lib/supabase", () => ({
   CONFIG_ERROR_MESSAGE: "Supabase is not configured.",
   isSupabaseConfigured: () => true,
+  getSupabase: () => supabaseMock,
 }));
 
 vi.mock("@/lib/marketing-attribution", () => ({
@@ -59,6 +68,7 @@ import LoginPage from "@/app/login/page";
 describe("login form label accessibility", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    resetPasswordForEmailMock.mockReset();
     delete process.env.NEXT_PUBLIC_DEMO_EMAIL;
     delete process.env.NEXT_PUBLIC_DEMO_PASSWORD;
   });
@@ -126,5 +136,55 @@ describe("login form label accessibility", () => {
 
     expect(loginMock).toHaveBeenCalledTimes(1);
     expect(loginMock).toHaveBeenCalledWith("demo@example.ch", "demo-password");
+  });
+
+  it("requests a generic password-recovery email once and only in sign-in mode", async () => {
+    let resolveRecovery: (value: { error: null }) => void = () => {};
+    resetPasswordForEmailMock.mockReturnValueOnce(
+      new Promise<{ error: null }>((resolve) => {
+        resolveRecovery = resolve;
+      })
+    );
+    render(<LoginPage />);
+
+    fireEvent.click(screen.getByRole("button", { name: "Forgot password?" }));
+    expect(screen.getByText("Enter your work email first.")).toBeTruthy();
+
+    fireEvent.change(screen.getByLabelText("Work email"), {
+      target: { value: "owner@example.ch" },
+    });
+    const recoveryButton = screen.getByRole("button", { name: "Forgot password?" });
+    fireEvent.click(recoveryButton);
+    fireEvent.click(recoveryButton);
+
+    expect(resetPasswordForEmailMock).toHaveBeenCalledTimes(1);
+    expect(resetPasswordForEmailMock).toHaveBeenCalledWith("owner@example.ch", {
+      redirectTo: `${window.location.origin}/dashboard/settings?recovery=1`,
+    });
+
+    await act(async () => {
+      resolveRecovery({ error: null });
+    });
+    expect(screen.getByText("If an account exists, a recovery link has been sent.")).toBeTruthy();
+
+    fireEvent.click(screen.getByRole("button", { name: "No account? Sign up" }));
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: "Forgot password?" })).toBeNull();
+    });
+  });
+
+  it("shows generic recovery feedback without exposing auth-provider details", async () => {
+    resetPasswordForEmailMock.mockResolvedValueOnce({
+      error: { message: "User not found" },
+    });
+    render(<LoginPage />);
+
+    fireEvent.change(screen.getByLabelText("Work email"), {
+      target: { value: "unknown@example.ch" },
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Forgot password?" }));
+
+    expect(await screen.findByText("We couldn't send the recovery link. Please try again.")).toBeTruthy();
+    expect(screen.queryByText("User not found")).toBeNull();
   });
 });

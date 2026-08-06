@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo, useRef } from "react";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Shield, LogOut, Loader2, Check, User, AlertCircle } from "lucide-react";
 import PageHeader from "@/components/dashboard/PageHeader";
 import { useLanguage } from "@/context/LanguageContext";
@@ -17,6 +18,13 @@ export default function Settings() {
   const { t } = useLanguage();
   const { user, logout } = useAuth();
   const supabase = useMemo(() => getSupabase(), []);
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
+  const searchParamString = searchParams.toString();
+  const isPasswordRecovery = new URLSearchParams(searchParamString).get("recovery") === "1";
+  const latestSearchParamStringRef = useRef(searchParamString);
+  latestSearchParamStringRef.current = searchParamString;
 
   const [fullName, setFullName] = useState("");
   const [company, setCompany] = useState("");
@@ -31,6 +39,7 @@ export default function Settings() {
   const [passwordUpdated, setPasswordUpdated] = useState(false);
   const [passwordFeedback, setPasswordFeedback] = useState<PasswordFeedback | null>(null);
   const latestPasswordRef = useRef("");
+  const passwordInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     latestProfileFormRef.current = { fullName, company };
@@ -39,6 +48,12 @@ export default function Settings() {
   useEffect(() => {
     latestPasswordRef.current = newPassword;
   }, [newPassword]);
+
+  useEffect(() => {
+    if (isPasswordRecovery) {
+      passwordInputRef.current?.focus();
+    }
+  }, [isPasswordRecovery]);
 
   useEffect(() => {
     if (!user) return;
@@ -151,6 +166,12 @@ export default function Settings() {
         setPasswordUpdated(true);
         setNewPassword("");
         setTimeout(() => setPasswordUpdated(false), 2000);
+        if (isPasswordRecovery) {
+          const params = new URLSearchParams(latestSearchParamStringRef.current);
+          params.delete("recovery");
+          const query = params.toString();
+          router.replace(`${pathname}${query ? `?${query}` : ""}`, { scroll: false });
+        }
       }
     } catch (error) {
       setPasswordFeedback({
@@ -265,12 +286,19 @@ export default function Settings() {
             <Shield className="w-5 h-5 text-emerald-400" /> {t("settings-password-title")}
           </h3>
 
+          {isPasswordRecovery && (
+            <p className="mb-4 rounded-lg border border-emerald-400/20 bg-emerald-400/[0.06] px-4 py-3 text-sm text-emerald-100">
+              {t("settings-password-recovery-guidance")}
+            </p>
+          )}
+
           <div className="max-w-sm space-y-4">
             <div>
               <label htmlFor="settings-new-password" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">
                 {t("settings-new-password")}
               </label>
               <input
+                ref={passwordInputRef}
                 id="settings-new-password"
                 type="password"
                 value={newPassword}

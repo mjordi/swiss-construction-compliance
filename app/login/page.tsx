@@ -6,7 +6,7 @@ import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import SiteHeader from "@/components/SiteHeader";
 import { getAuthFeedback, type AuthFeedback } from "@/lib/auth-feedback";
-import { CONFIG_ERROR_MESSAGE, isSupabaseConfigured } from "@/lib/supabase";
+import { CONFIG_ERROR_MESSAGE, getSupabase, isSupabaseConfigured } from "@/lib/supabase";
 import type { TranslationKey } from "@/locales";
 import {
   captureMarketingAttributionFromLocation,
@@ -23,8 +23,11 @@ export default function Login() {
   const [error, setError] = useState<AuthFeedback | null>(null);
   const [successKey, setSuccessKey] = useState<TranslationKey | null>(null);
   const authInFlightRef = useRef(false);
+  const recoveryInFlightRef = useRef(false);
+  const [recoveryPending, setRecoveryPending] = useState(false);
   const { login, signUp } = useAuth();
   const { t } = useLanguage();
+  const supabase = useMemo(() => getSupabase(), []);
   const supabaseConfigured = isSupabaseConfigured();
   const demoEmail = process.env.NEXT_PUBLIC_DEMO_EMAIL;
   const demoPassword = process.env.NEXT_PUBLIC_DEMO_PASSWORD;
@@ -44,7 +47,7 @@ export default function Login() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (authInFlightRef.current) return;
+    if (authInFlightRef.current || recoveryInFlightRef.current) return;
 
     authInFlightRef.current = true;
     setError(null);
@@ -93,7 +96,7 @@ export default function Login() {
 
   const handleDemoLogin = async () => {
     if (!demoEmail || !demoPassword) return;
-    if (authInFlightRef.current) return;
+    if (authInFlightRef.current || recoveryInFlightRef.current) return;
 
     authInFlightRef.current = true;
     setError(null);
@@ -115,6 +118,42 @@ export default function Login() {
           : { kind: "translation", key: "login-error-generic" }
       );
       finishAuthRequest();
+    }
+  };
+
+  const handlePasswordRecovery = async () => {
+    const submittedEmail = email.trim();
+    if (authInFlightRef.current || recoveryInFlightRef.current) return;
+
+    setError(null);
+    setSuccessKey(null);
+    if (!submittedEmail) {
+      setError({ kind: "translation", key: "login-recovery-email-required" });
+      return;
+    }
+    if (!supabaseConfigured) {
+      setError(getAuthFeedback(CONFIG_ERROR_MESSAGE));
+      return;
+    }
+
+    recoveryInFlightRef.current = true;
+    setRecoveryPending(true);
+    try {
+      const { error: recoveryError } = await supabase.auth.resetPasswordForEmail(
+        submittedEmail,
+        { redirectTo: `${window.location.origin}/dashboard/settings?recovery=1` }
+      );
+      if (recoveryError) {
+        setError({ kind: "translation", key: "login-recovery-error" });
+      } else {
+        // Keep this generic so the UI never discloses whether an account exists.
+        setSuccessKey("login-recovery-sent");
+      }
+    } catch {
+      setError({ kind: "translation", key: "login-recovery-error" });
+    } finally {
+      recoveryInFlightRef.current = false;
+      setRecoveryPending(false);
     }
   };
 
@@ -176,9 +215,14 @@ export default function Login() {
                   id="login-email"
                   type="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    setError(null);
+                    setSuccessKey(null);
+                  }}
                   placeholder={t("login-email-placeholder")}
                   className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-[14px] text-cream placeholder-muted/50 focus:outline-none focus:border-accent/40 transition-colors duration-200"
+                  disabled={isLoading || recoveryPending}
                 />
               </div>
               <div>
@@ -195,8 +239,22 @@ export default function Login() {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder={t("login-password-placeholder")}
                   className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-[14px] text-cream placeholder-muted/50 focus:outline-none focus:border-accent/40 transition-colors duration-200"
+                  disabled={isLoading || recoveryPending}
                 />
               </div>
+
+              {!isSignUp && (
+                <div className="text-right">
+                  <button
+                    type="button"
+                    onClick={handlePasswordRecovery}
+                    disabled={isLoading || recoveryPending || !supabaseConfigured}
+                    className="text-[12px] font-medium text-muted hover:text-accent disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {recoveryPending ? t("login-recovery-sending") : t("login-forgot-password")}
+                  </button>
+                </div>
+              )}
 
               {!supabaseConfigured && (
                 <div className="text-red-400 text-[13px] bg-red-400/[0.06] border border-red-400/15 rounded-lg px-4 py-2.5">
@@ -217,7 +275,7 @@ export default function Login() {
               )}
 
               <button
-                disabled={isLoading || !supabaseConfigured}
+                disabled={isLoading || recoveryPending || !supabaseConfigured}
                 className="w-full bg-accent hover:bg-accent/90 text-white font-semibold py-2.5 rounded-lg shadow-lg shadow-accent/10 transition-all duration-200 flex items-center justify-center gap-2 mt-1 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {isLoading ? (
@@ -246,7 +304,7 @@ export default function Login() {
                 <button
                   type="button"
                   onClick={handleDemoLogin}
-                  disabled={isLoading || !supabaseConfigured}
+                  disabled={isLoading || recoveryPending || !supabaseConfigured}
                   className="w-full bg-white/[0.04] hover:bg-white/[0.07] border border-white/[0.08] hover:border-accent/30 text-muted hover:text-cream font-semibold py-2.5 rounded-lg transition-all duration-200 flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <FlaskConical className="w-4 h-4" />
@@ -257,12 +315,14 @@ export default function Login() {
 
             <div className="mt-6 text-center">
               <button
+                type="button"
+                disabled={isLoading || recoveryPending}
                 onClick={() => {
                   setIsSignUp(!isSignUp);
                   setError(null);
                   setSuccessKey(null);
                 }}
-                className="text-[13px] text-muted hover:text-accent transition-colors duration-200"
+                className="text-[13px] text-muted hover:text-accent transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-50"
               >
                 {isSignUp ? t("login-have-account") : t("login-no-account")}
               </button>
