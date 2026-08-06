@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Lock, Loader2, UserPlus, LogIn, FlaskConical } from "lucide-react";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -31,6 +31,12 @@ export default function Login() {
   const supabaseConfigured = isSupabaseConfigured();
   const demoEmail = process.env.NEXT_PUBLIC_DEMO_EMAIL;
   const demoPassword = process.env.NEXT_PUBLIC_DEMO_PASSWORD;
+
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("recovery_error") === "1") {
+      setError({ kind: "translation", key: "login-recovery-link-error" });
+    }
+  }, []);
 
   const attribution = useMemo<MarketingAttribution | null>(() => {
     captureMarketingAttributionFromLocation();

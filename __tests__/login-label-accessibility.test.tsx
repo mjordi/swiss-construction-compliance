@@ -19,6 +19,7 @@ const translations: Record<string, string> = {
   "login-recovery-email-required": "Enter your work email first.",
   "login-recovery-sent": "If an account exists, a recovery link has been sent.",
   "login-recovery-error": "We couldn't send the recovery link. Please try again.",
+  "login-recovery-link-error": "This recovery link is invalid or expired. Request a new link and try again.",
   "login-authenticating": "Authenticating...",
   "login-encryption": "Protected by 256-bit Swiss banking-grade encryption",
   "login-demo-divider": "or",
@@ -71,6 +72,7 @@ describe("login form label accessibility", () => {
     resetPasswordForEmailMock.mockReset();
     delete process.env.NEXT_PUBLIC_DEMO_EMAIL;
     delete process.env.NEXT_PUBLIC_DEMO_PASSWORD;
+    window.history.replaceState({}, "", "/login");
   });
 
   it("exposes sign-in fields by their visible labels", () => {
@@ -186,5 +188,17 @@ describe("login form label accessibility", () => {
 
     expect(await screen.findByText("We couldn't send the recovery link. Please try again.")).toBeTruthy();
     expect(screen.queryByText("User not found")).toBeNull();
+  });
+
+  it("explains recovery callback failures from the URL marker", async () => {
+    window.history.replaceState({}, "", "/login?recovery_error=1");
+
+    render(<LoginPage />);
+
+    expect(
+      await screen.findByText(
+        "This recovery link is invalid or expired. Request a new link and try again."
+      )
+    ).toBeTruthy();
   });
 });
