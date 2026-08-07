@@ -172,6 +172,9 @@ type CaseFormState = {
   canton: string;
   contractDate: string;
   discoveryDate: string;
+  noticeRecipientName: string;
+  noticeRecipientAddress: string;
+  defectStatement: string;
 };
 
 const EMPTY_CASE_FORM: CaseFormState = {
@@ -179,15 +182,26 @@ const EMPTY_CASE_FORM: CaseFormState = {
   canton: "ZH",
   contractDate: "",
   discoveryDate: "",
+  noticeRecipientName: "",
+  noticeRecipientAddress: "",
+  defectStatement: "",
 };
 
-function buildCaseFormState(item: Pick<Case, "project_name" | "canton" | "contract_date" | "discovery_date">): CaseFormState {
+function buildCaseFormState(item: Pick<Case, "project_name" | "canton" | "contract_date" | "discovery_date" | "notice_recipient_name" | "notice_recipient_address" | "defect_statement">): CaseFormState {
   return {
     projectName: item.project_name,
     canton: item.canton,
     contractDate: item.contract_date.slice(0, 10),
     discoveryDate: item.discovery_date.slice(0, 10),
+    noticeRecipientName: item.notice_recipient_name ?? "",
+    noticeRecipientAddress: item.notice_recipient_address ?? "",
+    defectStatement: item.defect_statement ?? "",
   };
+}
+
+function normalizeOptionalSourceFact(value: string): string | null {
+  const normalized = value.trim();
+  return normalized.length > 0 ? normalized : null;
 }
 
 function formatCaseReminderReadiness(
@@ -1411,6 +1425,9 @@ export default function CasesPage() {
         canton: formData.canton,
         contract_date: formData.contractDate,
         discovery_date: formData.discoveryDate,
+        notice_recipient_name: normalizeOptionalSourceFact(formData.noticeRecipientName),
+        notice_recipient_address: normalizeOptionalSourceFact(formData.noticeRecipientAddress),
+        defect_statement: normalizeOptionalSourceFact(formData.defectStatement),
       });
 
       if (error) {
@@ -1551,6 +1568,9 @@ export default function CasesPage() {
         canton: editFormData.canton,
         contract_date: editFormData.contractDate,
         discovery_date: editFormData.discoveryDate,
+        notice_recipient_name: normalizeOptionalSourceFact(editFormData.noticeRecipientName),
+        notice_recipient_address: normalizeOptionalSourceFact(editFormData.noticeRecipientAddress),
+        defect_statement: normalizeOptionalSourceFact(editFormData.defectStatement),
         updated_at: new Date().toISOString(),
       };
 
@@ -1677,6 +1697,18 @@ export default function CasesPage() {
               {caseDateValidationError === "discovery-before-contract" && (
                 <p className="mt-2 text-xs text-red-400">{t("calc-discovery-before-contract")}</p>
               )}
+            </div>
+            <div>
+              <label htmlFor="cases-notice-recipient-name" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-notice-recipient-name")}</label>
+              <input id="cases-notice-recipient-name" type="text" maxLength={200} value={formData.noticeRecipientName} onChange={(e) => updateFormData({ ...formData, noticeRecipientName: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-60" disabled={saving} />
+            </div>
+            <div>
+              <label htmlFor="cases-notice-recipient-address" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-notice-recipient-address")}</label>
+              <textarea id="cases-notice-recipient-address" maxLength={1000} rows={3} value={formData.noticeRecipientAddress} onChange={(e) => updateFormData({ ...formData, noticeRecipientAddress: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-60" disabled={saving} />
+            </div>
+            <div className="md:col-span-2">
+              <label htmlFor="cases-defect-statement" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-defect-statement")}</label>
+              <textarea id="cases-defect-statement" maxLength={4000} rows={4} value={formData.defectStatement} onChange={(e) => updateFormData({ ...formData, defectStatement: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-60" disabled={saving} />
             </div>
           </div>
           <div className="flex gap-3">
@@ -1853,6 +1885,12 @@ export default function CasesPage() {
             const isProtocolPdfGenerating = Boolean(protocolPdfGeneratingByCase[item.id]);
             const finalizedProtocols = finalizedProtocolsByCase[item.id] ?? [];
             const isCaseBusy = isChecklistSaving || isDossierGenerating || isProtocolPdfGenerating;
+            const persistedCase = dbCases.find((dbItem) => dbItem.id === item.id);
+            const hasCompleteNoticeSource = Boolean(
+              persistedCase?.notice_recipient_name?.trim() &&
+              persistedCase.notice_recipient_address?.trim() &&
+              persistedCase.defect_statement?.trim()
+            );
 
             return (
               <article key={item.id} className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05]">
@@ -1906,9 +1944,8 @@ export default function CasesPage() {
                     <button
                       type="button"
                       onClick={() => {
-                        const dbCase = dbCases.find((dbItem) => dbItem.id === item.id);
-                        if (!dbCase) return;
-                        openEditForm(dbCase);
+                        if (!persistedCase) return;
+                        openEditForm(persistedCase);
                       }}
                       disabled={Boolean(updatingCaseId) || hasDeletingCases || isCaseBusy}
                       className="px-2.5 py-1 rounded-md border border-white/[0.14] text-cream hover:bg-white/[0.06] transition-colors disabled:cursor-not-allowed disabled:opacity-50"
@@ -2052,6 +2089,24 @@ export default function CasesPage() {
                           <p className="mt-2 text-xs text-red-400">{t("calc-discovery-before-contract")}</p>
                         )}
                       </div>
+                      <div>
+                        <label htmlFor={`cases-edit-notice-recipient-name-${item.id}`} className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+                          {t("cases-notice-recipient-name")}
+                        </label>
+                        <input id={`cases-edit-notice-recipient-name-${item.id}`} type="text" maxLength={200} value={editFormData.noticeRecipientName} onChange={(event) => updateEditForm({ ...editFormData, noticeRecipientName: event.target.value })} className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm text-cream outline-none focus:border-accent/40" disabled={updatingCaseId === item.id || hasDeletingCases} />
+                      </div>
+                      <div>
+                        <label htmlFor={`cases-edit-notice-recipient-address-${item.id}`} className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+                          {t("cases-notice-recipient-address")}
+                        </label>
+                        <textarea id={`cases-edit-notice-recipient-address-${item.id}`} maxLength={1000} rows={3} value={editFormData.noticeRecipientAddress} onChange={(event) => updateEditForm({ ...editFormData, noticeRecipientAddress: event.target.value })} className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm text-cream outline-none focus:border-accent/40" disabled={updatingCaseId === item.id || hasDeletingCases} />
+                      </div>
+                      <div className="md:col-span-2">
+                        <label htmlFor={`cases-edit-defect-statement-${item.id}`} className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+                          {t("cases-defect-statement")}
+                        </label>
+                        <textarea id={`cases-edit-defect-statement-${item.id}`} maxLength={4000} rows={4} value={editFormData.defectStatement} onChange={(event) => updateEditForm({ ...editFormData, defectStatement: event.target.value })} className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm text-cream outline-none focus:border-accent/40" disabled={updatingCaseId === item.id || hasDeletingCases} />
+                      </div>
                     </div>
                     <div className="mt-4 flex gap-3">
                       <button
@@ -2079,6 +2134,25 @@ export default function CasesPage() {
                     <InfoCell label={t("cases-notice-deadline")} value={item.noticeDeadlineLabel} />
                   </div>
                 )}
+
+                <section aria-labelledby={`cases-notice-source-title-${item.id}`} className="mb-5 rounded-xl border border-violet-500/20 bg-violet-500/[0.05] p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <h3 id={`cases-notice-source-title-${item.id}`} className="text-xs font-semibold uppercase tracking-[0.08em] text-violet-200">
+                      {t("cases-notice-source-title")}
+                    </h3>
+                    <span className={`rounded-md border px-2.5 py-1 text-xs ${hasCompleteNoticeSource ? "border-emerald-500/30 bg-emerald-500/[0.08] text-emerald-200" : "border-amber-500/30 bg-amber-500/[0.08] text-amber-200"}`}>
+                      {t(hasCompleteNoticeSource ? "cases-notice-source-complete" : "cases-notice-source-incomplete")}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs text-muted">{t("cases-notice-source-description")}</p>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <InfoCell label={t("cases-notice-recipient-name")} value={persistedCase?.notice_recipient_name ?? t("cases-notice-source-missing")} />
+                    <InfoCell label={t("cases-notice-recipient-address")} value={persistedCase?.notice_recipient_address ?? t("cases-notice-source-missing")} valueClassName="whitespace-pre-wrap text-cream" />
+                    <div className="md:col-span-2">
+                      <InfoCell label={t("cases-defect-statement")} value={persistedCase?.defect_statement ?? t("cases-notice-source-missing")} valueClassName="whitespace-pre-wrap text-cream" />
+                    </div>
+                  </div>
+                </section>
 
                 <details className="rounded-xl border border-white/[0.07] p-4 bg-white/[0.01]">
                   <summary className="cursor-pointer text-sm font-semibold text-cream">{t("cases-detail-summary")}</summary>
