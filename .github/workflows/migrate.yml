@@ -5,10 +5,17 @@ on:
     branches: [main]
     paths:
       - "supabase/migrations/**"
+  workflow_dispatch:
+
+# Never run two migration pushes against the same database at once.
+concurrency:
+  group: supabase-migrations
+  cancel-in-progress: false
 
 jobs:
   migrate:
-    runs-on: ubuntu-latest
+    # Self-hosted: the database is only reachable from inside the network.
+    runs-on: self-hosted
 
     steps:
       - name: Checkout
@@ -19,13 +26,12 @@ jobs:
         with:
           version: latest
 
-      - name: Link Supabase project
-        run: supabase link --project-ref ${{ secrets.SUPABASE_PROJECT_REF }}
-        env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-
       - name: Apply migrations
-        run: supabase db push
+        run: |
+          if [ -z "$SUPABASE_DB_URL" ]; then
+            echo "::error::SUPABASE_DB_URL is not set — cannot reach the self-hosted Supabase database."
+            exit 1
+          fi
+          supabase db push --db-url "$SUPABASE_DB_URL" --yes
         env:
-          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+          SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
