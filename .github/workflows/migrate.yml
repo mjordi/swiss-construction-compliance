@@ -6,6 +6,11 @@ on:
     paths:
       - "supabase/migrations/**"
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "List the migrations that would be applied, without applying them"
+        type: boolean
+        default: true
 
 # Never run two migration pushes against the same database at once.
 concurrency:
@@ -32,6 +37,13 @@ jobs:
             echo "::error::SUPABASE_DB_URL is not set — cannot reach the self-hosted Supabase database."
             exit 1
           fi
-          supabase db push --db-url "$SUPABASE_DB_URL" --yes
+          if [ "$DRY_RUN" = "true" ]; then
+            echo "Dry run — no migrations will be applied."
+            supabase db push --db-url "$SUPABASE_DB_URL" --dry-run
+          else
+            supabase db push --db-url "$SUPABASE_DB_URL" --yes
+          fi
         env:
           SUPABASE_DB_URL: ${{ secrets.SUPABASE_DB_URL }}
+          # Null on push events, so scheduled pushes always apply for real.
+          DRY_RUN: ${{ inputs.dry_run || false }}
