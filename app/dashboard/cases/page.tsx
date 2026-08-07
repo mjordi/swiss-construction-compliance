@@ -2147,9 +2147,9 @@ export default function CasesPage() {
                   <p className="mt-2 text-xs text-muted">{t("cases-notice-source-description")}</p>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <InfoCell label={t("cases-notice-recipient-name")} value={persistedCase?.notice_recipient_name ?? t("cases-notice-source-missing")} />
-                    <InfoCell label={t("cases-notice-recipient-address")} value={persistedCase?.notice_recipient_address ?? t("cases-notice-source-missing")} />
+                    <InfoCell label={t("cases-notice-recipient-address")} value={persistedCase?.notice_recipient_address ?? t("cases-notice-source-missing")} valueClassName="whitespace-pre-wrap text-cream" />
                     <div className="md:col-span-2">
-                      <InfoCell label={t("cases-defect-statement")} value={persistedCase?.defect_statement ?? t("cases-notice-source-missing")} />
+                      <InfoCell label={t("cases-defect-statement")} value={persistedCase?.defect_statement ?? t("cases-notice-source-missing")} valueClassName="whitespace-pre-wrap text-cream" />
                     </div>
                   </div>
                 </section>

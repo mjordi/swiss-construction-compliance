@@ -243,7 +243,11 @@ describe("cases inline edit", () => {
     const incompleteCard = screen.getByText("Riverside Hall").closest("article") as HTMLElement;
     expect(within(completeCard).getByText("cases-notice-source-complete")).toBeTruthy();
     expect(within(completeCard).getByText("Alpine Build AG")).toBeTruthy();
-    expect(within(completeCard).getByText("Water ingress at the north facade.")).toBeTruthy();
+    const addressReview = within(completeCard).getByText("cases-notice-recipient-address").nextElementSibling;
+    expect(addressReview?.textContent).toBe("Werkstrasse 4\n8000 Zürich");
+    expect(addressReview?.classList.contains("whitespace-pre-wrap")).toBe(true);
+    const defectReview = within(completeCard).getByText("Water ingress at the north facade.");
+    expect(defectReview.classList.contains("whitespace-pre-wrap")).toBe(true);
     expect(within(incompleteCard).getByText("cases-notice-source-incomplete")).toBeTruthy();
 
     fireEvent.click(within(completeCard).getByRole("button", { name: "cases-edit" }));
