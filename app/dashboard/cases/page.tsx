@@ -204,6 +204,28 @@ function normalizeOptionalSourceFact(value: string): string | null {
   return normalized.length > 0 ? normalized : null;
 }
 
+type CompleteNoticeSource = {
+  recipientName: string;
+  recipientAddress: string;
+  defectStatement: string;
+};
+
+function getCompleteNoticeSource(item: Case | undefined): CompleteNoticeSource | null {
+  if (
+    !item?.notice_recipient_name?.trim()
+    || !item.notice_recipient_address?.trim()
+    || !item.defect_statement?.trim()
+  ) {
+    return null;
+  }
+
+  return {
+    recipientName: item.notice_recipient_name,
+    recipientAddress: item.notice_recipient_address,
+    defectStatement: item.defect_statement,
+  };
+}
+
 function formatCaseReminderReadiness(
   item: ComplianceCaseViewModel,
   checklist: FollowUpChecklistState,
@@ -288,6 +310,9 @@ export default function CasesPage() {
   const [editFormData, setEditFormData] = useState<CaseFormState>(EMPTY_CASE_FORM);
   const [updatingCaseId, setUpdatingCaseId] = useState<string | null>(null);
   const [caseUpdateFeedback, setCaseUpdateFeedback] = useState<{ caseId: string; key: TranslationKey; tone: "success" | "error" } | null>(null);
+  const [noticePreviewOpenByCase, setNoticePreviewOpenByCase] = useState<Record<string, boolean>>({});
+  const noticePreviewOpenByCaseRef = useRef<Record<string, boolean>>({});
+  const previousNoticePreviewUserIdRef = useRef<string | null>(user?.id ?? null);
 
   const [regimeFilter, setRegimeFilter] = useState<CaseRegimeFilter>(() => parseRegimeFilter(searchParams.get("regime")));
   const [statusFilter, setStatusFilter] = useState<CaseStatusFilter>(() => parseStatusFilter(searchParams.get("status")));
@@ -337,6 +362,27 @@ export default function CasesPage() {
     searchTerm,
   });
   const skipNextUrlWriteRef = useRef(false);
+
+  const updateNoticePreviewOpenByCase = useCallback(
+    (updater: (current: Record<string, boolean>) => Record<string, boolean>) => {
+      const current = noticePreviewOpenByCaseRef.current;
+      const next = updater(current);
+      if (next === current) return;
+
+      noticePreviewOpenByCaseRef.current = next;
+      setNoticePreviewOpenByCase(next);
+    },
+    []
+  );
+
+  const clearNoticePreview = useCallback((caseId: string) => {
+    updateNoticePreviewOpenByCase((current) => {
+      if (!current[caseId]) return current;
+      const next = { ...current };
+      delete next[caseId];
+      return next;
+    });
+  }, [updateNoticePreviewOpenByCase]);
 
   const runCasesRefresh = useCallback(async (fetchId: number) => {
     if (!user) {
@@ -472,6 +518,38 @@ export default function CasesPage() {
       triggerCasesRefresh();
     });
   }, [triggerCasesRefresh]);
+
+  useEffect(() => {
+    const openCaseIds = Object.keys(noticePreviewOpenByCaseRef.current);
+    if (openCaseIds.length === 0) return;
+
+    const completeCaseIds = new Set(
+      dbCases.filter((item) => getCompleteNoticeSource(item) !== null).map((item) => item.id)
+    );
+    const staleCaseIds = openCaseIds.filter((caseId) => !completeCaseIds.has(caseId));
+    if (staleCaseIds.length === 0) return;
+
+    updateNoticePreviewOpenByCase((current) => {
+      const next = { ...current };
+      let changed = false;
+      for (const caseId of staleCaseIds) {
+        if (!next[caseId]) continue;
+        delete next[caseId];
+        changed = true;
+      }
+      return changed ? next : current;
+    });
+  }, [dbCases, updateNoticePreviewOpenByCase]);
+
+  useEffect(() => {
+    const currentUserId = user?.id ?? null;
+    if (previousNoticePreviewUserIdRef.current === currentUserId) return;
+
+    previousNoticePreviewUserIdRef.current = currentUserId;
+    updateNoticePreviewOpenByCase((current) => (
+      Object.keys(current).length === 0 ? current : {}
+    ));
+  }, [user?.id, updateNoticePreviewOpenByCase]);
 
   useEffect(() => {
     const cleanupUserId = user?.id;
@@ -1501,6 +1579,7 @@ export default function CasesPage() {
         // the durable cleanup job for a later authenticated Cases-page visit.
         if (cleanupWarningCaseIdRef.current === null) setDeleteError(null);
       }
+      clearNoticePreview(caseId);
       setDbCases((current) => {
         const next = current.filter((item) => item.id !== caseId);
         lastSuccessfulCasesRef.current = next;
@@ -1578,6 +1657,14 @@ export default function CasesPage() {
 
       if (error) {
         throw error;
+      }
+
+      if (
+        !payload.notice_recipient_name
+        || !payload.notice_recipient_address
+        || !payload.defect_statement
+      ) {
+        clearNoticePreview(caseId);
       }
 
       const applyUpdatedCase = (cases: Case[]) =>
@@ -1886,11 +1973,10 @@ export default function CasesPage() {
             const finalizedProtocols = finalizedProtocolsByCase[item.id] ?? [];
             const isCaseBusy = isChecklistSaving || isDossierGenerating || isProtocolPdfGenerating;
             const persistedCase = dbCases.find((dbItem) => dbItem.id === item.id);
-            const hasCompleteNoticeSource = Boolean(
-              persistedCase?.notice_recipient_name?.trim() &&
-              persistedCase.notice_recipient_address?.trim() &&
-              persistedCase.defect_statement?.trim()
-            );
+            const completeNoticeSource = getCompleteNoticeSource(persistedCase);
+            const hasCompleteNoticeSource = completeNoticeSource !== null;
+            const isNoticePreviewOpen = Boolean(noticePreviewOpenByCase[item.id] && completeNoticeSource);
+            const noticePreviewUnavailableId = `cases-notice-preview-unavailable-${item.id}`;
 
             return (
               <article key={item.id} className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05]">
@@ -2152,6 +2238,70 @@ export default function CasesPage() {
                       <InfoCell label={t("cases-defect-statement")} value={persistedCase?.defect_statement ?? t("cases-notice-source-missing")} valueClassName="whitespace-pre-wrap text-cream" />
                     </div>
                   </div>
+                  <div className="mt-4">
+                    <button
+                      type="button"
+                      aria-controls={`cases-notice-preview-${item.id}`}
+                      aria-describedby={!hasCompleteNoticeSource ? noticePreviewUnavailableId : undefined}
+                      aria-expanded={isNoticePreviewOpen}
+                      disabled={!hasCompleteNoticeSource}
+                      onClick={() => {
+                        if (!completeNoticeSource) return;
+                        updateNoticePreviewOpenByCase((current) => {
+                          if (current[item.id]) {
+                            const next = { ...current };
+                            delete next[item.id];
+                            return next;
+                          }
+                          return { ...current, [item.id]: true };
+                        });
+                      }}
+                      className="rounded-lg border border-violet-400/30 px-3 py-2 text-sm font-medium text-violet-100 hover:bg-violet-500/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {t(isNoticePreviewOpen ? "cases-notice-preview-hide" : "cases-notice-preview-show")}
+                    </button>
+                    {!hasCompleteNoticeSource && (
+                      <p id={noticePreviewUnavailableId} className="mt-2 text-xs text-amber-200">
+                        {t("cases-notice-preview-unavailable")}
+                      </p>
+                    )}
+                  </div>
+                  {isNoticePreviewOpen && completeNoticeSource && (
+                    <section
+                      id={`cases-notice-preview-${item.id}`}
+                      data-testid={`cases-notice-preview-${item.id}`}
+                      aria-labelledby={`cases-notice-preview-title-${item.id}`}
+                      className="mt-4 rounded-xl border border-violet-300/30 bg-black/20 p-4"
+                    >
+                      <h3 id={`cases-notice-preview-title-${item.id}`} className="font-semibold text-cream">
+                        {t("cases-notice-preview-title")}
+                      </h3>
+                      <p className="mt-2 rounded-lg border border-amber-400/30 bg-amber-500/[0.08] px-3 py-2 text-sm font-semibold text-amber-100">
+                        {t("cases-notice-preview-status")}
+                      </p>
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        <InfoCell label={t("cases-notice-preview-subject")} value={item.projectName} />
+                        <InfoCell label={t("cases-canton")} value={item.canton} />
+                        <InfoCell label={t("cases-notice-recipient-name")} value={completeNoticeSource.recipientName} />
+                        <InfoCell label={t("cases-notice-recipient-address")} value={completeNoticeSource.recipientAddress} valueClassName="whitespace-pre-wrap text-cream" />
+                        <div className="md:col-span-2">
+                          <InfoCell label={t("cases-defect-statement")} value={completeNoticeSource.defectStatement} valueClassName="whitespace-pre-wrap text-cream" />
+                        </div>
+                        <div className="md:col-span-2 text-xs font-semibold uppercase tracking-[0.08em] text-violet-200">
+                          {t("cases-notice-preview-context")}
+                        </div>
+                        <InfoCell label={t("cases-contract-date")} value={item.contractDateLabel} />
+                        <InfoCell label={t("cases-defect-discovered")} value={item.discoveryDateLabel} />
+                        <div className="md:col-span-2">
+                          <InfoCell
+                            label={t("cases-notice-preview-deadline")}
+                            value={item.noticeDeadline ? item.noticeDeadlineLabel : t("cases-not-fixed")}
+                          />
+                        </div>
+                      </div>
+                      <p className="mt-4 text-xs text-muted">{t("cases-notice-preview-safety")}</p>
+                    </section>
+                  )}
                 </section>
 
                 <details className="rounded-xl border border-white/[0.07] p-4 bg-white/[0.01]">

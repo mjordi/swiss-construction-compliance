@@ -157,6 +157,19 @@ describe("locales", () => {
     }
   });
 
+  it("includes notice preview disclosure labels in every locale", () => {
+    const requiredNoticePreviewKeys = [
+      "cases-notice-preview-show",
+      "cases-notice-preview-hide",
+    ] as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      for (const key of requiredNoticePreviewKeys) {
+        expect(translations[key], `Locale '${lang}' missing notice preview key '${key}'`).toBeDefined();
+      }
+    }
+  });
+
   it("includes login localization and feedback keys in every locale", () => {
     const requiredLoginKeys = [
       "login-subtitle",

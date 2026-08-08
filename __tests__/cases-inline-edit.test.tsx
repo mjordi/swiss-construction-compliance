@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 const replaceMock = vi.fn();
 const updateEqMock = vi.fn();
@@ -31,6 +31,8 @@ type CaseRecord = {
 };
 
 let casesData: CaseRecord[] = [];
+let authUser: { id: string } | null = { id: "user-1" };
+let oldLawCaseIds = new Set<string>();
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/cases",
@@ -49,7 +51,7 @@ vi.mock("@/context/LanguageContext", () => ({
 
 vi.mock("@/context/AuthContext", () => ({
   useAuth: () => ({
-    user: { id: "user-1" },
+    user: authUser,
   }),
 }));
 
@@ -68,34 +70,37 @@ vi.mock("@/lib/case-timeline", () => ({
   buildComplianceCaseTimeline: (
     inputs: Array<{ id: string; projectName: string; canton: string; contractDate: Date; discoveryDate: Date }>
   ) =>
-    inputs.map((input) => ({
-      id: input.id,
-      projectName: input.projectName,
-      canton: input.canton,
-      status: "warning",
-      statusLabel: "Warning",
-      deadlineCountdownTone: "warning",
-      deadlineCountdownLabel: "10 days left",
-      regimeLabel: "New law",
-      regime: "new",
-      noticeApplies: true,
-      noticeDeadline: new Date("2026-05-20T00:00:00.000Z"),
-      noticeDeadlineLabel: "2026-05-20",
-      contractDateLabel: input.contractDate.toISOString().slice(0, 10),
-      discoveryDateLabel: input.discoveryDate.toISOString().slice(0, 10),
-      nextAction: "Draft notice",
-      checklistDefaults: {
-        defectDocumented: true,
-        evidenceAttached: false,
-        noticeDrafted: false,
-        calendarReminderExported: false,
-      },
-      reminderReadiness: {
-        calendarExportReady: false,
-        emailReminderPlanned: false,
-        evidenceComplete: false,
-      },
-    })),
+    inputs.map((input) => {
+      const isOldLawCase = oldLawCaseIds.has(input.id);
+      return {
+        id: input.id,
+        projectName: input.projectName,
+        canton: input.canton,
+        status: "warning",
+        statusLabel: "Warning",
+        deadlineCountdownTone: "warning",
+        deadlineCountdownLabel: "10 days left",
+        regimeLabel: isOldLawCase ? "Old law" : "New law",
+        regime: isOldLawCase ? "old" : "new",
+        noticeApplies: !isOldLawCase,
+        noticeDeadline: isOldLawCase ? null : new Date("2026-05-20T00:00:00.000Z"),
+        noticeDeadlineLabel: isOldLawCase ? "No fixed 60-day deadline" : "2026-05-20",
+        contractDateLabel: input.contractDate.toISOString().slice(0, 10),
+        discoveryDateLabel: input.discoveryDate.toISOString().slice(0, 10),
+        nextAction: "Draft notice",
+        checklistDefaults: {
+          defectDocumented: true,
+          evidenceAttached: false,
+          noticeDrafted: false,
+          calendarReminderExported: false,
+        },
+        reminderReadiness: {
+          calendarExportReady: false,
+          emailReminderPlanned: false,
+          evidenceComplete: false,
+        },
+      };
+    }),
   buildCaseDeadlineReminderICS: () => "BEGIN:VCALENDAR\nEND:VCALENDAR",
   deriveCaseLegalMilestones: (item: { contractDateLabel: string; discoveryDateLabel: string; noticeDeadlineLabel: string }) => [
     { kind: "contract", date: new Date("2026-03-01"), dateLabel: item.contractDateLabel },
@@ -223,6 +228,8 @@ describe("cases inline edit", () => {
     casesSelectResponses = [];
     protocolsSelectResponses = [];
     casesData = [buildCase("case-1", "Alpine Tower"), buildCase("case-2", "Riverside Hall")];
+    authUser = { id: "user-1" };
+    oldLawCaseIds = new Set<string>();
   });
 
   it("reviews complete and incomplete notice source facts and persists normalized edits", async () => {
@@ -263,6 +270,173 @@ describe("cases inline edit", () => {
     fireEvent.click(within(completeCard).getByRole("button", { name: "cases-save" }));
 
     await waitFor(() => expect(updateEqMock).toHaveBeenCalledTimes(1));
+  });
+
+  it("reveals a per-case notice preview only from complete persisted source facts", async () => {
+    render(<CasesPage />);
+
+    const completeCard = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    await waitFor(() => {
+      expect(casesSelectResponses).toHaveLength(0);
+      expect(protocolsSelectResponses).toHaveLength(0);
+      expect(screen.queryByText("cases-loading")).toBeNull();
+    });
+    const incompleteCard = screen.getByText("Riverside Hall").closest("article") as HTMLElement;
+    const completeButton = within(completeCard).getByRole("button", { name: "cases-notice-preview-show" });
+    const incompleteButton = within(incompleteCard).getByRole("button", { name: "cases-notice-preview-show" });
+
+    expect((incompleteButton as HTMLButtonElement).disabled).toBe(true);
+    const unavailableExplanation = within(incompleteCard).getByText("cases-notice-preview-unavailable");
+    expect(incompleteButton.getAttribute("aria-describedby")).toBe(unavailableExplanation.id);
+    expect(within(completeCard).queryByTestId("cases-notice-preview-case-1")).toBeNull();
+    expect(within(incompleteCard).queryByTestId("cases-notice-preview-case-2")).toBeNull();
+
+    fireEvent.click(completeButton);
+
+    expect(completeButton.getAttribute("aria-expanded")).toBe("true");
+    const preview = within(completeCard).getByTestId("cases-notice-preview-case-1");
+    expect(within(preview).getByText("cases-notice-preview-title")).toBeTruthy();
+    expect(within(preview).getByText("cases-notice-preview-status")).toBeTruthy();
+    expect(within(preview).getByText("Alpine Build AG")).toBeTruthy();
+    const previewAddress = within(preview).getByText("cases-notice-recipient-address").nextElementSibling as HTMLElement;
+    expect(previewAddress.textContent).toBe("Werkstrasse 4\n8000 Zürich");
+    expect(previewAddress.classList.contains("whitespace-pre-wrap")).toBe(true);
+    expect(within(preview).getByText("Water ingress at the north facade.")).toBeTruthy();
+    expect(within(preview).getByText("Alpine Tower")).toBeTruthy();
+    expect(within(preview).getByText("ZH")).toBeTruthy();
+    expect(within(preview).getByText("2026-03-01")).toBeTruthy();
+    expect(within(preview).getByText("2026-03-21")).toBeTruthy();
+    expect(within(preview).getByText("2026-05-20")).toBeTruthy();
+    expect(within(preview).getByText("cases-notice-preview-safety")).toBeTruthy();
+    expect(within(incompleteCard).queryByTestId("cases-notice-preview-case-2")).toBeNull();
+
+    fireEvent.click(within(completeCard).getByRole("button", { name: "cases-notice-preview-hide" }));
+
+    await waitFor(() => {
+      expect(completeButton.getAttribute("aria-expanded")).toBe("false");
+      expect(within(completeCard).queryByTestId("cases-notice-preview-case-1")).toBeNull();
+    });
+  });
+
+  it("localizes the no-fixed-deadline value in old-law notice previews", async () => {
+    oldLawCaseIds.add("case-1");
+
+    render(<CasesPage />);
+
+    const completeCard = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    fireEvent.click(within(completeCard).getByRole("button", { name: "cases-notice-preview-show" }));
+
+    const preview = within(completeCard).getByTestId("cases-notice-preview-case-1");
+    expect(within(preview).getByText("cases-not-fixed")).toBeTruthy();
+    expect(within(preview).queryByText("No fixed 60-day deadline")).toBeNull();
+  });
+
+  it("closes and resets an open preview when a persisted edit makes its source incomplete", async () => {
+    updateEqMock.mockImplementation(async (payload: Record<string, unknown>, _field: string, caseId: string) => {
+      casesData = casesData.map((item) => item.id === caseId
+        ? {
+            ...item,
+            defect_statement:
+              typeof payload.defect_statement === "string" || payload.defect_statement === null
+                ? payload.defect_statement
+                : item.defect_statement,
+          }
+        : item);
+      return { error: null };
+    });
+
+    render(<CasesPage />);
+
+    const completeCard = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    await waitFor(() => {
+      expect(casesSelectResponses).toHaveLength(0);
+      expect(protocolsSelectResponses).toHaveLength(0);
+      expect(screen.queryByText("cases-loading")).toBeNull();
+    });
+    fireEvent.click(within(completeCard).getByRole("button", { name: "cases-notice-preview-show" }));
+    expect(within(completeCard).getByTestId("cases-notice-preview-case-1")).toBeTruthy();
+
+    fireEvent.click(within(completeCard).getByRole("button", { name: "cases-edit" }));
+    fireEvent.change(within(completeCard).getByLabelText("cases-defect-statement"), {
+      target: { value: "   " },
+    });
+    fireEvent.click(within(completeCard).getByRole("button", { name: "cases-save" }));
+
+    await waitFor(() => {
+      const disabledPreviewButton = within(completeCard).getByRole("button", { name: "cases-notice-preview-show" }) as HTMLButtonElement;
+      expect(updateEqMock).toHaveBeenCalledTimes(1);
+      expect(within(completeCard).queryByLabelText("cases-defect-statement")).toBeNull();
+      expect(disabledPreviewButton.disabled).toBe(true);
+      expect(disabledPreviewButton.getAttribute("aria-expanded")).toBe("false");
+      expect(within(completeCard).queryByTestId("cases-notice-preview-case-1")).toBeNull();
+    });
+
+    fireEvent.click(within(completeCard).getByRole("button", { name: "cases-edit" }));
+    fireEvent.change(within(completeCard).getByLabelText("cases-defect-statement"), {
+      target: { value: "Repaired membrane still leaks." },
+    });
+    fireEvent.click(within(completeCard).getByRole("button", { name: "cases-save" }));
+
+    await waitFor(() => {
+      const reenabledPreviewButton = within(completeCard).getByRole("button", { name: "cases-notice-preview-show" }) as HTMLButtonElement;
+      expect(updateEqMock).toHaveBeenCalledTimes(2);
+      expect(within(completeCard).queryByLabelText("cases-defect-statement")).toBeNull();
+      expect(reenabledPreviewButton.disabled).toBe(false);
+      expect(reenabledPreviewButton.getAttribute("aria-expanded")).toBe("false");
+      expect(within(completeCard).queryByTestId("cases-notice-preview-case-1")).toBeNull();
+    });
+  });
+
+  it("forgets an open preview after a successful delete even if refreshed data reintroduces the case", async () => {
+    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(true);
+    const refreshCasesDeferred = createDeferred<{ data: CaseRecord[] | null; error: { message: string } | null }>();
+    const deletedCase = casesData[0];
+    deleteEqMock.mockImplementationOnce(async (_field: string, caseId: string) => {
+      casesData = casesData.filter((item) => item.id !== caseId);
+      casesSelectResponses.push(refreshCasesDeferred.promise);
+      protocolsSelectResponses.push(Promise.resolve({ data: [], error: null }));
+      return { error: null };
+    });
+
+    render(<CasesPage />);
+
+    const completeCard = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    fireEvent.click(within(completeCard).getByRole("button", { name: "cases-notice-preview-show" }));
+    expect(within(completeCard).getByTestId("cases-notice-preview-case-1")).toBeTruthy();
+
+    fireEvent.click(within(completeCard).getByRole("button", { name: "cases-delete" }));
+    await waitFor(() => expect(screen.queryByText("Alpine Tower")).toBeNull());
+
+    casesData = [deletedCase, ...casesData];
+    await act(async () => {
+      refreshCasesDeferred.resolve({ data: casesData, error: null });
+    });
+
+    const restoredCard = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    expect(within(restoredCard).getByRole("button", { name: "cases-notice-preview-show" }).getAttribute("aria-expanded")).toBe("false");
+    expect(within(restoredCard).queryByTestId("cases-notice-preview-case-1")).toBeNull();
+
+    confirmSpy.mockRestore();
+  });
+
+  it("forgets open previews across logout and an actual user change", async () => {
+    const { rerender } = render(<CasesPage />);
+
+    const completeCard = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    fireEvent.click(within(completeCard).getByRole("button", { name: "cases-notice-preview-show" }));
+    expect(within(completeCard).getByTestId("cases-notice-preview-case-1")).toBeTruthy();
+
+    authUser = null;
+    rerender(<CasesPage />);
+    await waitFor(() => expect(screen.queryByText("Alpine Tower")).toBeNull());
+
+    authUser = { id: "user-2" };
+    casesData = [{ ...buildCase("case-1", "Alpine Tower"), user_id: "user-2" }];
+    rerender(<CasesPage />);
+
+    const returnedCard = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    expect(within(returnedCard).getByRole("button", { name: "cases-notice-preview-show" }).getAttribute("aria-expanded")).toBe("false");
+    expect(within(returnedCard).queryByTestId("cases-notice-preview-case-1")).toBeNull();
   });
 
   it("persists normalized notice source facts when creating a case", async () => {
