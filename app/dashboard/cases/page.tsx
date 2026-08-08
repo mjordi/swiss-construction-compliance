@@ -2293,7 +2293,10 @@ export default function CasesPage() {
                         <InfoCell label={t("cases-contract-date")} value={item.contractDateLabel} />
                         <InfoCell label={t("cases-defect-discovered")} value={item.discoveryDateLabel} />
                         <div className="md:col-span-2">
-                          <InfoCell label={t("cases-notice-preview-deadline")} value={item.noticeDeadlineLabel} />
+                          <InfoCell
+                            label={t("cases-notice-preview-deadline")}
+                            value={item.noticeDeadline ? item.noticeDeadlineLabel : t("cases-not-fixed")}
+                          />
                         </div>
                       </div>
                       <p className="mt-4 text-xs text-muted">{t("cases-notice-preview-safety")}</p>

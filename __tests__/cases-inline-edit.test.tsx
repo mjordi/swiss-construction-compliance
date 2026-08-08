@@ -32,6 +32,7 @@ type CaseRecord = {
 
 let casesData: CaseRecord[] = [];
 let authUser: { id: string } | null = { id: "user-1" };
+let oldLawCaseIds = new Set<string>();
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/cases",
@@ -69,34 +70,37 @@ vi.mock("@/lib/case-timeline", () => ({
   buildComplianceCaseTimeline: (
     inputs: Array<{ id: string; projectName: string; canton: string; contractDate: Date; discoveryDate: Date }>
   ) =>
-    inputs.map((input) => ({
-      id: input.id,
-      projectName: input.projectName,
-      canton: input.canton,
-      status: "warning",
-      statusLabel: "Warning",
-      deadlineCountdownTone: "warning",
-      deadlineCountdownLabel: "10 days left",
-      regimeLabel: "New law",
-      regime: "new",
-      noticeApplies: true,
-      noticeDeadline: new Date("2026-05-20T00:00:00.000Z"),
-      noticeDeadlineLabel: "2026-05-20",
-      contractDateLabel: input.contractDate.toISOString().slice(0, 10),
-      discoveryDateLabel: input.discoveryDate.toISOString().slice(0, 10),
-      nextAction: "Draft notice",
-      checklistDefaults: {
-        defectDocumented: true,
-        evidenceAttached: false,
-        noticeDrafted: false,
-        calendarReminderExported: false,
-      },
-      reminderReadiness: {
-        calendarExportReady: false,
-        emailReminderPlanned: false,
-        evidenceComplete: false,
-      },
-    })),
+    inputs.map((input) => {
+      const isOldLawCase = oldLawCaseIds.has(input.id);
+      return {
+        id: input.id,
+        projectName: input.projectName,
+        canton: input.canton,
+        status: "warning",
+        statusLabel: "Warning",
+        deadlineCountdownTone: "warning",
+        deadlineCountdownLabel: "10 days left",
+        regimeLabel: isOldLawCase ? "Old law" : "New law",
+        regime: isOldLawCase ? "old" : "new",
+        noticeApplies: !isOldLawCase,
+        noticeDeadline: isOldLawCase ? null : new Date("2026-05-20T00:00:00.000Z"),
+        noticeDeadlineLabel: isOldLawCase ? "No fixed 60-day deadline" : "2026-05-20",
+        contractDateLabel: input.contractDate.toISOString().slice(0, 10),
+        discoveryDateLabel: input.discoveryDate.toISOString().slice(0, 10),
+        nextAction: "Draft notice",
+        checklistDefaults: {
+          defectDocumented: true,
+          evidenceAttached: false,
+          noticeDrafted: false,
+          calendarReminderExported: false,
+        },
+        reminderReadiness: {
+          calendarExportReady: false,
+          emailReminderPlanned: false,
+          evidenceComplete: false,
+        },
+      };
+    }),
   buildCaseDeadlineReminderICS: () => "BEGIN:VCALENDAR\nEND:VCALENDAR",
   deriveCaseLegalMilestones: (item: { contractDateLabel: string; discoveryDateLabel: string; noticeDeadlineLabel: string }) => [
     { kind: "contract", date: new Date("2026-03-01"), dateLabel: item.contractDateLabel },
@@ -225,6 +229,7 @@ describe("cases inline edit", () => {
     protocolsSelectResponses = [];
     casesData = [buildCase("case-1", "Alpine Tower"), buildCase("case-2", "Riverside Hall")];
     authUser = { id: "user-1" };
+    oldLawCaseIds = new Set<string>();
   });
 
   it("reviews complete and incomplete notice source facts and persists normalized edits", async () => {
@@ -311,6 +316,19 @@ describe("cases inline edit", () => {
       expect(completeButton.getAttribute("aria-expanded")).toBe("false");
       expect(within(completeCard).queryByTestId("cases-notice-preview-case-1")).toBeNull();
     });
+  });
+
+  it("localizes the no-fixed-deadline value in old-law notice previews", async () => {
+    oldLawCaseIds.add("case-1");
+
+    render(<CasesPage />);
+
+    const completeCard = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    fireEvent.click(within(completeCard).getByRole("button", { name: "cases-notice-preview-show" }));
+
+    const preview = within(completeCard).getByTestId("cases-notice-preview-case-1");
+    expect(within(preview).getByText("cases-not-fixed")).toBeTruthy();
+    expect(within(preview).queryByText("No fixed 60-day deadline")).toBeNull();
   });
 
   it("closes and resets an open preview when a persisted edit makes its source incomplete", async () => {
