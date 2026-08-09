@@ -26,6 +26,22 @@ export interface Case {
   updated_at: string;
 }
 
+export interface CaseNoticeDraft {
+  id: string;
+  user_id: string;
+  case_id: string;
+  project_name: string;
+  canton: string;
+  notice_recipient_name: string;
+  notice_recipient_address: string;
+  defect_statement: string;
+  contract_date: string;
+  discovery_date: string;
+  notice_deadline: string | null;
+  regime: "old" | "new";
+  created_at: string;
+}
+
 export interface CaseEvidence {
   id: string;
   user_id: string;
