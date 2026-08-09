@@ -70,3 +70,16 @@ grant insert (
   notice_deadline,
   regime
 ) on public.case_notice_drafts to authenticated;
+
+-- Keep client reads bounded to one server-selected latest revision per Case.
+-- security_invoker preserves the underlying table's owner-scoped RLS policy.
+create view public.latest_case_notice_drafts
+with (security_invoker = true)
+as
+select distinct on (user_id, case_id) *
+from public.case_notice_drafts
+order by user_id, case_id, created_at desc, id desc;
+
+revoke all on public.latest_case_notice_drafts from anon;
+revoke all on public.latest_case_notice_drafts from authenticated;
+grant select on public.latest_case_notice_drafts to authenticated;

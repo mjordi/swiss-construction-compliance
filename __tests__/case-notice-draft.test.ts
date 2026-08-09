@@ -75,6 +75,17 @@ describe("buildCaseNoticeDraftPayload", () => {
     expect(buildCaseNoticeDraftPayload(persistedCase({ defect_statement: missing }), context())).toBeNull();
   });
 
+  it.each([
+    { project_name: "   " },
+    { project_name: "x".repeat(201) },
+    { canton: "ZHH" },
+    { notice_recipient_name: "x".repeat(201) },
+    { notice_recipient_address: "x".repeat(1001) },
+    { defect_statement: "x".repeat(4001) },
+  ])("rejects source text outside the persisted revision constraints: %o", (overrides) => {
+    expect(buildCaseNoticeDraftPayload(persistedCase(overrides), context())).toBeNull();
+  });
+
   it("trims all persisted text without changing dates or legal context", () => {
     const payload = buildCaseNoticeDraftPayload(
       persistedCase({

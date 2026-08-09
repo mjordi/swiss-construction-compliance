@@ -455,10 +455,9 @@ export default function CasesPage() {
       const loadNoticeDrafts = async () => {
         try {
           const result = await supabase
-            .from("case_notice_drafts")
+            .from("latest_case_notice_drafts")
             .select("*")
-            .eq("user_id", user.id)
-            .order("created_at", { ascending: false });
+            .eq("user_id", user.id);
           return { data: (result.data ?? []) as CaseNoticeDraft[], failed: Boolean(result.error) };
         } catch {
           // Draft revisions are additive; older deployments must still load Cases.

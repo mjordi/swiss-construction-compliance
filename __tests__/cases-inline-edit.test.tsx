@@ -225,16 +225,19 @@ vi.mock("@/lib/supabase", () => {
         };
       }
 
-      if (table === "case_notice_drafts") {
+      if (table === "latest_case_notice_drafts") {
         return {
           select: () => ({
-            eq: () => ({
-              order: () => {
-                const nextResponse = noticeDraftSelectResponses.shift();
-                return Promise.resolve(nextResponse ?? { data: noticeDraftsData, error: null });
-              },
-            }),
+            eq: () => {
+              const nextResponse = noticeDraftSelectResponses.shift();
+              return Promise.resolve(nextResponse ?? { data: noticeDraftsData, error: null });
+            },
           }),
+        };
+      }
+
+      if (table === "case_notice_drafts") {
+        return {
           insert: (payload: Record<string, unknown>) => ({
             select: () => ({
               single: () => noticeDraftInsertMock(payload),

@@ -64,4 +64,14 @@ describe("case notice draft revisions migration", () => {
     expect(sql).toMatch(/case deletion is[\s\S]*privacy erasure[\s\S]*revisions are purged/);
     expect(sql).toMatch(/case_id uuid references public\.cases\(id\) on delete cascade not null/);
   });
+
+  it("exposes only the server-selected latest revision per owner and Case", () => {
+    const sql = migrationSql();
+
+    expect(sql).toMatch(/create view public\.latest_case_notice_drafts\s+with \(security_invoker = true\)/);
+    expect(sql).toMatch(/select distinct on \(user_id, case_id\) \*[\s\S]*order by user_id, case_id, created_at desc, id desc/);
+    expect(sql).toContain("revoke all on public.latest_case_notice_drafts from anon");
+    expect(sql).toContain("revoke all on public.latest_case_notice_drafts from authenticated");
+    expect(sql).toContain("grant select on public.latest_case_notice_drafts to authenticated");
+  });
 });
