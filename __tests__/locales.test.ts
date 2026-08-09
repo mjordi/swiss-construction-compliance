@@ -170,6 +170,25 @@ describe("locales", () => {
     }
   });
 
+  it("includes notice draft revision labels in every locale", () => {
+    const requiredNoticeDraftKeys = [
+      "cases-notice-draft-create",
+      "cases-notice-draft-creating",
+      "cases-notice-draft-create-error",
+      "cases-notice-draft-created",
+      "cases-notice-draft-title",
+      "cases-notice-draft-status",
+      "cases-notice-draft-created-at",
+      "cases-notice-draft-context",
+    ] as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      for (const key of requiredNoticeDraftKeys) {
+        expect(translations[key], `Locale '${lang}' missing notice draft key '${key}'`).toBeDefined();
+      }
+    }
+  });
+
   it("includes login localization and feedback keys in every locale", () => {
     const requiredLoginKeys = [
       "login-subtitle",

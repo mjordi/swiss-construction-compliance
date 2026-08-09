@@ -18,7 +18,8 @@ import {
 import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { buildCaseAuditDossier } from "@/lib/case-audit-dossier";
 import { buildFinalizedProtocolReportFromRecord } from "@/lib/protocol-report";
-import type { Case, CaseActivityEvent, Protocol } from "@/lib/database.types";
+import type { Case, CaseActivityEvent, CaseNoticeDraft, Protocol } from "@/lib/database.types";
+import { buildCaseNoticeDraftPayload } from "@/lib/case-notice-draft";
 import {
   applyComplianceCaseView,
   buildCaseAuditRegisterCsv,
@@ -42,6 +43,7 @@ import {
 import { buildDashboardProtocolHref } from "@/lib/dashboard-linked-case";
 import { buildCaseVaultHref } from "@/lib/vault";
 import {
+  formatDateCH,
   formatTimestampDateCH,
   getMillisecondsUntilNextSwissCalendarDay,
   sanitizeDateQueryParam,
@@ -114,6 +116,29 @@ function formatMilestoneDateTime(date: Date): string {
       .map((part) => [part.type, part.value])
   );
   return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
+function formatNoticeDraftDate(value: string): string {
+  return formatDateCH(new Date(`${value}T00:00:00.000Z`));
+}
+
+const noticeDraftTimestampLocales = {
+  de: "de-CH",
+  fr: "fr-CH",
+  it: "it-CH",
+  en: "en-CH",
+} as const;
+
+function formatNoticeDraftCreatedAt(value: string, lang: keyof typeof noticeDraftTimestampLocales): string {
+  return new Intl.DateTimeFormat(noticeDraftTimestampLocales[lang], {
+    timeZone: "Europe/Zurich",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).format(new Date(value));
 }
 
 const legalMilestoneLabelKey: Record<CaseLegalMilestoneKind, TranslationKey> = {
@@ -289,7 +314,7 @@ function formatCaseAuditReadinessSummary(
 }
 
 export default function CasesPage() {
-  const { t } = useLanguage();
+  const { lang = "de", t } = useLanguage();
   const { user } = useAuth();
   const supabase = useMemo(() => getSupabase(), []);
   const router = useRouter();
@@ -313,6 +338,7 @@ export default function CasesPage() {
   const [noticePreviewOpenByCase, setNoticePreviewOpenByCase] = useState<Record<string, boolean>>({});
   const noticePreviewOpenByCaseRef = useRef<Record<string, boolean>>({});
   const previousNoticePreviewUserIdRef = useRef<string | null>(user?.id ?? null);
+  const previousNoticeDraftUserIdRef = useRef<string | null>(user?.id ?? null);
 
   const [regimeFilter, setRegimeFilter] = useState<CaseRegimeFilter>(() => parseRegimeFilter(searchParams.get("regime")));
   const [statusFilter, setStatusFilter] = useState<CaseStatusFilter>(() => parseStatusFilter(searchParams.get("status")));
@@ -348,6 +374,14 @@ export default function CasesPage() {
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
   const [linkedProtocols, setLinkedProtocols] = useState<LinkedProtocolRow[]>([]);
   const [caseActivityEvents, setCaseActivityEvents] = useState<CaseActivityEvent[]>([]);
+  const [noticeDrafts, setNoticeDrafts] = useState<CaseNoticeDraft[]>([]);
+  const [noticeDraftCreatingByCase, setNoticeDraftCreatingByCase] = useState<Record<string, boolean>>({});
+  const [noticeDraftFeedbackByCase, setNoticeDraftFeedbackByCase] = useState<Record<string, TranslationKey>>({});
+  const noticeDraftInFlightIdsRef = useRef<Set<string>>(new Set());
+  const noticeDraftRequestIdsRef = useRef<Record<string, number>>({});
+  const latestNoticeDraftLoadIdRef = useRef(0);
+  const currentUserIdRef = useRef<string | null>(user?.id ?? null);
+  currentUserIdRef.current = user?.id ?? null;
   const latestFetchIdRef = useRef(0);
   const hasLoadedInitialCasesRef = useRef(false);
   const lastSuccessfulCasesRef = useRef<Case[]>([]);
@@ -355,6 +389,8 @@ export default function CasesPage() {
   const lastSuccessfulLinkedProtocolsRef = useRef<LinkedProtocolRow[]>([]);
   const lastSuccessfulCaseActivityEventsRef = useRef<CaseActivityEvent[]>([]);
   const lastSuccessfulCaseActivityUserIdRef = useRef<string | null>(null);
+  const lastSuccessfulNoticeDraftsRef = useRef<CaseNoticeDraft[]>([]);
+  const lastSuccessfulNoticeDraftsUserIdRef = useRef<string | null>(null);
   const filterStateRef = useRef({
     regimeFilter,
     statusFilter,
@@ -392,10 +428,14 @@ export default function CasesPage() {
       lastSuccessfulLinkedProtocolsRef.current = [];
       lastSuccessfulCaseActivityEventsRef.current = [];
       lastSuccessfulCaseActivityUserIdRef.current = null;
+      lastSuccessfulNoticeDraftsRef.current = [];
+      lastSuccessfulNoticeDraftsUserIdRef.current = null;
+      latestNoticeDraftLoadIdRef.current += 1;
       setDbCases([]);
       setProtocolCounts({});
       setLinkedProtocols([]);
       setCaseActivityEvents([]);
+      setNoticeDrafts([]);
       setInitialLoadError(null);
       setLoading(false);
       return;
@@ -411,6 +451,19 @@ export default function CasesPage() {
     }
 
     try {
+      const noticeDraftLoadId = ++latestNoticeDraftLoadIdRef.current;
+      const loadNoticeDrafts = async () => {
+        try {
+          const result = await supabase
+            .from("latest_case_notice_drafts")
+            .select("*")
+            .eq("user_id", user.id);
+          return { data: (result.data ?? []) as CaseNoticeDraft[], failed: Boolean(result.error) };
+        } catch {
+          // Draft revisions are additive; older deployments must still load Cases.
+          return { data: [] as CaseNoticeDraft[], failed: true };
+        }
+      };
       const loadActivityEvents = async () => {
         try {
           const result = await supabase
@@ -426,6 +479,7 @@ export default function CasesPage() {
         }
       };
       const activityResultPromise = loadActivityEvents();
+      const noticeDraftResultPromise = loadNoticeDrafts();
       const [casesResult, protocolsResult] = await Promise.all([
         supabase
           .from("cases")
@@ -478,18 +532,36 @@ export default function CasesPage() {
       lastSuccessfulCasesRef.current = (casesResult.data as Case[]) ?? [];
       setLoading(false);
 
-      // Core case review remains usable even if provenance is slow or unavailable.
-      const activityResult = await activityResultPromise;
-      if (fetchId !== latestFetchIdRef.current) return;
-      if (!activityResult.failed) {
-        lastSuccessfulCaseActivityEventsRef.current = activityResult.data;
-        lastSuccessfulCaseActivityUserIdRef.current = user.id;
-        setCaseActivityEvents(activityResult.data);
-      } else if (lastSuccessfulCaseActivityUserIdRef.current === user.id) {
-        setCaseActivityEvents(lastSuccessfulCaseActivityEventsRef.current);
-      } else {
-        setCaseActivityEvents([]);
-      }
+      // Consume additive records independently: either source may be unavailable
+      // forever without delaying core Cases or the other additive source.
+      void activityResultPromise.then((activityResult) => {
+        if (fetchId !== latestFetchIdRef.current || currentUserIdRef.current !== user.id) return;
+        if (!activityResult.failed) {
+          lastSuccessfulCaseActivityEventsRef.current = activityResult.data;
+          lastSuccessfulCaseActivityUserIdRef.current = user.id;
+          setCaseActivityEvents(activityResult.data);
+        } else if (lastSuccessfulCaseActivityUserIdRef.current === user.id) {
+          setCaseActivityEvents(lastSuccessfulCaseActivityEventsRef.current);
+        } else {
+          setCaseActivityEvents([]);
+        }
+      });
+      void noticeDraftResultPromise.then((noticeDraftResult) => {
+        if (
+          fetchId !== latestFetchIdRef.current
+          || noticeDraftLoadId !== latestNoticeDraftLoadIdRef.current
+          || currentUserIdRef.current !== user.id
+        ) return;
+        if (!noticeDraftResult.failed) {
+          lastSuccessfulNoticeDraftsRef.current = noticeDraftResult.data;
+          lastSuccessfulNoticeDraftsUserIdRef.current = user.id;
+          setNoticeDrafts(noticeDraftResult.data);
+        } else if (lastSuccessfulNoticeDraftsUserIdRef.current === user.id) {
+          setNoticeDrafts(lastSuccessfulNoticeDraftsRef.current);
+        } else {
+          setNoticeDrafts([]);
+        }
+      });
     } catch {
       if (fetchId !== latestFetchIdRef.current) return;
       if (!hasLoadedInitialCasesRef.current) {
@@ -550,6 +622,23 @@ export default function CasesPage() {
       Object.keys(current).length === 0 ? current : {}
     ));
   }, [user?.id, updateNoticePreviewOpenByCase]);
+
+  useEffect(() => {
+    const currentUserId = user?.id ?? null;
+    if (previousNoticeDraftUserIdRef.current === currentUserId) return;
+
+    previousNoticeDraftUserIdRef.current = currentUserId;
+    latestNoticeDraftLoadIdRef.current += 1;
+    for (const caseId of Object.keys(noticeDraftRequestIdsRef.current)) {
+      noticeDraftRequestIdsRef.current[caseId] += 1;
+    }
+    noticeDraftInFlightIdsRef.current.clear();
+    lastSuccessfulNoticeDraftsRef.current = [];
+    lastSuccessfulNoticeDraftsUserIdRef.current = null;
+    setNoticeDrafts([]);
+    setNoticeDraftCreatingByCase({});
+    setNoticeDraftFeedbackByCase({});
+  }, [user?.id]);
 
   useEffect(() => {
     const cleanupUserId = user?.id;
@@ -884,6 +973,21 @@ export default function CasesPage() {
     return result;
   }, [linkedProtocols]);
 
+  const latestNoticeDraftByCase = useMemo(() => {
+    const result: Record<string, CaseNoticeDraft> = {};
+    for (const draft of noticeDrafts) {
+      const current = result[draft.case_id];
+      if (
+        !current
+        || draft.created_at > current.created_at
+        || (draft.created_at === current.created_at && draft.id.localeCompare(current.id) > 0)
+      ) {
+        result[draft.case_id] = draft;
+      }
+    }
+    return result;
+  }, [noticeDrafts]);
+
   // Derive effective checklists by layering persisted checklist state over timeline defaults.
   const effectiveChecklists = useMemo(() => {
     const persistedByCaseId = new Map(
@@ -960,7 +1064,7 @@ export default function CasesPage() {
   }
 
   function openEditForm(item: Case) {
-    if (updatingCaseId || hasDeletingCases) return;
+    if (updatingCaseId || hasDeletingCases || noticeDraftCreatingByCase[item.id]) return;
     setCaseUpdateFeedback(null);
     setEditingCaseId(item.id);
     setEditFormData(buildCaseFormState(item));
@@ -1058,6 +1162,19 @@ export default function CasesPage() {
   }, [editFormData.contractDate, editFormData.discoveryDate]);
 
   const hasDeletingCases = Object.keys(deletingCaseIds).length > 0;
+  const hasChecklistSave = Object.values(checklistSavingByCase).some(Boolean);
+  const hasDossierGeneration = Object.values(dossierGeneratingByCase).some(Boolean);
+  const hasProtocolPdfGeneration = Object.values(protocolPdfGeneratingByCase).some(Boolean);
+  const hasNoticeDraftCreation = Object.values(noticeDraftCreatingByCase).some(Boolean);
+  const hasAnyRowLevelMutation = Boolean(
+    editingCaseId
+    || updatingCaseId
+    || hasDeletingCases
+    || hasChecklistSave
+    || hasDossierGeneration
+    || hasProtocolPdfGeneration
+    || hasNoticeDraftCreation
+  );
   const hasVisibleChecklistSave = visibleCases.some((item) =>
     Boolean(checklistSavingByCase[item.id])
   );
@@ -1070,7 +1187,15 @@ export default function CasesPage() {
   };
 
   async function setChecklistItem(caseId: string, key: FollowUpChecklistKey, value: boolean) {
-    if (checklistSavingByCase[caseId]) {
+    if (
+      checklistSavingByCase[caseId]
+      || noticeDraftCreatingByCase[caseId]
+      || editingCaseId === caseId
+      || updatingCaseId === caseId
+      || deletingCaseIds[caseId]
+      || dossierGeneratingByCase[caseId]
+      || protocolPdfGeneratingByCase[caseId]
+    ) {
       return;
     }
 
@@ -1137,6 +1262,15 @@ export default function CasesPage() {
   }
 
   function downloadCaseReminder(item: ComplianceCaseViewModel) {
+    if (
+      noticeDraftCreatingByCase[item.id]
+      || editingCaseId === item.id
+      || updatingCaseId === item.id
+      || deletingCaseIds[item.id]
+      || checklistSavingByCase[item.id]
+      || dossierGeneratingByCase[item.id]
+      || protocolPdfGeneratingByCase[item.id]
+    ) return;
     clearReminderExportFeedback(item.id);
     const requestId = reminderExportRequestIdsRef.current[item.id] ?? 0;
 
@@ -1225,6 +1359,15 @@ export default function CasesPage() {
   }
 
   function downloadCaseChronology(item: ComplianceCaseViewModel) {
+    if (
+      noticeDraftCreatingByCase[item.id]
+      || editingCaseId === item.id
+      || updatingCaseId === item.id
+      || deletingCaseIds[item.id]
+      || checklistSavingByCase[item.id]
+      || dossierGeneratingByCase[item.id]
+      || protocolPdfGeneratingByCase[item.id]
+    ) return;
     const content = buildCaseLegalChronologyCsv(
       item,
       linkedProtocolEventsByCase[item.id] ?? [],
@@ -1265,7 +1408,17 @@ export default function CasesPage() {
 
   async function downloadFinalizedProtocolPdf(protocol: FinalizedLinkedProtocolRow) {
     const caseId = protocol.case_id;
-    if (!caseId || protocolPdfInFlightCaseIdsRef.current.has(caseId) || checklistSavingByCase[caseId]) {
+    if (
+      !caseId
+      || protocolPdfInFlightCaseIdsRef.current.has(caseId)
+      || noticeDraftCreatingByCase[caseId]
+      || editingCaseId === caseId
+      || updatingCaseId === caseId
+      || deletingCaseIds[caseId]
+      || checklistSavingByCase[caseId]
+      || dossierGeneratingByCase[caseId]
+      || protocolPdfGeneratingByCase[caseId]
+    ) {
       return;
     }
 
@@ -1352,7 +1505,16 @@ export default function CasesPage() {
     item: ComplianceCaseViewModel,
     checklist: FollowUpChecklistState
   ) {
-    if (dossierInFlightIdsRef.current.has(item.id) || checklistSavingByCase[item.id]) return;
+    if (
+      dossierInFlightIdsRef.current.has(item.id)
+      || noticeDraftCreatingByCase[item.id]
+      || editingCaseId === item.id
+      || updatingCaseId === item.id
+      || deletingCaseIds[item.id]
+      || checklistSavingByCase[item.id]
+      || dossierGeneratingByCase[item.id]
+      || protocolPdfGeneratingByCase[item.id]
+    ) return;
 
     dossierInFlightIdsRef.current.add(item.id);
     const requestId = (dossierRequestIdsRef.current[item.id] ?? 0) + 1;
@@ -1481,6 +1643,87 @@ export default function CasesPage() {
     }
   }
 
+  async function handleCreateNoticeDraft(item: ComplianceCaseViewModel, persistedCase: Case) {
+    const userId = user?.id;
+    if (
+      !userId
+      || noticeDraftInFlightIdsRef.current.has(item.id)
+      || editingCaseId !== null
+      || updatingCaseId !== null
+      || hasDeletingCases
+      || hasChecklistSave
+      || hasDossierGeneration
+      || hasProtocolPdfGeneration
+      || hasNoticeDraftCreation
+    ) return;
+
+    const payload = buildCaseNoticeDraftPayload(persistedCase, item);
+    if (!payload) return;
+
+    noticeDraftInFlightIdsRef.current.add(item.id);
+    const requestId = (noticeDraftRequestIdsRef.current[item.id] ?? 0) + 1;
+    noticeDraftRequestIdsRef.current[item.id] = requestId;
+    setNoticeDraftFeedbackByCase((current) => {
+      if (!(item.id in current)) return current;
+      const next = { ...current };
+      delete next[item.id];
+      return next;
+    });
+    setNoticeDraftCreatingByCase((current) => ({ ...current, [item.id]: true }));
+
+    const requestIsCurrent = () =>
+      dossierMountedRef.current
+      && currentUserIdRef.current === userId
+      && noticeDraftRequestIdsRef.current[item.id] === requestId;
+
+    try {
+      const { data, error } = await supabase
+        .from("case_notice_drafts")
+        .insert({ user_id: userId, case_id: item.id, ...payload })
+        .select("*")
+        .single();
+      if (error || !data) throw error ?? new Error("Draft revision insert was not confirmed");
+      const savedDraft = data as CaseNoticeDraft;
+      if (
+        savedDraft.user_id !== userId
+        || savedDraft.case_id !== item.id
+        || !requestIsCurrent()
+      ) {
+        return;
+      }
+
+      // An older additive load must not overwrite the server row just returned.
+      latestNoticeDraftLoadIdRef.current += 1;
+      setNoticeDrafts((current) => {
+        const next = [savedDraft, ...current.filter((draft) => draft.id !== savedDraft.id)];
+        lastSuccessfulNoticeDraftsRef.current = next;
+        lastSuccessfulNoticeDraftsUserIdRef.current = userId;
+        return next;
+      });
+      setNoticeDraftFeedbackByCase((current) => ({
+        ...current,
+        [item.id]: "cases-notice-draft-created",
+      }));
+    } catch {
+      if (!requestIsCurrent()) return;
+      setNoticeDraftFeedbackByCase((current) => ({
+        ...current,
+        [item.id]: "cases-notice-draft-create-error",
+      }));
+    } finally {
+      if (noticeDraftRequestIdsRef.current[item.id] === requestId) {
+        noticeDraftInFlightIdsRef.current.delete(item.id);
+      }
+      if (requestIsCurrent()) {
+        setNoticeDraftCreatingByCase((current) => {
+          const next = { ...current };
+          delete next[item.id];
+          return next;
+        });
+      }
+    }
+  }
+
   async function handleAddCase(e: React.FormEvent) {
     e.preventDefault();
     if (
@@ -1525,7 +1768,15 @@ export default function CasesPage() {
   }
 
   async function handleDeleteCase(caseId: string, projectName: string) {
-    if (!user || updatingCaseId) return;
+    if (
+      !user
+      || updatingCaseId
+      || deletingCaseIds[caseId]
+      || noticeDraftCreatingByCase[caseId]
+      || checklistSavingByCase[caseId]
+      || dossierGeneratingByCase[caseId]
+      || protocolPdfGeneratingByCase[caseId]
+    ) return;
     const confirmText = t("cases-delete-confirm").replace("{projectName}", projectName);
     const confirmed = window.confirm(confirmText);
     if (!confirmed) return;
@@ -1634,7 +1885,11 @@ export default function CasesPage() {
       !editFormData.discoveryDate ||
       editCaseDateValidationError ||
       updatingCaseId ||
-      hasDeletingCases
+      hasDeletingCases ||
+      noticeDraftCreatingByCase[caseId] ||
+      checklistSavingByCase[caseId] ||
+      dossierGeneratingByCase[caseId] ||
+      protocolPdfGeneratingByCase[caseId]
     ) {
       return;
     }
@@ -1971,10 +2226,13 @@ export default function CasesPage() {
             const isDossierGenerating = Boolean(dossierGeneratingByCase[item.id]);
             const isProtocolPdfGenerating = Boolean(protocolPdfGeneratingByCase[item.id]);
             const finalizedProtocols = finalizedProtocolsByCase[item.id] ?? [];
-            const isCaseBusy = isChecklistSaving || isDossierGenerating || isProtocolPdfGenerating;
             const persistedCase = dbCases.find((dbItem) => dbItem.id === item.id);
             const completeNoticeSource = getCompleteNoticeSource(persistedCase);
             const hasCompleteNoticeSource = completeNoticeSource !== null;
+            const noticeDraftPayload = persistedCase ? buildCaseNoticeDraftPayload(persistedCase, item) : null;
+            const latestNoticeDraft = latestNoticeDraftByCase[item.id];
+            const isNoticeDraftCreating = Boolean(noticeDraftCreatingByCase[item.id]);
+            const isCaseBusy = isChecklistSaving || isDossierGenerating || isProtocolPdfGenerating || isNoticeDraftCreating;
             const isNoticePreviewOpen = Boolean(noticePreviewOpenByCase[item.id] && completeNoticeSource);
             const noticePreviewUnavailableId = `cases-notice-preview-unavailable-${item.id}`;
 
@@ -2238,7 +2496,7 @@ export default function CasesPage() {
                       <InfoCell label={t("cases-defect-statement")} value={persistedCase?.defect_statement ?? t("cases-notice-source-missing")} valueClassName="whitespace-pre-wrap text-cream" />
                     </div>
                   </div>
-                  <div className="mt-4">
+                  <div className="mt-4 flex flex-wrap items-start gap-3">
                     <button
                       type="button"
                       aria-controls={`cases-notice-preview-${item.id}`}
@@ -2260,9 +2518,33 @@ export default function CasesPage() {
                     >
                       {t(isNoticePreviewOpen ? "cases-notice-preview-hide" : "cases-notice-preview-show")}
                     </button>
+                    <button
+                      type="button"
+                      aria-label={t("cases-notice-draft-create")}
+                      disabled={!persistedCase || !noticeDraftPayload || hasAnyRowLevelMutation}
+                      onClick={() => {
+                        if (!persistedCase || !noticeDraftPayload) return;
+                        void handleCreateNoticeDraft(item, persistedCase);
+                      }}
+                      className="rounded-lg border border-cyan-400/30 px-3 py-2 text-sm font-medium text-cyan-100 hover:bg-cyan-500/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      {t(isNoticeDraftCreating ? "cases-notice-draft-creating" : "cases-notice-draft-create")}
+                    </button>
                     {!hasCompleteNoticeSource && (
-                      <p id={noticePreviewUnavailableId} className="mt-2 text-xs text-amber-200">
+                      <p id={noticePreviewUnavailableId} className="basis-full text-xs text-amber-200">
                         {t("cases-notice-preview-unavailable")}
+                      </p>
+                    )}
+                    {!isNoticeDraftCreating && noticeDraftFeedbackByCase[item.id] && (
+                      <p
+                        role="status"
+                        className={`basis-full text-xs ${
+                          noticeDraftFeedbackByCase[item.id] === "cases-notice-draft-created"
+                            ? "text-emerald-300"
+                            : "text-rose-300"
+                        }`}
+                      >
+                        {t(noticeDraftFeedbackByCase[item.id])}
                       </p>
                     )}
                   </div>
@@ -2300,6 +2582,42 @@ export default function CasesPage() {
                         </div>
                       </div>
                       <p className="mt-4 text-xs text-muted">{t("cases-notice-preview-safety")}</p>
+                    </section>
+                  )}
+                  {latestNoticeDraft && (
+                    <section
+                      data-testid={`cases-notice-draft-${item.id}`}
+                      aria-labelledby={`cases-notice-draft-title-${item.id}`}
+                      className="mt-4 rounded-xl border border-cyan-300/30 bg-cyan-500/[0.05] p-4"
+                    >
+                      <h3 id={`cases-notice-draft-title-${item.id}`} className="font-semibold text-cyan-100">
+                        {t("cases-notice-draft-title")}
+                      </h3>
+                      <p className="mt-2 rounded-lg border border-amber-400/30 bg-amber-500/[0.08] px-3 py-2 text-sm font-semibold text-amber-100">
+                        {t("cases-notice-draft-status")}
+                      </p>
+                      <div className="mt-4 grid gap-3 md:grid-cols-2">
+                        <InfoCell label={t("cases-notice-draft-created-at")} value={formatNoticeDraftCreatedAt(latestNoticeDraft.created_at, lang)} />
+                        <InfoCell label={t("cases-notice-preview-subject")} value={latestNoticeDraft.project_name} />
+                        <InfoCell label={t("cases-canton")} value={latestNoticeDraft.canton} />
+                        <InfoCell label={t("cases-audit-register-regime")} value={t(latestNoticeDraft.regime === "old" ? "cases-old-law" : "cases-new-law")} />
+                        <InfoCell label={t("cases-notice-recipient-name")} value={latestNoticeDraft.notice_recipient_name} />
+                        <InfoCell label={t("cases-notice-recipient-address")} value={latestNoticeDraft.notice_recipient_address} valueClassName="whitespace-pre-wrap text-cream" />
+                        <div className="md:col-span-2">
+                          <InfoCell label={t("cases-defect-statement")} value={latestNoticeDraft.defect_statement} valueClassName="whitespace-pre-wrap text-cream" />
+                        </div>
+                        <div className="md:col-span-2 text-xs font-semibold uppercase tracking-[0.08em] text-cyan-200">
+                          {t("cases-notice-draft-context")}
+                        </div>
+                        <InfoCell label={t("cases-contract-date")} value={formatNoticeDraftDate(latestNoticeDraft.contract_date)} />
+                        <InfoCell label={t("cases-defect-discovered")} value={formatNoticeDraftDate(latestNoticeDraft.discovery_date)} />
+                        <div className="md:col-span-2">
+                          <InfoCell
+                            label={t("cases-notice-preview-deadline")}
+                            value={latestNoticeDraft.notice_deadline ? formatNoticeDraftDate(latestNoticeDraft.notice_deadline) : t("cases-not-fixed")}
+                          />
+                        </div>
+                      </div>
                     </section>
                   )}
                 </section>

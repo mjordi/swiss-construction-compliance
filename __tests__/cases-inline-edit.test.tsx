@@ -5,6 +5,7 @@ const replaceMock = vi.fn();
 const updateEqMock = vi.fn();
 const deleteEqMock = vi.fn();
 const insertMock = vi.fn();
+const noticeDraftInsertMock = vi.fn();
 let casesSelectResponses: Array<
   | { data: CaseRecord[] | null; error: { message: string } | null }
   | Promise<{ data: CaseRecord[] | null; error: { message: string } | null }>
@@ -12,6 +13,14 @@ let casesSelectResponses: Array<
 let protocolsSelectResponses: Array<
   | { data: Array<{ case_id: string | null }> | null; error: { message: string } | null }
   | Promise<{ data: Array<{ case_id: string | null }> | null; error: { message: string } | null }>
+> = [];
+let noticeDraftSelectResponses: Array<
+  | { data: NoticeDraftRecord[] | null; error: { message: string } | null }
+  | Promise<{ data: NoticeDraftRecord[] | null; error: { message: string } | null }>
+> = [];
+let activitySelectResponses: Array<
+  | { data: ActivityRecord[] | null; error: { message: string } | null }
+  | Promise<{ data: ActivityRecord[] | null; error: { message: string } | null }>
 > = [];
 
 type CaseRecord = {
@@ -30,9 +39,39 @@ type CaseRecord = {
   status: string;
 };
 
+type NoticeDraftRecord = {
+  id: string;
+  user_id: string;
+  case_id: string;
+  project_name: string;
+  canton: string;
+  notice_recipient_name: string;
+  notice_recipient_address: string;
+  defect_statement: string;
+  contract_date: string;
+  discovery_date: string;
+  notice_deadline: string | null;
+  regime: "old" | "new";
+  created_at: string;
+};
+
+type ActivityRecord = {
+  id: string;
+  user_id: string;
+  case_id: string;
+  evidence_id: string;
+  event_type: "evidence-uploaded";
+  source_name: string;
+  source_mime_type: string;
+  source_size_bytes: number;
+  occurred_at: string;
+};
+
 let casesData: CaseRecord[] = [];
+let noticeDraftsData: NoticeDraftRecord[] = [];
 let authUser: { id: string } | null = { id: "user-1" };
 let oldLawCaseIds = new Set<string>();
+let activeLanguage: "de" | "fr" | "it" | "en" = "de";
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/cases",
@@ -45,6 +84,7 @@ vi.mock("next/navigation", () => ({
 
 vi.mock("@/context/LanguageContext", () => ({
   useLanguage: () => ({
+    lang: activeLanguage,
     t: (key: string) => key,
   }),
 }));
@@ -102,9 +142,20 @@ vi.mock("@/lib/case-timeline", () => ({
       };
     }),
   buildCaseDeadlineReminderICS: () => "BEGIN:VCALENDAR\nEND:VCALENDAR",
-  deriveCaseLegalMilestones: (item: { contractDateLabel: string; discoveryDateLabel: string; noticeDeadlineLabel: string }) => [
+  deriveCaseLegalMilestones: (
+    item: { contractDateLabel: string; discoveryDateLabel: string; noticeDeadlineLabel: string },
+    _protocols: unknown[],
+    evidence: Array<{ id: string; sourceName: string; occurredAt: string }>
+  ) => [
     { kind: "contract", date: new Date("2026-03-01"), dateLabel: item.contractDateLabel },
     { kind: "discovery", date: new Date("2026-03-21"), dateLabel: item.discoveryDateLabel },
+    ...evidence.map((event) => ({
+      id: event.id,
+      kind: "evidence-uploaded",
+      date: new Date(event.occurredAt),
+      dateLabel: event.occurredAt.slice(0, 10),
+      sourceName: event.sourceName,
+    })),
     { kind: "notice-deadline", date: new Date("2026-05-20"), dateLabel: item.noticeDeadlineLabel },
   ],
   deriveChecklistProgress: (checklist: Record<string, boolean>) => ({
@@ -174,6 +225,40 @@ vi.mock("@/lib/supabase", () => {
         };
       }
 
+      if (table === "latest_case_notice_drafts") {
+        return {
+          select: () => ({
+            eq: () => {
+              const nextResponse = noticeDraftSelectResponses.shift();
+              return Promise.resolve(nextResponse ?? { data: noticeDraftsData, error: null });
+            },
+          }),
+        };
+      }
+
+      if (table === "case_notice_drafts") {
+        return {
+          insert: (payload: Record<string, unknown>) => ({
+            select: () => ({
+              single: () => noticeDraftInsertMock(payload),
+            }),
+          }),
+        };
+      }
+
+      if (table === "case_activity_events") {
+        return {
+          select: () => ({
+            eq: () => ({
+              order: () => {
+                const nextResponse = activitySelectResponses.shift();
+                return Promise.resolve(nextResponse ?? { data: [], error: null });
+              },
+            }),
+          }),
+        };
+      }
+
       throw new Error(`Unexpected table ${table}`);
     },
   };
@@ -209,6 +294,25 @@ function buildCase(id: string, projectName: string): CaseRecord {
   };
 }
 
+function buildNoticeDraft(id: string, overrides: Partial<NoticeDraftRecord> = {}): NoticeDraftRecord {
+  return {
+    id,
+    user_id: "user-1",
+    case_id: "case-1",
+    project_name: "Saved Alpine Tower",
+    canton: "ZH",
+    notice_recipient_name: "Saved Builder AG",
+    notice_recipient_address: "Saved Road 1\n8000 Zürich",
+    defect_statement: "Saved immutable defect.",
+    contract_date: "2026-03-01",
+    discovery_date: "2026-03-21",
+    notice_deadline: "2026-05-20",
+    regime: "new",
+    created_at: "2026-08-09T08:30:00.000Z",
+    ...overrides,
+  };
+}
+
 function createDeferred<T>() {
   let resolve!: (value: T) => void;
   let reject!: (reason?: unknown) => void;
@@ -225,11 +329,24 @@ describe("cases inline edit", () => {
     updateEqMock.mockReset();
     deleteEqMock.mockReset();
     insertMock.mockReset().mockResolvedValue({ error: null });
+    noticeDraftInsertMock.mockReset().mockImplementation(async (payload: Record<string, unknown>) => {
+      const row = {
+        ...payload,
+        id: `draft-${noticeDraftsData.length + 1}`,
+        created_at: "2026-08-09T08:30:00.000Z",
+      } as NoticeDraftRecord;
+      noticeDraftsData = [row, ...noticeDraftsData];
+      return { data: row, error: null };
+    });
     casesSelectResponses = [];
     protocolsSelectResponses = [];
+    noticeDraftSelectResponses = [];
+    activitySelectResponses = [];
+    noticeDraftsData = [];
     casesData = [buildCase("case-1", "Alpine Tower"), buildCase("case-2", "Riverside Hall")];
     authUser = { id: "user-1" };
     oldLawCaseIds = new Set<string>();
+    activeLanguage = "de";
   });
 
   it("reviews complete and incomplete notice source facts and persists normalized edits", async () => {
@@ -942,5 +1059,194 @@ describe("cases inline edit", () => {
     expect(screen.queryByText("cases-load-error")).toBeNull();
 
     confirmSpy.mockRestore();
+  });
+
+  it("loads notice revisions additively, groups the newest by case, and does not wait to show core cases", async () => {
+    const draftsDeferred = createDeferred<{ data: NoticeDraftRecord[] | null; error: { message: string } | null }>();
+    const activityDeferred = createDeferred<{ data: ActivityRecord[] | null; error: { message: string } | null }>();
+    noticeDraftSelectResponses.push(draftsDeferred.promise);
+    activitySelectResponses.push(activityDeferred.promise);
+
+    render(<CasesPage />);
+
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+    expect(screen.queryByTestId("cases-notice-draft-case-1")).toBeNull();
+
+    draftsDeferred.resolve({
+      data: [
+        buildNoticeDraft("draft-new", { created_at: "2026-08-09T09:00:00.000Z", defect_statement: "Newest saved defect." }),
+        buildNoticeDraft("draft-old", { created_at: "2026-08-08T09:00:00.000Z", defect_statement: "Older saved defect." }),
+      ],
+      error: null,
+    });
+
+    const saved = await screen.findByTestId("cases-notice-draft-case-1");
+    expect(within(saved).getByText("Newest saved defect.")).toBeTruthy();
+    expect(within(saved).queryByText("Older saved defect.")).toBeNull();
+    expect(within(saved).getByText("cases-notice-draft-status")).toBeTruthy();
+    expect(within(saved).getByText("cases-notice-draft-created-at")).toBeTruthy();
+  });
+
+  it("applies activity independently while notice revisions remain pending", async () => {
+    const draftsDeferred = createDeferred<{ data: NoticeDraftRecord[] | null; error: { message: string } | null }>();
+    const activityDeferred = createDeferred<{ data: ActivityRecord[] | null; error: { message: string } | null }>();
+    noticeDraftSelectResponses.push(draftsDeferred.promise);
+    activitySelectResponses.push(activityDeferred.promise);
+
+    render(<CasesPage />);
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+
+    activityDeferred.resolve({
+      data: [{
+        id: "activity-1",
+        user_id: "user-1",
+        case_id: "case-1",
+        evidence_id: "evidence-1",
+        event_type: "evidence-uploaded",
+        source_name: "facade-photo.jpg",
+        source_mime_type: "image/jpeg",
+        source_size_bytes: 1200,
+        occurred_at: "2026-08-09T08:00:00.000Z",
+      }],
+      error: null,
+    });
+
+    expect(await screen.findByText("facade-photo.jpg")).toBeTruthy();
+    expect(screen.queryByTestId("cases-notice-draft-case-1")).toBeNull();
+  });
+
+  it("creates one immutable revision from persisted facts, locks duplicate clicks, and preserves it after live edits", async () => {
+    const insertDeferred = createDeferred<{ data: NoticeDraftRecord | null; error: { message: string } | null }>();
+    noticeDraftInsertMock.mockReturnValueOnce(insertDeferred.promise);
+
+    render(<CasesPage />);
+
+    const completeCard = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    const incompleteCard = screen.getByText("Riverside Hall").closest("article") as HTMLElement;
+    const createButton = within(completeCard).getByRole("button", { name: "cases-notice-draft-create" }) as HTMLButtonElement;
+    expect((within(incompleteCard).getByRole("button", { name: "cases-notice-draft-create" }) as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(createButton);
+    fireEvent.click(createButton);
+
+    await waitFor(() => expect(noticeDraftInsertMock).toHaveBeenCalledTimes(1));
+    expect(createButton.disabled).toBe(true);
+    const editButton = within(completeCard).getByRole("button", { name: "cases-edit" }) as HTMLButtonElement;
+    const deleteButton = within(completeCard).getByRole("button", { name: "cases-delete" }) as HTMLButtonElement;
+    expect(editButton.disabled).toBe(true);
+    expect(deleteButton.disabled).toBe(true);
+    expect(within(completeCard).getByText("cases-notice-draft-creating")).toBeTruthy();
+    expect(noticeDraftInsertMock).toHaveBeenCalledWith({
+      user_id: "user-1",
+      case_id: "case-1",
+      project_name: "Alpine Tower",
+      canton: "ZH",
+      notice_recipient_name: "Alpine Build AG",
+      notice_recipient_address: "Werkstrasse 4\n8000 Zürich",
+      defect_statement: "Water ingress at the north facade.",
+      contract_date: "2026-03-01",
+      discovery_date: "2026-03-21",
+      notice_deadline: "2026-05-20",
+      regime: "new",
+    });
+
+    const savedRow = buildNoticeDraft("draft-created", {
+      project_name: "Alpine Tower",
+      notice_recipient_name: "Alpine Build AG",
+      notice_recipient_address: "Werkstrasse 4\n8000 Zürich",
+      defect_statement: "Water ingress at the north facade.",
+    });
+    insertDeferred.resolve({ data: savedRow, error: null });
+
+    const saved = await within(completeCard).findByTestId("cases-notice-draft-case-1");
+    await waitFor(() => {
+      expect(createButton.disabled).toBe(false);
+      expect(editButton.disabled).toBe(false);
+      expect(deleteButton.disabled).toBe(false);
+    });
+    expect(within(saved).getByText("Water ingress at the north facade.")).toBeTruthy();
+
+    updateEqMock.mockImplementationOnce(async (payload: Record<string, unknown>, _field: string, caseId: string) => {
+      casesData = casesData.map((item) => item.id === caseId ? { ...item, ...payload } as CaseRecord : item);
+      return { error: null };
+    });
+    fireEvent.click(within(completeCard).getByRole("button", { name: "cases-edit" }));
+    fireEvent.change(within(completeCard).getByLabelText("cases-defect-statement"), { target: { value: "Edited live defect." } });
+    fireEvent.click(within(completeCard).getByRole("button", { name: "cases-save" }));
+
+    await within(completeCard).findByText("Edited live defect.");
+    expect(within(saved).getByText("Water ingress at the north facade.")).toBeTruthy();
+    expect(within(saved).queryByText("Edited live defect.")).toBeNull();
+  });
+
+  it("disables notice revision creation while a Case is being edited", async () => {
+    render(<CasesPage />);
+    const card = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    const createButton = within(card).getByRole("button", { name: "cases-notice-draft-create" }) as HTMLButtonElement;
+
+    fireEvent.click(within(card).getByRole("button", { name: "cases-edit" }));
+    expect(createButton.disabled).toBe(true);
+    fireEvent.click(createButton);
+    expect(noticeDraftInsertMock).not.toHaveBeenCalled();
+
+    fireEvent.click(within(card).getByRole("button", { name: "cases-cancel" }));
+    await waitFor(() => expect(createButton.disabled).toBe(false));
+  });
+
+  it("formats saved server timestamps with the active Swiss locale", async () => {
+    activeLanguage = "fr";
+    noticeDraftsData = [buildNoticeDraft("draft-fr")];
+    render(<CasesPage />);
+
+    const saved = await screen.findByTestId("cases-notice-draft-case-1");
+    const expected = new Intl.DateTimeFormat("fr-CH", {
+      timeZone: "Europe/Zurich",
+      year: "numeric",
+      month: "long",
+      day: "numeric",
+      hour: "2-digit",
+      minute: "2-digit",
+      second: "2-digit",
+    }).format(new Date("2026-08-09T08:30:00.000Z"));
+    expect(within(saved).getByText(expected)).toBeTruthy();
+  });
+
+  it("handles returned and thrown draft insert errors and allows retry", async () => {
+    noticeDraftInsertMock
+      .mockResolvedValueOnce({ data: null, error: { message: "insert failed" } })
+      .mockRejectedValueOnce(new Error("network failed"));
+
+    render(<CasesPage />);
+    const card = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    const button = within(card).getByRole("button", { name: "cases-notice-draft-create" }) as HTMLButtonElement;
+
+    fireEvent.click(button);
+    expect(await within(card).findByText("cases-notice-draft-create-error")).toBeTruthy();
+    await waitFor(() => expect(button.disabled).toBe(false));
+
+    fireEvent.click(button);
+    await waitFor(() => expect(noticeDraftInsertMock).toHaveBeenCalledTimes(2));
+    expect(await within(card).findByText("cases-notice-draft-create-error")).toBeTruthy();
+    await waitFor(() => expect(button.disabled).toBe(false));
+  });
+
+  it("ignores a draft insert result after the authenticated user changes", async () => {
+    const insertDeferred = createDeferred<{ data: NoticeDraftRecord | null; error: { message: string } | null }>();
+    noticeDraftInsertMock.mockReturnValueOnce(insertDeferred.promise);
+    const { rerender } = render(<CasesPage />);
+
+    const card = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    fireEvent.click(within(card).getByRole("button", { name: "cases-notice-draft-create" }));
+    await waitFor(() => expect(noticeDraftInsertMock).toHaveBeenCalledTimes(1));
+
+    authUser = { id: "user-2" };
+    casesData = [{ ...buildCase("case-1", "Other User Case"), user_id: "user-2" }];
+    rerender(<CasesPage />);
+    await screen.findByText("Other User Case");
+
+    insertDeferred.resolve({ data: buildNoticeDraft("stale-draft"), error: null });
+    await act(async () => Promise.resolve());
+
+    expect(screen.queryByTestId("cases-notice-draft-case-1")).toBeNull();
   });
 });
