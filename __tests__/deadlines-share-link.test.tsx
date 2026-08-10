@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
 const legalUtilsMocks = vi.hoisted(() => ({
   parseDateInputAsUTC: vi.fn(),
@@ -339,10 +339,13 @@ describe("deadlines share-link restoration", () => {
       expect(screen.getByText("deadlines-result-title")).toBeTruthy();
     });
 
-    expect(screen.getByText("deadlines-reminder-label: 30 deadlines-reminder-days, 3 deadlines-reminder-days")).toBeTruthy();
+    const exportRegion = screen.getByRole("region", { name: "deadlines-download-ics" });
+    expect(within(exportRegion).getByText("deadlines-reminder-label: 30 deadlines-reminder-days, 3 deadlines-reminder-days")).toBeTruthy();
+    expect(within(exportRegion).getByText("reminders-activation-guidance")).toBeTruthy();
+    expect(within(exportRegion).getByRole("button", { name: "deadlines-download-ics" })).toBeTruthy();
   });
 
-  it("shows an explicit no-reminders summary beside deadline result actions", async () => {
+  it("uses event-only guidance and success feedback for a no-reminders download", async () => {
     window.history.replaceState(null, "", "/dashboard/deadlines?contract=2026-01-15&acceptance=2026-04-30&discovery=2026-05-10&reminders=none");
 
     render(<DeadlinesPage />);
@@ -351,7 +354,20 @@ describe("deadlines share-link restoration", () => {
       expect(screen.getByText("deadlines-result-title")).toBeTruthy();
     });
 
-    expect(screen.getByText("deadlines-reminder-label: deadlines-reminder-none")).toBeTruthy();
+    const exportRegion = screen.getByRole("region", { name: "deadlines-download-ics" });
+    expect(within(exportRegion).getByText("deadlines-reminder-label: deadlines-reminder-none")).toBeTruthy();
+    expect(within(exportRegion).getByText("reminders-event-only-guidance")).toBeTruthy();
+    expect(within(exportRegion).queryByText("reminders-activation-guidance")).toBeNull();
+
+    fireEvent.click(within(exportRegion).getByRole("button", { name: "deadlines-download-ics" }));
+
+    await waitFor(() => {
+      expect(
+        within(exportRegion).getByRole("button", {
+          name: "deadlines-download-event-only-ready",
+        })
+      ).toBeTruthy();
+    });
   });
 
   it("copies updated reminder presets after the user changes them", async () => {

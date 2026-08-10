@@ -83,7 +83,10 @@ export default function RuegefristCalculator() {
     "calc-share-link-copied" | "calc-share-link-error" | null
   >(null);
   const [downloadFeedback, setDownloadFeedback] = useState<
-    "calc-download-ics-ready" | "calc-download-ics-error" | null
+    | "calc-download-ics-ready"
+    | "calc-download-ics-event-only-ready"
+    | "calc-download-ics-error"
+    | null
   >(null);
   const shareLinkResetTimerRef = useRef<number | null>(null);
   const shareLinkRequestIdRef = useRef(0);
@@ -352,7 +355,11 @@ export default function RuegefristCalculator() {
       a.click();
       URL.revokeObjectURL(url);
       if (requestId !== downloadRequestIdRef.current) return;
-      setDownloadFeedback("calc-download-ics-ready");
+      setDownloadFeedback(
+        reminderOffsets.length > 0
+          ? "calc-download-ics-ready"
+          : "calc-download-ics-event-only-ready"
+      );
     } catch {
       if (requestId !== downloadRequestIdRef.current) return;
       setDownloadFeedback("calc-download-ics-error");
@@ -369,6 +376,9 @@ export default function RuegefristCalculator() {
     ? `/dashboard/cases?contract=${encodeURIComponent(calculatedDates.contractDate)}&discovery=${encodeURIComponent(calculatedDates.discoveryDate)}`
     : null;
   const reminderSummary = formatReminderSummary(reminderOffsets, t);
+  const reminderGuidanceKey = reminderOffsets.length > 0
+    ? "reminders-activation-guidance"
+    : "reminders-event-only-guidance";
 
   function toggleReminder(offset: number) {
     clearShareLinkFeedback();
@@ -463,7 +473,11 @@ export default function RuegefristCalculator() {
               </button>
             )}
           </div>
-          <div className="pt-4 border-t border-white/[0.06]">
+          <div
+            role="region"
+            aria-labelledby="ruegefrist-reminder-presets-label"
+            className="pt-4 border-t border-white/[0.06]"
+          >
             <p
               id="ruegefrist-reminder-presets-label"
               className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-2"
@@ -651,14 +665,19 @@ export default function RuegefristCalculator() {
               </div>
 
               {/* Download ICS */}
-              <button
-                onClick={downloadICS}
-                aria-label={downloadFeedback ? t(downloadFeedback) : t("calc-download-ics")}
-                className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-white/[0.08] hover:border-accent/30 text-muted hover:text-accent font-medium rounded-lg transition-all duration-300 text-[13px]"
-              >
-                <Download className="w-4 h-4" />
-                {downloadFeedback ? t(downloadFeedback) : t("calc-download-ics")}
-              </button>
+              <section aria-label={t("calc-download-ics")} className="space-y-2">
+                <p className="text-xs leading-relaxed text-muted">
+                  {t(reminderGuidanceKey)}
+                </p>
+                <button
+                  onClick={downloadICS}
+                  aria-label={downloadFeedback ? t(downloadFeedback) : t("calc-download-ics")}
+                  className="w-full flex items-center justify-center gap-2 px-4 py-3 border border-white/[0.08] hover:border-accent/30 text-muted hover:text-accent font-medium rounded-lg transition-all duration-300 text-[13px]"
+                >
+                  <Download className="w-4 h-4" />
+                  {downloadFeedback ? t(downloadFeedback) : t("calc-download-ics")}
+                </button>
+              </section>
             </>
           )}
 

@@ -195,7 +195,7 @@ export function toComplianceCaseViewModel(
       nextAction: "Send defect notice immediately and document delivery.",
       reminderReadiness: {
         calendarExportReady: false,
-        emailReminderPlanned: true,
+        emailReminderPlanned: false,
         evidenceComplete,
       },
       exportCapability: {
@@ -229,7 +229,7 @@ export function toComplianceCaseViewModel(
     nextAction: getNextAction(deadline.status),
     reminderReadiness: {
       calendarExportReady: true,
-      emailReminderPlanned: true,
+      emailReminderPlanned: false,
       evidenceComplete,
     },
     exportCapability: {

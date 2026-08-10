@@ -123,6 +123,125 @@ describe("locales", () => {
     }
   });
 
+  it("states calendar import activation and reminder delivery limits in every locale", () => {
+    const expectedTerms = {
+      de: [".ics", "importieren", "keine e-mail- oder in-app-erinnerungen"],
+      fr: [".ics", "importez", "aucun rappel par e-mail ni dans l’application"],
+      it: [".ics", "importa", "promemoria via e-mail o nell’app"],
+      en: [".ics", "import", "no email or in-app reminders"],
+    } as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      const guidance = translations["reminders-activation-guidance"];
+      expect(guidance, `Locale '${lang}' missing reminder activation guidance`).toBeDefined();
+      for (const term of expectedTerms[lang as keyof typeof expectedTerms]) {
+        expect(guidance.toLocaleLowerCase(lang), `Locale '${lang}' reminder guidance missing '${term}'`).toContain(term);
+      }
+    }
+  });
+
+  it("explains event-only calendar imports when no reminders are selected in every locale", () => {
+    const expectedTerms = {
+      de: [/\.ics/i, /import/i, /frist.*termin/i, /ohne (?:alarme|alarm).*erinner/i],
+      fr: [/\.ics/i, /import/i, /échéance/i, /sans alerte ni rappel/i],
+      it: [/\.ics/i, /importa/i, /eventi? .*scadenz/i, /senza avvisi né promemoria/i],
+      en: [/\.ics/i, /import/i, /deadline event/i, /no alerts or reminders/i],
+    } as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      const eventOnlyCopy = [
+        translations["reminders-event-only-guidance"],
+        translations["deadlines-download-event-only-ready"],
+        translations["calc-download-ics-event-only-ready"],
+      ].join(" ");
+      for (const expectedTerm of expectedTerms[lang as keyof typeof expectedTerms]) {
+        expect(eventOnlyCopy, `Locale '${lang}' event-only copy is missing ${expectedTerm}`).toMatch(expectedTerm);
+      }
+    }
+  });
+
+  it("tells users to import successful calendar downloads in every locale", () => {
+    for (const [lang, translations] of Object.entries(locales)) {
+      for (const key of ["deadlines-download-ready", "calc-download-ics-ready", "cases-export-ics-ready"] as const) {
+        expect(translations[key], `Locale '${lang}' feedback '${key}' must require import`).toMatch(/import/i);
+      }
+    }
+  });
+
+  it("uses direct singular imperatives in the changed Italian reminder and marketing copy", () => {
+    const changedItalianKeys = [
+      "how-step2-title",
+      "how-step2-desc",
+      "feat-warranty-desc",
+      "plan-team-f2",
+      "plan-pro-f2",
+      "deadlines-download-ready",
+      "deadlines-download-event-only-ready",
+      "reminders-activation-guidance",
+      "reminders-event-only-guidance",
+      "calc-download-ics-ready",
+      "calc-download-ics-event-only-ready",
+      "cases-export-ics-ready",
+      "home-faq-a2",
+    ] as const;
+    const changedItalianCopy = changedItalianKeys.map((key) => itLocale[key]).join(" ");
+
+    expect(changedItalianCopy).toMatch(/\bScarica\b/);
+    expect(changedItalianCopy).toMatch(/\bImporta(?:lo|li)?\b/);
+    expect(changedItalianCopy).not.toMatch(/\b(?:Scaricare|Importare|Calcolare)\b/i);
+  });
+
+  it("describes each public deadline feature truthfully without promising delivered alerts", () => {
+    const calculationKeys = [
+      "hero-title",
+      "hero-subtitle",
+      "how-step2-title",
+      "how-step2-desc",
+      "feat-warranty-title",
+      "feat-warranty-desc",
+      "plan-team-f2",
+      "plan-pro-f2",
+      "home-faq-a1",
+      "home-faq-a2",
+    ] as const;
+    const calendarHandoffKeys = [
+      "hero-subtitle",
+      "how-step2-desc",
+      "feat-warranty-desc",
+      "plan-team-f2",
+      "plan-pro-f2",
+      "home-faq-a2",
+    ] as const;
+    const calculationTerm = {
+      de: /berechn/i,
+      fr: /calcul/i,
+      it: /calcol/i,
+      en: /calculat/i,
+    } as const;
+    const prohibitedDeliveryClaims = {
+      de: /warnung|alarm|benachrichtig|überwach|nie wieder.*verpass/i,
+      fr: /alert|surveill|ne manquez plus/i,
+      it: /avvis|sorvegl|monitor|mai più.*mancat/i,
+      en: /alert|notification|monitor|track|never miss/i,
+    } as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      const locale = lang as keyof typeof calculationTerm;
+      for (const key of calculationKeys) {
+        const copy = translations[key];
+        expect(copy, `Locale '${lang}' marketing key '${key}' must describe calculation`).toMatch(calculationTerm[locale]);
+        expect(copy, `Locale '${lang}' marketing key '${key}' must not imply proactive delivery`).not.toMatch(
+          prohibitedDeliveryClaims[locale]
+        );
+      }
+      for (const key of calendarHandoffKeys) {
+        const copy = translations[key];
+        expect(copy, `Locale '${lang}' marketing key '${key}' must identify the .ics handoff`).toMatch(/\.ics/i);
+        expect(copy, `Locale '${lang}' marketing key '${key}' must require calendar import`).toMatch(/import/i);
+      }
+    }
+  });
+
   it("includes calculator share-link localization keys in every locale", () => {
     const requiredCalculatorShareKeys = [
       "calc-share-link",

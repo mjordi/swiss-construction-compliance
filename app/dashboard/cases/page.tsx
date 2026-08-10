@@ -2778,7 +2778,14 @@ export default function CasesPage() {
                   </div>
 
                   {isDeadlineReminderIcsExportEligible(item) && (
-                    <div className="mt-4 flex flex-col items-end gap-2">
+                    <div
+                      role="region"
+                      aria-label={t("cases-export-ics")}
+                      className="mt-4 flex flex-col items-end gap-2"
+                    >
+                      <p className="max-w-2xl text-right text-xs leading-relaxed text-muted">
+                        {t("reminders-activation-guidance")}
+                      </p>
                       <div className="flex justify-end">
                         <button
                           type="button"

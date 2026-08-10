@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import RuegefristCalculator from "@/components/ruegefrist-calculator";
 
 vi.mock("@/context/LanguageContext", () => ({
@@ -294,23 +294,37 @@ describe("RuegefristCalculator", () => {
     fireEvent.click(screen.getByRole("button", { name: "calc-calculate" }));
 
     expect(screen.getByText("deadlines-reminder-label: 30 deadlines-reminder-days, 7 deadlines-reminder-days, 1 deadlines-reminder-days")).toBeTruthy();
+    const exportRegion = screen.getByRole("region", { name: "calc-download-ics" });
+    expect(within(exportRegion).getByText("reminders-activation-guidance")).toBeTruthy();
+    expect(within(exportRegion).getByRole("button", { name: "calc-download-ics" })).toBeTruthy();
   });
 
-  it("shows an explicit no-reminders summary beside result actions", () => {
+  it("uses event-only guidance and success feedback for reminders=none", async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/tools/ruegefrist-rechner?contract=2026-02-01&discovery=2026-03-01&reminders=none"
+    );
     render(<RuegefristCalculator />);
 
-    fireEvent.change(screen.getByLabelText("calc-contract-date"), {
-      target: { value: "2026-02-01" },
+    await waitFor(() => {
+      expect(screen.getByText("calc-60day-title")).toBeTruthy();
     });
-    fireEvent.change(screen.getByLabelText("calc-discovery-date"), {
-      target: { value: "2026-03-01" },
-    });
-    fireEvent.click(screen.getByRole("button", { name: "14 deadlines-reminder-days" }));
-    fireEvent.click(screen.getByRole("button", { name: "7 deadlines-reminder-days" }));
-    fireEvent.click(screen.getByRole("button", { name: "1 deadlines-reminder-days" }));
-    fireEvent.click(screen.getByRole("button", { name: "calc-calculate" }));
 
+    const exportRegion = screen.getByRole("region", { name: "calc-download-ics" });
     expect(screen.getByText("deadlines-reminder-label: deadlines-reminder-none")).toBeTruthy();
+    expect(within(exportRegion).getByText("reminders-event-only-guidance")).toBeTruthy();
+    expect(within(exportRegion).queryByText("reminders-activation-guidance")).toBeNull();
+
+    fireEvent.click(within(exportRegion).getByRole("button", { name: "calc-download-ics" }));
+
+    await waitFor(() => {
+      expect(
+        within(exportRegion).getByRole("button", {
+          name: "calc-download-ics-event-only-ready",
+        })
+      ).toBeTruthy();
+    });
   });
 
   it("copies reminder changes made with the preset toggles", async () => {
