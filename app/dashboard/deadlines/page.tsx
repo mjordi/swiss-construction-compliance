@@ -326,7 +326,11 @@ export default function DeadlinesPage() {
       anchor.download = `baucompliance-fristen-${calculatedInputs.acceptanceDate}.ics`;
       anchor.click();
       URL.revokeObjectURL(url);
-      setDownloadFeedback("deadlines-download-ready");
+      setDownloadFeedback(
+        reminderOffsets.length > 0
+          ? "deadlines-download-ready"
+          : "deadlines-download-event-only-ready"
+      );
     } catch {
       setDownloadFeedback("deadlines-download-error");
     }
@@ -363,6 +367,9 @@ export default function DeadlinesPage() {
     expired: { bg: "bg-white/[0.02] border-white/[0.06]", text: "text-muted", bar: "bg-muted", icon: XCircle, label: t("deadlines-expired") },
   };
   const reminderSummary = formatReminderSummary(reminderOffsets, t);
+  const reminderGuidanceKey = reminderOffsets.length > 0
+    ? "reminders-activation-guidance"
+    : "reminders-event-only-guidance";
   const maxDays = 1825;
   const inputClass = "w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-3 text-cream focus:outline-none focus:border-accent/40 transition-colors duration-300 [color-scheme:dark]";
 
@@ -406,7 +413,11 @@ export default function DeadlinesPage() {
             </button>
           )}
         </div>
-        <div className="mt-4 pt-4 border-t border-white/[0.06]">
+        <div
+          role="region"
+          aria-labelledby="deadlines-reminder-presets-label"
+          className="mt-4 pt-4 border-t border-white/[0.06]"
+        >
           <p id="deadlines-reminder-presets-label" className="text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-2">{t("deadlines-reminder-label")}</p>
           <div role="group" aria-labelledby="deadlines-reminder-presets-label" className="flex flex-wrap gap-2">
             {DEADLINE_REMINDER_OFFSET_OPTIONS.map((offset) => (
@@ -420,20 +431,26 @@ export default function DeadlinesPage() {
 
       {deadlines && calculatedInputs && (
         <div className="space-y-5">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between mb-2">
+          <section
+            aria-label={t("deadlines-download-ics")}
+            className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between mb-2"
+          >
             <div>
               <h2 className="text-lg font-semibold text-cream">{t("deadlines-result-title")}</h2>
               <p className="text-[12px] text-muted">{t("deadlines-reminder-label")}: {reminderSummary}</p>
             </div>
-            <div className="flex items-center gap-2">
-              <button onClick={copyShareLink} className="flex items-center gap-2 px-4 py-2 bg-white/[0.03] border border-white/[0.06] hover:border-accent/30 text-muted hover:text-accent text-[13px] font-medium rounded-lg transition-all duration-300">
-                {shareLinkFeedback ? t(shareLinkFeedback) : t("deadlines-share-link")}
-              </button>
-              <button onClick={downloadICS} className="flex items-center gap-2 px-4 py-2 bg-white/[0.03] border border-white/[0.06] hover:border-accent/30 text-muted hover:text-accent text-[13px] font-medium rounded-lg transition-all duration-300">
-                <Download className="w-4 h-4" /> {downloadFeedback ? t(downloadFeedback) : t("deadlines-download-ics")}
-              </button>
+            <div className="flex max-w-2xl flex-col items-end gap-2">
+              <p className="text-right text-xs leading-relaxed text-muted">{t(reminderGuidanceKey)}</p>
+              <div className="flex items-center gap-2">
+                <button onClick={copyShareLink} className="flex items-center gap-2 px-4 py-2 bg-white/[0.03] border border-white/[0.06] hover:border-accent/30 text-muted hover:text-accent text-[13px] font-medium rounded-lg transition-all duration-300">
+                  {shareLinkFeedback ? t(shareLinkFeedback) : t("deadlines-share-link")}
+                </button>
+                <button onClick={downloadICS} className="flex items-center gap-2 px-4 py-2 bg-white/[0.03] border border-white/[0.06] hover:border-accent/30 text-muted hover:text-accent text-[13px] font-medium rounded-lg transition-all duration-300">
+                  <Download className="w-4 h-4" /> {downloadFeedback ? t(downloadFeedback) : t("deadlines-download-ics")}
+                </button>
+              </div>
             </div>
-          </div>
+          </section>
 
           {calculatedInputs.regime === "old" && (
             <div className="border border-blue-500/20 bg-blue-500/[0.04] p-5 rounded-2xl flex items-start gap-3">

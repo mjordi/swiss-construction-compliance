@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const {
@@ -329,6 +329,25 @@ describe("cases checklist persistence", () => {
 
     expect(scanBadge).toBeTruthy();
     expect(scanBadge?.className).toContain("border-amber-500/30");
+  });
+
+  it("explains that exported case reminders require calendar import", async () => {
+    render(<CasesPage />);
+
+    const caseHeading = await screen.findByText("Alpine Tower");
+    const caseCard = caseHeading.closest("article");
+    expect(caseCard).toBeTruthy();
+
+    const detailsSummary = within(caseCard as HTMLElement).getByText("cases-detail-summary");
+    fireEvent.click(detailsSummary);
+
+    const details = detailsSummary.closest("details");
+    expect(details?.open).toBe(true);
+    const exportRegion = within(details as HTMLElement).getByRole("region", {
+      name: "cases-export-ics",
+    });
+    expect(within(exportRegion).getByText("reminders-activation-guidance")).toBeTruthy();
+    expect(within(exportRegion).getByRole("button", { name: "cases-export-ics" })).toBeTruthy();
   });
 
   it("includes linked protocol count in the scan-level action snapshot", async () => {

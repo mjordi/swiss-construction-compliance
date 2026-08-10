@@ -189,6 +189,7 @@ describe("case timeline view model", () => {
     expect(vm.noticeApplies).toBe(false);
     expect(vm.deadlineCountdownLabel).toBe("Notify immediately");
     expect(vm.exportCapability.deadlineReminderIcsEligible).toBe(false);
+    expect(vm.reminderReadiness.emailReminderPlanned).toBe(false);
   });
 
   it("adds 60-day deadline and countdown details under the new law", () => {
@@ -205,6 +206,7 @@ describe("case timeline view model", () => {
     expect(vm.noticeDeadline!.toISOString().split("T")[0]).toBe("2026-04-30");
     expect(vm.noticeApplies).toBe(true);
     expect(vm.reminderReadiness.calendarExportReady).toBe(true);
+    expect(vm.reminderReadiness.emailReminderPlanned).toBe(false);
     expect(vm.exportCapability.deadlineReminderIcsEligible).toBe(true);
   });
 });
