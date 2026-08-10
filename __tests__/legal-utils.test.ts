@@ -157,9 +157,10 @@ describe("generateDeadlineICS", () => {
       "Description"
     );
 
-    expect(ics).toContain("TRIGGER;VALUE=DATE:20260416");
-    expect(ics).toContain("TRIGGER;VALUE=DATE:20260423");
-    expect(ics).toContain("TRIGGER;VALUE=DATE:20260429");
+    expect(ics).toContain("TRIGGER:-P14D");
+    expect(ics).toContain("TRIGGER:-P7D");
+    expect(ics).toContain("TRIGGER:-P1D");
+    expect(ics).not.toContain("TRIGGER;VALUE=DATE:");
   });
 
   it("creates configurable reminders for single deadline exports", () => {
@@ -170,10 +171,10 @@ describe("generateDeadlineICS", () => {
       [30, 3]
     );
 
-    expect(ics).toContain("TRIGGER;VALUE=DATE:20260331");
-    expect(ics).toContain("TRIGGER;VALUE=DATE:20260427");
-    expect(ics).not.toContain("TRIGGER;VALUE=DATE:20260416");
-    expect(ics).not.toContain("TRIGGER;VALUE=DATE:20260423");
+    expect(ics).toContain("TRIGGER:-P30D");
+    expect(ics).toContain("TRIGGER:-P3D");
+    expect(ics).not.toContain("TRIGGER:-P14D");
+    expect(ics).not.toContain("TRIGGER:-P7D");
   });
 
   it("escapes ICS reserved characters in title and description", () => {
@@ -204,9 +205,10 @@ describe("generateDeadlineCalendarICS", () => {
     expect(ics.match(/BEGIN:VEVENT/g)?.length).toBe(2);
     expect(ics).toContain("SUMMARY:BauCompliance: 60-Tage-Rügefrist (Abnahme 01.03.2026)");
     expect(ics).toContain("SUMMARY:BauCompliance: 2-Jahres-SIA-Frist (Abnahme 01.03.2026)");
-    expect(ics).toContain("TRIGGER;VALUE=DATE:20260416"); // -14 days
-    expect(ics).toContain("TRIGGER;VALUE=DATE:20260423"); // -7 days
-    expect(ics).toContain("TRIGGER;VALUE=DATE:20260429"); // -1 day
+    expect(ics).toContain("TRIGGER:-P14D");
+    expect(ics).toContain("TRIGGER:-P7D");
+    expect(ics).toContain("TRIGGER:-P1D");
+    expect(ics).not.toContain("TRIGGER;VALUE=DATE:");
   });
 
   it("includes the calculated contract and discovery source dates when provided", () => {

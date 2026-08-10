@@ -352,11 +352,7 @@ export function generateDeadlineICS(
     .replace(/-/g, "");
   const alarms = normalizeDeadlineReminderOffsets(reminderOffsets)
     .map((offset) => {
-      const reminderStr = addDays(deadlineDate, -offset)
-        .toISOString()
-        .split("T")[0]
-        .replace(/-/g, "");
-      return `BEGIN:VALARM\nACTION:DISPLAY\nDESCRIPTION:Rügefrist läuft in ${offset} ${offset === 1 ? "Tag" : "Tagen"} ab!\nTRIGGER;VALUE=DATE:${reminderStr}\nEND:VALARM`;
+      return `BEGIN:VALARM\nACTION:DISPLAY\nDESCRIPTION:Rügefrist läuft in ${offset} ${offset === 1 ? "Tag" : "Tagen"} ab!\nTRIGGER:-P${offset}D\nEND:VALARM`;
     })
     .join("\n");
 
@@ -405,11 +401,7 @@ export function generateDeadlineCalendarICS(
       const endDateStr = addDays(deadline.date, 1).toISOString().split("T")[0].replace(/-/g, "");
       const alarms = sortedOffsets
         .map((offset) => {
-          const reminderStr = addDays(deadline.date, -offset)
-            .toISOString()
-            .split("T")[0]
-            .replace(/-/g, "");
-          return `BEGIN:VALARM\nACTION:DISPLAY\nDESCRIPTION:Frist läuft in ${offset} ${offset === 1 ? "Tag" : "Tagen"} ab\nTRIGGER;VALUE=DATE:${reminderStr}\nEND:VALARM`;
+          return `BEGIN:VALARM\nACTION:DISPLAY\nDESCRIPTION:Frist läuft in ${offset} ${offset === 1 ? "Tag" : "Tagen"} ab\nTRIGGER:-P${offset}D\nEND:VALARM`;
         })
         .join("\n");
 
