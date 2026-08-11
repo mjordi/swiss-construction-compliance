@@ -8,6 +8,7 @@ import { pdf } from "@react-pdf/renderer";
 import PageHeader from "@/components/dashboard/PageHeader";
 import { AuditReportPDF } from "@/components/dashboard/AuditReportPDF";
 import { CaseAuditDossierPDF } from "@/components/dashboard/CaseAuditDossierPDF";
+import { CaseNoticeDraftPDF } from "@/components/dashboard/CaseNoticeDraftPDF";
 import { useLanguage } from "@/context/LanguageContext";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
@@ -20,6 +21,10 @@ import { buildCaseAuditDossier } from "@/lib/case-audit-dossier";
 import { buildFinalizedProtocolReportFromRecord } from "@/lib/protocol-report";
 import type { Case, CaseActivityEvent, CaseNoticeDraft, Protocol } from "@/lib/database.types";
 import { buildCaseNoticeDraftPayload } from "@/lib/case-notice-draft";
+import {
+  buildCaseNoticeDraftReport,
+  caseNoticeDraftPdfFilename,
+} from "@/lib/case-notice-draft-report";
 import {
   applyComplianceCaseView,
   buildCaseAuditRegisterCsv,
@@ -379,6 +384,14 @@ export default function CasesPage() {
   const [noticeDraftFeedbackByCase, setNoticeDraftFeedbackByCase] = useState<Record<string, TranslationKey>>({});
   const noticeDraftInFlightIdsRef = useRef<Set<string>>(new Set());
   const noticeDraftRequestIdsRef = useRef<Record<string, number>>({});
+  const [noticeDraftPdfFeedbackByCase, setNoticeDraftPdfFeedbackByCase] = useState<
+    Record<string, { key: TranslationKey; tone: "success" | "error" }>
+  >({});
+  const [noticeDraftPdfGeneratingByCase, setNoticeDraftPdfGeneratingByCase] = useState<Record<string, boolean>>({});
+  const noticeDraftPdfFeedbackTimersRef = useRef<Record<string, number>>({});
+  const noticeDraftPdfRequestIdsRef = useRef<Record<string, number>>({});
+  const noticeDraftPdfInFlightCaseIdsRef = useRef<Set<string>>(new Set());
+  const latestNoticeDraftByCaseRef = useRef<Record<string, CaseNoticeDraft>>({});
   const latestNoticeDraftLoadIdRef = useRef(0);
   const currentUserIdRef = useRef<string | null>(user?.id ?? null);
   currentUserIdRef.current = user?.id ?? null;
@@ -632,12 +645,22 @@ export default function CasesPage() {
     for (const caseId of Object.keys(noticeDraftRequestIdsRef.current)) {
       noticeDraftRequestIdsRef.current[caseId] += 1;
     }
+    for (const caseId of Object.keys(noticeDraftPdfRequestIdsRef.current)) {
+      noticeDraftPdfRequestIdsRef.current[caseId] += 1;
+    }
     noticeDraftInFlightIdsRef.current.clear();
+    noticeDraftPdfInFlightCaseIdsRef.current.clear();
+    for (const timer of Object.values(noticeDraftPdfFeedbackTimersRef.current)) {
+      window.clearTimeout(timer);
+    }
+    noticeDraftPdfFeedbackTimersRef.current = {};
     lastSuccessfulNoticeDraftsRef.current = [];
     lastSuccessfulNoticeDraftsUserIdRef.current = null;
     setNoticeDrafts([]);
     setNoticeDraftCreatingByCase({});
     setNoticeDraftFeedbackByCase({});
+    setNoticeDraftPdfGeneratingByCase({});
+    setNoticeDraftPdfFeedbackByCase({});
   }, [user?.id]);
 
   useEffect(() => {
@@ -810,6 +833,8 @@ export default function CasesPage() {
     const dossierRequestIds = dossierRequestIdsRef.current;
     const protocolPdfInFlightCaseIds = protocolPdfInFlightCaseIdsRef.current;
     const protocolPdfRequestIds = protocolPdfRequestIdsRef.current;
+    const noticeDraftPdfInFlightCaseIds = noticeDraftPdfInFlightCaseIdsRef.current;
+    const noticeDraftPdfRequestIds = noticeDraftPdfRequestIdsRef.current;
     return () => {
       dossierMountedRef.current = false;
       shareLinkRequestIdRef.current += 1;
@@ -825,17 +850,25 @@ export default function CasesPage() {
       for (const timer of Object.values(protocolPdfFeedbackTimersRef.current)) {
         window.clearTimeout(timer);
       }
+      for (const timer of Object.values(noticeDraftPdfFeedbackTimersRef.current)) {
+        window.clearTimeout(timer);
+      }
       reminderExportResetTimersRef.current = {};
       reminderExportRequestIdsRef.current = {};
       dossierFeedbackTimersRef.current = {};
       protocolPdfFeedbackTimersRef.current = {};
+      noticeDraftPdfFeedbackTimersRef.current = {};
       dossierInFlightIds.clear();
       protocolPdfInFlightCaseIds.clear();
+      noticeDraftPdfInFlightCaseIds.clear();
       for (const caseId of Object.keys(dossierRequestIds)) {
         dossierRequestIds[caseId] += 1;
       }
       for (const caseId of Object.keys(protocolPdfRequestIds)) {
         protocolPdfRequestIds[caseId] += 1;
+      }
+      for (const caseId of Object.keys(noticeDraftPdfRequestIds)) {
+        noticeDraftPdfRequestIds[caseId] += 1;
       }
     };
   }, []);
@@ -987,6 +1020,7 @@ export default function CasesPage() {
     }
     return result;
   }, [noticeDrafts]);
+  latestNoticeDraftByCaseRef.current = latestNoticeDraftByCase;
 
   // Derive effective checklists by layering persisted checklist state over timeline defaults.
   const effectiveChecklists = useMemo(() => {
@@ -1195,6 +1229,7 @@ export default function CasesPage() {
       || deletingCaseIds[caseId]
       || dossierGeneratingByCase[caseId]
       || protocolPdfGeneratingByCase[caseId]
+      || noticeDraftPdfGeneratingByCase[caseId]
     ) {
       return;
     }
@@ -1270,6 +1305,7 @@ export default function CasesPage() {
       || checklistSavingByCase[item.id]
       || dossierGeneratingByCase[item.id]
       || protocolPdfGeneratingByCase[item.id]
+      || noticeDraftPdfGeneratingByCase[item.id]
     ) return;
     clearReminderExportFeedback(item.id);
     const requestId = reminderExportRequestIdsRef.current[item.id] ?? 0;
@@ -1367,6 +1403,7 @@ export default function CasesPage() {
       || checklistSavingByCase[item.id]
       || dossierGeneratingByCase[item.id]
       || protocolPdfGeneratingByCase[item.id]
+      || noticeDraftPdfGeneratingByCase[item.id]
     ) return;
     const content = buildCaseLegalChronologyCsv(
       item,
@@ -1418,6 +1455,7 @@ export default function CasesPage() {
       || checklistSavingByCase[caseId]
       || dossierGeneratingByCase[caseId]
       || protocolPdfGeneratingByCase[caseId]
+      || noticeDraftPdfGeneratingByCase[caseId]
     ) {
       return;
     }
@@ -1514,6 +1552,7 @@ export default function CasesPage() {
       || checklistSavingByCase[item.id]
       || dossierGeneratingByCase[item.id]
       || protocolPdfGeneratingByCase[item.id]
+      || noticeDraftPdfGeneratingByCase[item.id]
     ) return;
 
     dossierInFlightIdsRef.current.add(item.id);
@@ -1643,6 +1682,118 @@ export default function CasesPage() {
     }
   }
 
+  async function downloadCaseNoticeDraftPdf(draft: CaseNoticeDraft) {
+    const caseId = draft.case_id;
+    const draftId = draft.id;
+    const userId = user?.id;
+    if (
+      !userId
+      || draft.user_id !== userId
+      || noticeDraftPdfInFlightCaseIdsRef.current.has(caseId)
+      || noticeDraftCreatingByCase[caseId]
+      || editingCaseId === caseId
+      || updatingCaseId === caseId
+      || deletingCaseIds[caseId]
+      || checklistSavingByCase[caseId]
+      || dossierGeneratingByCase[caseId]
+      || protocolPdfGeneratingByCase[caseId]
+      || noticeDraftPdfGeneratingByCase[caseId]
+    ) return;
+
+    const report = buildCaseNoticeDraftReport(draft, {
+      title: t("cases-notice-draft-pdf-title"),
+      saved: t("cases-notice-draft-pdf-saved"),
+      notApproved: t("cases-notice-draft-pdf-not-approved"),
+      notSent: t("cases-notice-draft-pdf-not-sent"),
+      reviewDisclaimer: t("cases-notice-draft-pdf-review-disclaimer"),
+      legalDisclaimer: t("cases-notice-draft-pdf-legal-disclaimer"),
+      draftId: t("cases-notice-draft-pdf-revision-id"),
+      createdAt: t("cases-notice-draft-created-at"),
+      projectName: t("cases-notice-preview-subject"),
+      canton: t("cases-canton-label"),
+      recipientName: t("cases-notice-recipient-name"),
+      recipientAddress: t("cases-notice-recipient-address"),
+      defectStatement: t("cases-defect-statement"),
+      contractDate: t("cases-contract-date"),
+      discoveryDate: t("cases-defect-discovered"),
+      noticeDeadline: t("cases-notice-draft-pdf-stored-deadline"),
+      noticeDeadlineNotFixed: t("cases-not-fixed"),
+      regime: t("cases-audit-register-regime"),
+      regimes: {
+        old: t("cases-old-law"),
+        new: t("cases-new-law"),
+      },
+    });
+
+    noticeDraftPdfInFlightCaseIdsRef.current.add(caseId);
+    const requestId = (noticeDraftPdfRequestIdsRef.current[caseId] ?? 0) + 1;
+    noticeDraftPdfRequestIdsRef.current[caseId] = requestId;
+    const existingTimer = noticeDraftPdfFeedbackTimersRef.current[caseId];
+    if (existingTimer !== undefined) {
+      window.clearTimeout(existingTimer);
+      delete noticeDraftPdfFeedbackTimersRef.current[caseId];
+    }
+    setNoticeDraftPdfFeedbackByCase((current) => {
+      if (!(caseId in current)) return current;
+      const next = { ...current };
+      delete next[caseId];
+      return next;
+    });
+    setNoticeDraftPdfGeneratingByCase((current) => ({ ...current, [caseId]: true }));
+
+    const requestOwnershipIsCurrent = () =>
+      dossierMountedRef.current
+      && currentUserIdRef.current === userId
+      && noticeDraftPdfRequestIdsRef.current[caseId] === requestId;
+    const sourceIsCurrent = () =>
+      requestOwnershipIsCurrent()
+      && latestNoticeDraftByCaseRef.current[caseId]?.id === draftId;
+    const showFeedback = (key: TranslationKey, tone: "success" | "error") => {
+      setNoticeDraftPdfFeedbackByCase((current) => ({ ...current, [caseId]: { key, tone } }));
+      noticeDraftPdfFeedbackTimersRef.current[caseId] = window.setTimeout(() => {
+        if (noticeDraftPdfRequestIdsRef.current[caseId] !== requestId) return;
+        setNoticeDraftPdfFeedbackByCase((current) => {
+          if (!(caseId in current)) return current;
+          const next = { ...current };
+          delete next[caseId];
+          return next;
+        });
+        delete noticeDraftPdfFeedbackTimersRef.current[caseId];
+      }, 2000);
+    };
+
+    try {
+      const blob = await pdf(<CaseNoticeDraftPDF report={report} />).toBlob();
+      if (!sourceIsCurrent()) return;
+
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      try {
+        anchor.href = url;
+        anchor.download = caseNoticeDraftPdfFilename(draftId);
+        anchor.click();
+      } finally {
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      }
+      showFeedback("cases-notice-draft-download-success", "success");
+    } catch {
+      if (!sourceIsCurrent()) return;
+      showFeedback("cases-notice-draft-download-error", "error");
+    } finally {
+      if (noticeDraftPdfRequestIdsRef.current[caseId] === requestId) {
+        noticeDraftPdfInFlightCaseIdsRef.current.delete(caseId);
+      }
+      if (requestOwnershipIsCurrent()) {
+        setNoticeDraftPdfGeneratingByCase((current) => {
+          const next = { ...current };
+          delete next[caseId];
+          return next;
+        });
+      }
+    }
+  }
+
   async function handleCreateNoticeDraft(item: ComplianceCaseViewModel, persistedCase: Case) {
     const userId = user?.id;
     if (
@@ -1655,6 +1806,7 @@ export default function CasesPage() {
       || hasDossierGeneration
       || hasProtocolPdfGeneration
       || hasNoticeDraftCreation
+      || noticeDraftPdfInFlightCaseIdsRef.current.has(item.id)
     ) return;
 
     const payload = buildCaseNoticeDraftPayload(persistedCase, item);
@@ -1776,6 +1928,7 @@ export default function CasesPage() {
       || checklistSavingByCase[caseId]
       || dossierGeneratingByCase[caseId]
       || protocolPdfGeneratingByCase[caseId]
+      || noticeDraftPdfGeneratingByCase[caseId]
     ) return;
     const confirmText = t("cases-delete-confirm").replace("{projectName}", projectName);
     const confirmed = window.confirm(confirmText);
@@ -1889,7 +2042,8 @@ export default function CasesPage() {
       noticeDraftCreatingByCase[caseId] ||
       checklistSavingByCase[caseId] ||
       dossierGeneratingByCase[caseId] ||
-      protocolPdfGeneratingByCase[caseId]
+      protocolPdfGeneratingByCase[caseId] ||
+      noticeDraftPdfGeneratingByCase[caseId]
     ) {
       return;
     }
@@ -2232,7 +2386,8 @@ export default function CasesPage() {
             const noticeDraftPayload = persistedCase ? buildCaseNoticeDraftPayload(persistedCase, item) : null;
             const latestNoticeDraft = latestNoticeDraftByCase[item.id];
             const isNoticeDraftCreating = Boolean(noticeDraftCreatingByCase[item.id]);
-            const isCaseBusy = isChecklistSaving || isDossierGenerating || isProtocolPdfGenerating || isNoticeDraftCreating;
+            const isNoticeDraftPdfGenerating = Boolean(noticeDraftPdfGeneratingByCase[item.id]);
+            const isCaseBusy = isChecklistSaving || isDossierGenerating || isProtocolPdfGenerating || isNoticeDraftCreating || isNoticeDraftPdfGenerating;
             const isNoticePreviewOpen = Boolean(noticePreviewOpenByCase[item.id] && completeNoticeSource);
             const noticePreviewUnavailableId = `cases-notice-preview-unavailable-${item.id}`;
 
@@ -2502,7 +2657,7 @@ export default function CasesPage() {
                       aria-controls={`cases-notice-preview-${item.id}`}
                       aria-describedby={!hasCompleteNoticeSource ? noticePreviewUnavailableId : undefined}
                       aria-expanded={isNoticePreviewOpen}
-                      disabled={!hasCompleteNoticeSource}
+                      disabled={!hasCompleteNoticeSource || isCaseBusy}
                       onClick={() => {
                         if (!completeNoticeSource) return;
                         updateNoticePreviewOpenByCase((current) => {
@@ -2521,7 +2676,7 @@ export default function CasesPage() {
                     <button
                       type="button"
                       aria-label={t("cases-notice-draft-create")}
-                      disabled={!persistedCase || !noticeDraftPayload || hasAnyRowLevelMutation}
+                      disabled={!persistedCase || !noticeDraftPayload || hasAnyRowLevelMutation || isNoticeDraftPdfGenerating}
                       onClick={() => {
                         if (!persistedCase || !noticeDraftPayload) return;
                         void handleCreateNoticeDraft(item, persistedCase);
@@ -2617,6 +2772,29 @@ export default function CasesPage() {
                             value={latestNoticeDraft.notice_deadline ? formatNoticeDraftDate(latestNoticeDraft.notice_deadline) : t("cases-not-fixed")}
                           />
                         </div>
+                      </div>
+                      <div className="mt-4 flex flex-wrap items-center gap-3">
+                        <button
+                          type="button"
+                          aria-label={t("cases-notice-draft-download")}
+                          disabled={isCaseBusy}
+                          onClick={() => void downloadCaseNoticeDraftPdf(latestNoticeDraft)}
+                          className="rounded-lg border border-cyan-400/30 px-3 py-2 text-sm font-medium text-cyan-100 hover:bg-cyan-500/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
+                        >
+                          {t(isNoticeDraftPdfGenerating ? "cases-notice-draft-generating" : "cases-notice-draft-download")}
+                        </button>
+                        {!isNoticeDraftPdfGenerating && noticeDraftPdfFeedbackByCase[item.id] && (
+                          <p
+                            role="status"
+                            className={`text-xs ${
+                              noticeDraftPdfFeedbackByCase[item.id].tone === "success"
+                                ? "text-emerald-300"
+                                : "text-rose-300"
+                            }`}
+                          >
+                            {t(noticeDraftPdfFeedbackByCase[item.id].key)}
+                          </p>
+                        )}
                       </div>
                     </section>
                   )}

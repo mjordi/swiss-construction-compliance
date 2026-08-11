@@ -1,6 +1,11 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 
+const { pdfMock, pdfToBlobMock } = vi.hoisted(() => ({
+  pdfMock: vi.fn(),
+  pdfToBlobMock: vi.fn(async () => new Blob(["pdf"], { type: "application/pdf" })),
+}));
+
 const replaceMock = vi.fn();
 const updateEqMock = vi.fn();
 const deleteEqMock = vi.fn();
@@ -93,6 +98,19 @@ vi.mock("@/context/AuthContext", () => ({
   useAuth: () => ({
     user: authUser,
   }),
+}));
+
+vi.mock("@react-pdf/renderer", () => ({
+  Document: ({ children }: { children: unknown }) => <>{children}</>,
+  Page: ({ children }: { children: unknown }) => <>{children}</>,
+  Text: ({ children }: { children: unknown }) => <>{children}</>,
+  View: ({ children }: { children: unknown }) => <>{children}</>,
+  Font: { register: vi.fn() },
+  StyleSheet: { create: (styles: unknown) => styles },
+  pdf: (document: unknown) => {
+    pdfMock(document);
+    return { toBlob: pdfToBlobMock };
+  },
 }));
 
 vi.mock("@/components/dashboard/PageHeader", () => ({
@@ -347,6 +365,9 @@ describe("cases inline edit", () => {
     authUser = { id: "user-1" };
     oldLawCaseIds = new Set<string>();
     activeLanguage = "de";
+    pdfMock.mockClear();
+    pdfToBlobMock.mockReset();
+    pdfToBlobMock.mockResolvedValue(new Blob(["pdf"], { type: "application/pdf" }));
   });
 
   it("reviews complete and incomplete notice source facts and persists normalized edits", async () => {
@@ -1209,6 +1230,98 @@ describe("cases inline edit", () => {
       second: "2-digit",
     }).format(new Date("2026-08-09T08:30:00.000Z"));
     expect(within(saved).getByText(expected)).toBeTruthy();
+  });
+
+  it("downloads the exact latest saved revision once with a PII-safe filename and only locks its row", async () => {
+    const blobDeferred = createDeferred<Blob>();
+    pdfToBlobMock.mockReturnValueOnce(blobDeferred.promise);
+    noticeDraftsData = [
+      buildNoticeDraft("draft-latest", { project_name: "Saved Alpine", defect_statement: "Saved source only." }),
+      buildNoticeDraft("draft-other", { case_id: "case-2", project_name: "Saved Riverside" }),
+    ];
+    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:notice-draft");
+    const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    render(<CasesPage />);
+    const firstSaved = await screen.findByTestId("cases-notice-draft-case-1");
+    const firstCard = firstSaved.closest("article") as HTMLElement;
+    const secondCard = screen.getByText("Riverside Hall").closest("article") as HTMLElement;
+    const download = within(firstSaved).getByRole("button", { name: "cases-notice-draft-download" }) as HTMLButtonElement;
+
+    fireEvent.click(download);
+    fireEvent.click(download);
+    await waitFor(() => expect(pdfMock).toHaveBeenCalledTimes(1));
+    expect(download.disabled).toBe(true);
+    expect((within(firstCard).getByRole("button", { name: "cases-edit" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((within(secondCard).getByRole("button", { name: "cases-edit" }) as HTMLButtonElement).disabled).toBe(false);
+
+    const pdfDocument = pdfMock.mock.calls[0][0] as { props: { report: Record<string, unknown> } };
+    expect(pdfDocument.props.report).toMatchObject({
+      draftId: "draft-latest",
+      projectName: "Saved Alpine",
+      defectStatement: "Saved source only.",
+      createdAt: "2026-08-09T08:30:00.000Z",
+    });
+    expect(pdfDocument.props.report).not.toHaveProperty("caseId");
+
+    blobDeferred.resolve(new Blob(["pdf"], { type: "application/pdf" }));
+    expect(await within(firstSaved).findByText("cases-notice-draft-download-success")).toBeTruthy();
+    expect(createObjectURL).toHaveBeenCalledTimes(1);
+    expect(clickSpy).toHaveBeenCalledTimes(1);
+    const anchor = clickSpy.mock.instances[0] as HTMLAnchorElement;
+    expect(anchor.download).toBe("baucompliance-notice-draft-draft-latest.pdf");
+    expect(revokeObjectURL).toHaveBeenCalledWith("blob:notice-draft");
+
+    createObjectURL.mockRestore();
+    revokeObjectURL.mockRestore();
+    clickSpy.mockRestore();
+  });
+
+  it("shows scoped failure feedback, releases the duplicate guard, and retries", async () => {
+    noticeDraftsData = [buildNoticeDraft("draft-retry")];
+    pdfToBlobMock.mockRejectedValueOnce(new Error("render failed"));
+    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:retry");
+    const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL").mockImplementation(() => undefined);
+    const clickSpy = vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
+
+    render(<CasesPage />);
+    const saved = await screen.findByTestId("cases-notice-draft-case-1");
+    const button = within(saved).getByRole("button", { name: "cases-notice-draft-download" }) as HTMLButtonElement;
+    fireEvent.click(button);
+    expect(await within(saved).findByText("cases-notice-draft-download-error")).toBeTruthy();
+    await waitFor(() => expect(button.disabled).toBe(false));
+
+    fireEvent.click(button);
+    expect(await within(saved).findByText("cases-notice-draft-download-success")).toBeTruthy();
+    expect(pdfMock).toHaveBeenCalledTimes(2);
+
+    createObjectURL.mockRestore();
+    revokeObjectURL.mockRestore();
+    clickSpy.mockRestore();
+  });
+
+  it("ignores PDF completion after the authenticated user changes", async () => {
+    const blobDeferred = createDeferred<Blob>();
+    pdfToBlobMock.mockReturnValueOnce(blobDeferred.promise);
+    noticeDraftsData = [buildNoticeDraft("draft-stale")];
+    const createObjectURL = vi.spyOn(URL, "createObjectURL").mockReturnValue("blob:stale");
+    const { rerender } = render(<CasesPage />);
+    const saved = await screen.findByTestId("cases-notice-draft-case-1");
+    fireEvent.click(within(saved).getByRole("button", { name: "cases-notice-draft-download" }));
+    await waitFor(() => expect(pdfMock).toHaveBeenCalledTimes(1));
+
+    authUser = { id: "user-2" };
+    noticeDraftsData = [buildNoticeDraft("draft-new-user", { user_id: "user-2" })];
+    casesData = [{ ...buildCase("case-1", "Other User Case"), user_id: "user-2" }];
+    rerender(<CasesPage />);
+    await screen.findByText("Other User Case");
+    blobDeferred.resolve(new Blob(["pdf"], { type: "application/pdf" }));
+    await act(async () => Promise.resolve());
+
+    expect(createObjectURL).not.toHaveBeenCalled();
+    expect(screen.queryByText("cases-notice-draft-download-success")).toBeNull();
+    createObjectURL.mockRestore();
   });
 
   it("handles returned and thrown draft insert errors and allows retry", async () => {
