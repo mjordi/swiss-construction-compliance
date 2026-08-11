@@ -2,6 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { renderToBuffer } from "@react-pdf/renderer";
+import { openPdf } from "clawpdf";
 import { Children, isValidElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -12,6 +13,15 @@ function collectText(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") return String(node);
   if (!isValidElement<{ children?: ReactNode }>(node)) return "";
   return Children.toArray(node.props.children).map(collectText).join(" ");
+}
+
+async function extractPdfText(buffer: Buffer): Promise<string> {
+  const pdf = await openPdf(new Uint8Array(buffer));
+  try {
+    return pdf.text();
+  } finally {
+    pdf.destroy();
+  }
 }
 
 const report: CaseNoticeDraftReport = {
@@ -54,12 +64,13 @@ describe("CaseNoticeDraftPDF", () => {
     const document = CaseNoticeDraftPDF({ report });
     const text = collectText(document);
     const page = Children.toArray(document.props.children)[0];
+    const pageElement = isValidElement<{ children?: ReactNode; size?: string; wrap?: boolean }>(page) ? page : null;
     const statusBox = isValidElement<{ children?: ReactNode }>(page)
       ? Children.toArray(page.props.children).find((child) => collectText(child).includes("Not approved"))
       : null;
 
-    expect(isValidElement(page) && page.props.size).toBe("A4");
-    expect(isValidElement(page) && page.props.wrap).not.toBe(false);
+    expect(pageElement?.props.size).toBe("A4");
+    expect(pageElement?.props.wrap).not.toBe(false);
     expect(isValidElement<{ fixed?: boolean }>(statusBox) && statusBox.props.fixed).toBe(true);
     expect(text).toContain("Saved notice draft");
     expect(text).toContain("Saved");
@@ -73,6 +84,18 @@ describe("CaseNoticeDraftPDF", () => {
     expect(text).toContain("New law");
     expect(text).toContain("Review every source fact");
     expect(text).toContain("not legal advice");
+  });
+
+  it("allows the persisted multiline recipient address row to continue across pages", () => {
+    const document = CaseNoticeDraftPDF({ report });
+    const page = Children.toArray(document.props.children)[0];
+    const addressRow = isValidElement<{ children?: ReactNode }>(page)
+      ? Children.toArray(page.props.children)
+        .flatMap((child) => isValidElement<{ children?: ReactNode }>(child) ? Children.toArray(child.props.children) : [])
+        .find((child) => collectText(child).includes("Recipient address"))
+      : null;
+
+    expect(isValidElement<{ wrap?: boolean }>(addressRow) && addressRow.props.wrap).toBe(true);
   });
 
   it("does not add positive approval, signature, finality, completeness, delivery, certification, or sending-proof claims", () => {
@@ -96,28 +119,38 @@ describe("CaseNoticeDraftPDF", () => {
     expect(text).toContain("Not stored");
   });
 
-  it("generates a PDF with non-Latin source facts using the embedded Unicode font", async () => {
-    const font = await readFile(path.join(process.cwd(), "public/fonts/NotoSansSC-Variable.ttf"));
+  it("preserves a non-CJK Devanagari source fact in extracted PDF text using a script fallback", async () => {
+    const fontFiles = new Map(await Promise.all([
+      "NotoSansSC-Variable.ttf",
+      "NotoSansArabic-Variable.ttf",
+      "NotoSansHebrew-Variable.ttf",
+      "NotoSansDevanagari-Variable.ttf",
+      "NotoSansSymbols2-Regular.ttf",
+    ].map(async (fileName) => [
+      fileName,
+      await readFile(path.join(process.cwd(), "public/fonts", fileName)),
+    ] as const)));
     const originalFetch = globalThis.fetch;
     const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
       const url = typeof input === "string" || input instanceof URL ? input.toString() : input.url;
-      if (url.endsWith("/fonts/NotoSansSC-Variable.ttf")) {
-        return Promise.resolve(new Response(font));
-      }
+      const font = fontFiles.get(url.split("/").at(-1) ?? "");
+      if (font) return Promise.resolve(new Response(font));
       return originalFetch(input, init);
     });
 
     try {
       const unicodeReport = {
         ...report,
-        projectName: "Αθήνα · Москва · 東京",
-        recipientName: "株式会社 建築",
-        defectStatement: "建筑缺陷 — трещина — οικοδομικό ελάττωμα",
+        projectName: "Αθήνα · Москва · 東京 · भारत",
+        recipientName: "Saved Builder AG",
+        defectStatement: "भारत में निर्माण दोष",
       };
       const buffer = await renderToBuffer(<CaseNoticeDraftPDF report={unicodeReport} />);
+      const extractedText = await extractPdfText(buffer);
 
       expect(buffer.subarray(0, 4).toString()).toBe("%PDF");
       expect(buffer.byteLength).toBeGreaterThan(1_000);
+      expect(extractedText).toContain("भारत");
     } finally {
       fetchMock.mockRestore();
     }

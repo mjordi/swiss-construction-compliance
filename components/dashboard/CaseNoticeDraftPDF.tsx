@@ -3,15 +3,55 @@ import { Document, Font, Page, StyleSheet, Text, View } from "@react-pdf/rendere
 import type { CaseNoticeDraftReport } from "@/lib/case-notice-draft-report";
 
 const NOTICE_DRAFT_FONT_FAMILY = "Noto Sans SC";
-const NOTICE_DRAFT_FONT_PATH = "/fonts/NotoSansSC-Variable.ttf";
-const NOTICE_DRAFT_FONT_URL = typeof window === "undefined"
-  ? `http://localhost${NOTICE_DRAFT_FONT_PATH}`
-  : new URL(NOTICE_DRAFT_FONT_PATH, window.location.origin).toString();
+const NOTICE_DRAFT_FONTS = [
+  { family: NOTICE_DRAFT_FONT_FAMILY, path: "/fonts/NotoSansSC-Variable.ttf" },
+  { family: "Noto Sans Arabic", path: "/fonts/NotoSansArabic-Variable.ttf" },
+  { family: "Noto Sans Hebrew", path: "/fonts/NotoSansHebrew-Variable.ttf" },
+  { family: "Noto Sans Devanagari", path: "/fonts/NotoSansDevanagari-Variable.ttf" },
+  { family: "Noto Sans Symbols 2", path: "/fonts/NotoSansSymbols2-Regular.ttf" },
+] as const;
 
-Font.register({
-  family: NOTICE_DRAFT_FONT_FAMILY,
-  src: NOTICE_DRAFT_FONT_URL,
-});
+function fontUrl(fontPath: string) {
+  return typeof window === "undefined"
+    ? `http://localhost${fontPath}`
+    : new URL(fontPath, window.location.origin).toString();
+}
+
+for (const font of NOTICE_DRAFT_FONTS) {
+  Font.register({ family: font.family, src: fontUrl(font.path) });
+}
+
+const SCRIPT_FONTS = [
+  { family: "Noto Sans Arabic", pattern: /[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff\ufb50-\ufdff\ufe70-\ufeff]/u },
+  { family: "Noto Sans Hebrew", pattern: /[\u0590-\u05ff\ufb1d-\ufb4f]/u },
+  { family: "Noto Sans Devanagari", pattern: /[\u0900-\u097f\ua8e0-\ua8ff]/u },
+  { family: "Noto Sans Symbols 2", pattern: /\p{Extended_Pictographic}/u },
+] as const;
+
+function scriptFont(character: string, previousFamily: string) {
+  if (/\p{Mark}|\u200d|\ufe0f|[\u{1f3fb}-\u{1f3ff}]/u.test(character)) return previousFamily;
+  return SCRIPT_FONTS.find(({ pattern }) => pattern.test(character))?.family ?? NOTICE_DRAFT_FONT_FAMILY;
+}
+
+function UnicodeText({ children, style }: { children: string; style: "value" | "sourceText" }) {
+  const runs: Array<{ family: string; text: string }> = [];
+
+  for (const character of children) {
+    const previousFamily = runs.at(-1)?.family ?? NOTICE_DRAFT_FONT_FAMILY;
+    const family = scriptFont(character, previousFamily);
+    const previousRun = runs.at(-1);
+    if (previousRun?.family === family) previousRun.text += character;
+    else runs.push({ family, text: character });
+  }
+
+  return (
+    <Text style={styles[style]}>
+      {runs.map((run, index) => (
+        <Text key={`${index}-${run.family}`} style={{ fontFamily: run.family }}>{run.text}</Text>
+      ))}
+    </Text>
+  );
+}
 
 const styles = StyleSheet.create({
   page: {
@@ -74,16 +114,16 @@ const styles = StyleSheet.create({
 
 export function CaseNoticeDraftPDF({ report }: { report: CaseNoticeDraftReport }) {
   const details = [
-    [report.labels.draftId, report.draftId],
-    [report.labels.createdAt, report.createdAt],
-    [report.labels.projectName, report.projectName],
-    [report.labels.canton, report.canton],
-    [report.labels.regime, report.labels.regimes[report.regime]],
-    [report.labels.contractDate, report.contractDate],
-    [report.labels.discoveryDate, report.discoveryDate],
-    [report.labels.noticeDeadline, report.noticeDeadline ?? report.labels.noticeDeadlineNotFixed],
-    [report.labels.recipientName, report.recipientName],
-    [report.labels.recipientAddress, report.recipientAddress],
+    { label: report.labels.draftId, value: report.draftId, wrap: false },
+    { label: report.labels.createdAt, value: report.createdAt, wrap: false },
+    { label: report.labels.projectName, value: report.projectName, wrap: false },
+    { label: report.labels.canton, value: report.canton, wrap: false },
+    { label: report.labels.regime, value: report.labels.regimes[report.regime], wrap: false },
+    { label: report.labels.contractDate, value: report.contractDate, wrap: false },
+    { label: report.labels.discoveryDate, value: report.discoveryDate, wrap: false },
+    { label: report.labels.noticeDeadline, value: report.noticeDeadline ?? report.labels.noticeDeadlineNotFixed, wrap: false },
+    { label: report.labels.recipientName, value: report.recipientName, wrap: false },
+    { label: report.labels.recipientAddress, value: report.recipientAddress, wrap: true },
   ];
 
   return (
@@ -103,10 +143,10 @@ export function CaseNoticeDraftPDF({ report }: { report: CaseNoticeDraftReport }
 
         <View style={styles.section}>
           <Text style={styles.sectionTitle}>{report.labels.projectName}</Text>
-          {details.map(([label, value]) => (
-            <View key={label} style={styles.row} wrap={false}>
+          {details.map(({ label, value, wrap }) => (
+            <View key={label} style={styles.row} wrap={wrap}>
               <Text style={styles.label}>{label}</Text>
-              <Text style={styles.value}>{value}</Text>
+              <UnicodeText style="value">{value}</UnicodeText>
             </View>
           ))}
         </View>
@@ -115,7 +155,7 @@ export function CaseNoticeDraftPDF({ report }: { report: CaseNoticeDraftReport }
           <Text style={styles.sectionTitle}>{report.labels.defectStatement}</Text>
           <View style={styles.sourceBlock}>
             <Text style={styles.sourceLabel}>{report.labels.defectStatement}</Text>
-            <Text style={styles.sourceText}>{report.defectStatement}</Text>
+            <UnicodeText style="sourceText">{report.defectStatement}</UnicodeText>
           </View>
         </View>
 
