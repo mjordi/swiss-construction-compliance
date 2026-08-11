@@ -1,6 +1,17 @@
-import { Document, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
+import { Document, Font, Page, StyleSheet, Text, View } from "@react-pdf/renderer";
 
 import type { CaseNoticeDraftReport } from "@/lib/case-notice-draft-report";
+
+const NOTICE_DRAFT_FONT_FAMILY = "Noto Sans SC";
+const NOTICE_DRAFT_FONT_PATH = "/fonts/NotoSansSC-Variable.ttf";
+const NOTICE_DRAFT_FONT_URL = typeof window === "undefined"
+  ? `http://localhost${NOTICE_DRAFT_FONT_PATH}`
+  : new URL(NOTICE_DRAFT_FONT_PATH, window.location.origin).toString();
+
+Font.register({
+  family: NOTICE_DRAFT_FONT_FAMILY,
+  src: NOTICE_DRAFT_FONT_URL,
+});
 
 const styles = StyleSheet.create({
   page: {
@@ -9,7 +20,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 36,
     backgroundColor: "#ffffff",
     color: "#172033",
-    fontFamily: "Helvetica",
+    fontFamily: NOTICE_DRAFT_FONT_FAMILY,
     fontSize: 9,
     lineHeight: 1.45,
   },
@@ -83,7 +94,7 @@ export function CaseNoticeDraftPDF({ report }: { report: CaseNoticeDraftReport }
           <Text style={styles.brand}>BauCompliance.ch</Text>
         </View>
 
-        <View style={styles.statusBox} wrap={false}>
+        <View fixed style={styles.statusBox} wrap={false}>
           <Text style={styles.status}>
             {report.labels.saved} · {report.labels.notApproved} · {report.labels.notSent}
           </Text>

@@ -1,5 +1,9 @@
+import { readFile } from "node:fs/promises";
+import path from "node:path";
+
+import { renderToBuffer } from "@react-pdf/renderer";
 import { Children, isValidElement, type ReactNode } from "react";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { CaseNoticeDraftPDF } from "@/components/dashboard/CaseNoticeDraftPDF";
 import type { CaseNoticeDraftReport } from "@/lib/case-notice-draft-report";
@@ -50,9 +54,13 @@ describe("CaseNoticeDraftPDF", () => {
     const document = CaseNoticeDraftPDF({ report });
     const text = collectText(document);
     const page = Children.toArray(document.props.children)[0];
+    const statusBox = isValidElement<{ children?: ReactNode }>(page)
+      ? Children.toArray(page.props.children).find((child) => collectText(child).includes("Not approved"))
+      : null;
 
     expect(isValidElement(page) && page.props.size).toBe("A4");
     expect(isValidElement(page) && page.props.wrap).not.toBe(false);
+    expect(isValidElement<{ fixed?: boolean }>(statusBox) && statusBox.props.fixed).toBe(true);
     expect(text).toContain("Saved notice draft");
     expect(text).toContain("Saved");
     expect(text).toContain("Not approved");
@@ -86,5 +94,32 @@ describe("CaseNoticeDraftPDF", () => {
   it("renders the explicit null-deadline label without calculating a date", () => {
     const text = collectText(CaseNoticeDraftPDF({ report: { ...report, noticeDeadline: null } }));
     expect(text).toContain("Not stored");
+  });
+
+  it("generates a PDF with non-Latin source facts using the embedded Unicode font", async () => {
+    const font = await readFile(path.join(process.cwd(), "public/fonts/NotoSansSC-Variable.ttf"));
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url = typeof input === "string" || input instanceof URL ? input.toString() : input.url;
+      if (url.endsWith("/fonts/NotoSansSC-Variable.ttf")) {
+        return Promise.resolve(new Response(font));
+      }
+      return originalFetch(input, init);
+    });
+
+    try {
+      const unicodeReport = {
+        ...report,
+        projectName: "Αθήνα · Москва · 東京",
+        recipientName: "株式会社 建築",
+        defectStatement: "建筑缺陷 — трещина — οικοδομικό ελάττωμα",
+      };
+      const buffer = await renderToBuffer(<CaseNoticeDraftPDF report={unicodeReport} />);
+
+      expect(buffer.subarray(0, 4).toString()).toBe("%PDF");
+      expect(buffer.byteLength).toBeGreaterThan(1_000);
+    } finally {
+      fetchMock.mockRestore();
+    }
   });
 });
