@@ -291,6 +291,12 @@ describe("dashboard linked-case loading retry", () => {
           contractDate: "2019-02-01T00:00:00.000Z",
           discoveryDate: "2019-03-02T00:00:00.000Z",
         }),
+        {
+          ...buildCase("archived-expired", "Archived Expired", {
+            discoveryDate: "2026-03-01T00:00:00.000Z",
+          }),
+          status: "archived",
+        },
         buildCase("expired", "Expired Case", { discoveryDate: "2026-03-01T00:00:00.000Z" }),
         buildCase("warning-top", "Warning Top", { discoveryDate: "2026-03-04T00:00:00.000Z" }),
       ],

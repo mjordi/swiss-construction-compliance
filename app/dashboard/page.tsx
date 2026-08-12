@@ -343,6 +343,10 @@ export default function Dashboard() {
 
       return selectDashboardPriorityCases(
         userCases.flatMap((item) => {
+          if (item.status === "archived") {
+            return [];
+          }
+
           try {
             return [
               toComplianceCaseViewModel({
