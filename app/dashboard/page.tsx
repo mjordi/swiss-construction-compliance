@@ -19,6 +19,7 @@ import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import type { Case } from "@/lib/database.types";
 import { toComplianceCaseViewModel, type CaseDeadlineStatus, type ComplianceCaseViewModel } from "@/lib/case-timeline";
+import { selectDashboardPriorityCases } from "@/lib/dashboard-action-cockpit";
 
 const PROJECT_DRAFT_STORAGE_KEY = "baucompliance:wizard-project-draft";
 
@@ -334,6 +335,32 @@ export default function Dashboard() {
       return null;
     }
   }, [effectiveSelectedCase, selectedCase]);
+  const dashboardPriorityCases = useMemo(
+    () => {
+      if (!user || lastSuccessfulUserCasesUserIdRef.current !== user.id) {
+        return [];
+      }
+
+      return selectDashboardPriorityCases(
+        userCases.flatMap((item) => {
+          try {
+            return [
+              toComplianceCaseViewModel({
+                id: item.id,
+                projectName: item.project_name,
+                canton: item.canton,
+                contractDate: new Date(item.contract_date),
+                discoveryDate: new Date(item.discovery_date),
+              }),
+            ];
+          } catch {
+            return [];
+          }
+        })
+      );
+    },
+    [user, userCases]
+  );
   const hasPendingLinkedCaseContext = Boolean(effectiveSelectedCaseId && !selectedCaseContext && linkedCaseLoading && !linkedCaseLoadError);
   const finalReviewCaseSummary = selectedCaseContext
     ? selectedCaseContext.regime === "old"
@@ -561,6 +588,53 @@ export default function Dashboard() {
 
   return (
     <div>
+      {step === 1 && dashboardPriorityCases.length > 0 && (
+        <section
+          aria-labelledby="dashboard-action-cockpit-title"
+          className="mb-8 rounded-2xl border border-amber-400/20 bg-amber-500/[0.05] p-5"
+        >
+          <div className="mb-4">
+            <h2 id="dashboard-action-cockpit-title" className="text-lg font-semibold text-cream">
+              {t("dashboard-action-cockpit-title")}
+            </h2>
+            <p className="mt-1 text-sm text-muted">{t("dashboard-action-cockpit-description")}</p>
+          </div>
+          <div className="grid gap-3 lg:grid-cols-3">
+            {dashboardPriorityCases.map((item) => {
+              const query = encodeURIComponent(item.projectName);
+              const href =
+                item.status === "warning"
+                  ? `/dashboard/cases?q=${query}`
+                  : `/dashboard/cases?q=${query}&status=triage`;
+
+              return (
+                <Link
+                  key={item.id}
+                  href={href}
+                  className="group rounded-xl border border-white/[0.08] bg-black/10 p-4 transition-colors hover:border-amber-300/30 hover:bg-amber-500/[0.06]"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <span className="font-semibold text-cream">{item.projectName}</span>
+                    <span className="text-[10px] font-semibold uppercase tracking-[0.08em] text-amber-200">
+                      {t(linkedCaseStatusLabelKey[item.status])}
+                    </span>
+                  </div>
+                  <p className="mt-2 text-xs leading-relaxed text-muted">
+                    {t(linkedCaseNextActionKey[item.status])}
+                  </p>
+                  <div className="mt-3 flex items-center justify-between gap-3 text-xs">
+                    <span className="text-amber-100/80">{getLinkedCaseCountdownLabel(item, t)}</span>
+                    <span className="font-semibold text-accent group-hover:text-cream">
+                      {t("dashboard-action-cockpit-open")}
+                    </span>
+                  </div>
+                </Link>
+              );
+            })}
+          </div>
+        </section>
+      )}
+
       {/* Header with section marker + step progress */}
       <header className="mb-8">
         <div className="section-marker mb-4">{t("step")} {step}/3</div>
@@ -593,6 +667,7 @@ export default function Dashboard() {
           ))}
         </div>
       </header>
+
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         <div className="lg:col-span-2">

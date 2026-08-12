@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import type { HTMLAttributes, ReactNode } from "react";
 
 let currentSearch = "";
@@ -174,13 +174,25 @@ vi.mock("@/lib/compliance-record", () => ({
 }));
 
 vi.mock("@/lib/legal-utils", () => ({
-  calculateRuegefrist: () => ({
-    ruegefrist60: {
-      status: "ok",
-      date: new Date("2026-06-01T00:00:00.000Z"),
-    },
-  }),
-  determineLegalRegime: () => "new",
+  calculateRuegefrist: (_contractDate: Date, discoveryDate: Date) => {
+    const resultByDiscoveryDay = {
+      1: { status: "expired", daysRemaining: -4 },
+      3: { status: "urgent", daysRemaining: 2 },
+      4: { status: "warning", daysRemaining: 10 },
+      6: { status: "warning", daysRemaining: 12 },
+    } as const;
+    const result = resultByDiscoveryDay[
+      discoveryDate.getUTCDate() as keyof typeof resultByDiscoveryDay
+    ] ?? { status: "ok", daysRemaining: 40 };
+    return {
+      ruegefrist60: {
+        ...result,
+        date: new Date("2026-06-01T00:00:00.000Z"),
+      },
+    };
+  },
+  determineLegalRegime: (contractDate: Date) => contractDate.getUTCFullYear() < 2020 ? "old" : "new",
+  validateRuegefristInput: () => null,
   formatDateCH: () => "01.06.2026",
 }));
 
@@ -190,14 +202,18 @@ vi.mock("@/lib/supabase", () => ({
 
 import DashboardPage from "@/app/dashboard/page";
 
-function buildCase(id = "case-1", projectName = "Alpine Tower") {
+function buildCase(
+  id = "case-1",
+  projectName = "Alpine Tower",
+  dates: { contractDate?: string; discoveryDate?: string } = {}
+) {
   return {
     id,
     user_id: "user-1",
     project_name: projectName,
     canton: "ZH",
-    contract_date: "2026-03-01T00:00:00.000Z",
-    discovery_date: "2026-03-21T00:00:00.000Z",
+    contract_date: dates.contractDate ?? "2026-03-01T00:00:00.000Z",
+    discovery_date: dates.discoveryDate ?? "2026-03-21T00:00:00.000Z",
     checklist: null,
     created_at: "2026-03-21T00:00:00.000Z",
     updated_at: "2026-03-21T00:00:00.000Z",
@@ -263,6 +279,97 @@ describe("dashboard linked-case loading retry", () => {
     });
     authState.user = { id: "user-1" };
     caseResponseFactory = () => ({ data: [], error: null });
+  });
+
+  it("shows the top three rows in the priority action cockpit with legal context and native Cases links", async () => {
+    caseResponseFactory = () => ({
+      data: [
+        buildCase("warning-low", "Warning Lower", { discoveryDate: "2026-03-06T00:00:00.000Z" }),
+        buildCase("urgent", "Urgent & Central", { discoveryDate: "2026-03-03T00:00:00.000Z" }),
+        buildCase("ok", "On Track", { discoveryDate: "2026-03-21T00:00:00.000Z" }),
+        buildCase("immediate", "Old Law", {
+          contractDate: "2019-02-01T00:00:00.000Z",
+          discoveryDate: "2019-03-02T00:00:00.000Z",
+        }),
+        buildCase("expired", "Expired Case", { discoveryDate: "2026-03-01T00:00:00.000Z" }),
+        buildCase("warning-top", "Warning Top", { discoveryDate: "2026-03-04T00:00:00.000Z" }),
+      ],
+      error: null,
+    });
+
+    render(<DashboardPage />);
+
+    const cockpit = await screen.findByRole("region", { name: "dashboard-action-cockpit-title" });
+    const rows = within(cockpit).getAllByRole("link");
+    expect(rows).toHaveLength(3);
+    expect(rows.map((row) => row.textContent)).toEqual([
+      expect.stringContaining("Expired Case"),
+      expect.stringContaining("Old Law"),
+      expect.stringContaining("Urgent & Central"),
+    ]);
+    expect(rows[0]?.textContent).toContain("cases-status-expired");
+    expect(rows[0]?.textContent).toContain("cases-next-action-expired");
+    expect(rows[0]?.textContent).toContain("4 cases-countdown-days-overdue-suffix");
+    expect(rows[1]?.textContent).toContain("cases-status-immediate-notice");
+    expect(rows[1]?.textContent).toContain("cases-next-action-immediate-notice");
+    expect(rows[1]?.textContent).toContain("cases-countdown-notify-immediately");
+    expect(rows[2]?.textContent).toContain("cases-status-urgent");
+    expect(rows[2]?.textContent).toContain("cases-next-action-urgent");
+    expect(rows[2]?.textContent).toContain("2 cases-countdown-days-left-suffix");
+    expect(rows[0]?.getAttribute("href")).toBe("/dashboard/cases?q=Expired%20Case&status=triage");
+    expect(rows[1]?.getAttribute("href")).toBe("/dashboard/cases?q=Old%20Law&status=triage");
+    expect(rows[2]?.getAttribute("href")).toBe("/dashboard/cases?q=Urgent%20%26%20Central&status=triage");
+    expect(cockpit.textContent).not.toContain("Warning Top");
+    expect(cockpit.textContent).not.toContain("On Track");
+  });
+
+  it("uses a search-only Cases link for a warning in the priority action cockpit", async () => {
+    caseResponseFactory = () => ({
+      data: [buildCase("warning", "Warning Project", { discoveryDate: "2026-03-04T00:00:00.000Z" })],
+      error: null,
+    });
+
+    render(<DashboardPage />);
+
+    const cockpit = await screen.findByRole("region", { name: "dashboard-action-cockpit-title" });
+    expect(within(cockpit).getByRole("link").getAttribute("href")).toBe(
+      "/dashboard/cases?q=Warning%20Project"
+    );
+  });
+
+  it("does not show the priority action cockpit when no case is actionable", async () => {
+    caseResponseFactory = () => ({ data: [buildCase("ok", "On Track")], error: null });
+
+    render(<DashboardPage />);
+
+    expect(await screen.findByRole("option", { name: "On Track (ZH)" })).toBeTruthy();
+    expect(screen.queryByRole("region", { name: "dashboard-action-cockpit-title" })).toBeNull();
+  });
+
+  it("hides a prior owner's priority cases while the next owner's cases are loading", async () => {
+    let resolveNextOwnerLoad: ((value: CaseLoadResolution) => void) | null = null;
+    caseResponsesQueue = [{
+      data: [buildCase("expired", "Prior Owner Case", { discoveryDate: "2026-03-01T00:00:00.000Z" })],
+      error: null,
+    }];
+    caseResponseFactory = () => new Promise((resolve) => {
+      resolveNextOwnerLoad = resolve;
+    });
+
+    const { rerender } = render(<DashboardPage />);
+    expect(await screen.findByText("Prior Owner Case")).toBeTruthy();
+
+    authState.user = { id: "user-2" };
+    rerender(<DashboardPage />);
+
+    await waitFor(() => {
+      expect(screen.queryByText("Prior Owner Case")).toBeNull();
+      expect(screen.queryByRole("region", { name: "dashboard-action-cockpit-title" })).toBeNull();
+    });
+
+    await act(async () => {
+      resolveCaseLoadPromise(resolveNextOwnerLoad, { data: [], error: null });
+    });
   });
 
   it("exposes handover wizard project fields by their visible labels", async () => {
