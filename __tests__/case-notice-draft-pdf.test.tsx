@@ -2,7 +2,7 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 import { renderToBuffer } from "@react-pdf/renderer";
-import { openPdf } from "clawpdf";
+import { getDocument } from "pdfjs-dist/legacy/build/pdf.mjs";
 import { Children, isValidElement, type ReactNode } from "react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -16,11 +16,20 @@ function collectText(node: ReactNode): string {
 }
 
 async function extractPdfText(buffer: Buffer): Promise<string> {
-  const pdf = await openPdf(new Uint8Array(buffer));
+  const task = getDocument({ data: new Uint8Array(buffer) });
   try {
-    return pdf.text();
+    const pdf = await task.promise;
+    const pages: string[] = [];
+
+    for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber += 1) {
+      const page = await pdf.getPage(pageNumber);
+      const content = await page.getTextContent();
+      pages.push(content.items.map((item) => ("str" in item ? item.str : "")).join(" "));
+    }
+
+    return pages.join("\n");
   } finally {
-    pdf.destroy();
+    await task.destroy();
   }
 }
 
@@ -138,6 +147,7 @@ describe("CaseNoticeDraftPDF", () => {
       "NotoSansHebrew-Variable.ttf",
       "NotoSansDevanagari-Variable.ttf",
       "NotoSansSymbols2-Regular.ttf",
+      "NotoEmoji-Variable.ttf",
     ].map(async (fileName) => [
       fileName,
       await readFile(path.join(process.cwd(), "public/fonts", fileName)),
@@ -163,6 +173,39 @@ describe("CaseNoticeDraftPDF", () => {
       expect(buffer.subarray(0, 4).toString()).toBe("%PDF");
       expect(buffer.byteLength).toBeGreaterThan(1_000);
       expect(extractedText).toContain("भारत");
+    } finally {
+      fetchMock.mockRestore();
+    }
+  });
+
+  it("preserves a common pictographic emoji in extracted PDF text using an emoji fallback", async () => {
+    const fontFiles = new Map(await Promise.all([
+      "NotoSansSC-Variable.ttf",
+      "NotoSansArabic-Variable.ttf",
+      "NotoSansHebrew-Variable.ttf",
+      "NotoSansDevanagari-Variable.ttf",
+      "NotoSansSymbols2-Regular.ttf",
+      "NotoEmoji-Variable.ttf",
+    ].map(async (fileName) => [
+      fileName,
+      await readFile(path.join(process.cwd(), "public/fonts", fileName)),
+    ] as const)));
+    const originalFetch = globalThis.fetch;
+    const fetchMock = vi.spyOn(globalThis, "fetch").mockImplementation((input, init) => {
+      const url = typeof input === "string" || input instanceof URL ? input.toString() : input.url;
+      const font = fontFiles.get(url.split("/").at(-1) ?? "");
+      if (font) return Promise.resolve(new Response(font));
+      return originalFetch(input, init);
+    });
+
+    try {
+      const buffer = await renderToBuffer(
+        <CaseNoticeDraftPDF report={{ ...report, defectStatement: "Saved face defect 😀" }} />,
+      );
+      const extractedText = await extractPdfText(buffer);
+
+      expect(buffer.subarray(0, 4).toString()).toBe("%PDF");
+      expect(extractedText).toContain("😀");
     } finally {
       fetchMock.mockRestore();
     }

@@ -9,6 +9,7 @@ const NOTICE_DRAFT_FONTS = [
   { family: "Noto Sans Hebrew", path: "/fonts/NotoSansHebrew-Variable.ttf" },
   { family: "Noto Sans Devanagari", path: "/fonts/NotoSansDevanagari-Variable.ttf" },
   { family: "Noto Sans Symbols 2", path: "/fonts/NotoSansSymbols2-Regular.ttf" },
+  { family: "Noto Emoji", path: "/fonts/NotoEmoji-Variable.ttf" },
 ] as const;
 
 function fontUrl(fontPath: string) {
@@ -25,7 +26,7 @@ const SCRIPT_FONTS = [
   { family: "Noto Sans Arabic", pattern: /[\u0600-\u06ff\u0750-\u077f\u08a0-\u08ff\ufb50-\ufdff\ufe70-\ufeff]/u },
   { family: "Noto Sans Hebrew", pattern: /[\u0590-\u05ff\ufb1d-\ufb4f]/u },
   { family: "Noto Sans Devanagari", pattern: /[\u0900-\u097f\ua8e0-\ua8ff]/u },
-  { family: "Noto Sans Symbols 2", pattern: /\p{Extended_Pictographic}/u },
+  { family: "Noto Emoji", pattern: /\p{Extended_Pictographic}/u },
 ] as const;
 
 function scriptFont(character: string, previousFamily: string) {
