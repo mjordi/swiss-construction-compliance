@@ -20,6 +20,7 @@ import { getSupabase } from "@/lib/supabase";
 import type { Case } from "@/lib/database.types";
 import { toComplianceCaseViewModel, type CaseDeadlineStatus, type ComplianceCaseViewModel } from "@/lib/case-timeline";
 import { selectDashboardPriorityCases } from "@/lib/dashboard-action-cockpit";
+import { getMillisecondsUntilNextSwissCalendarDay } from "@/lib/legal-utils";
 
 const PROJECT_DRAFT_STORAGE_KEY = "baucompliance:wizard-project-draft";
 
@@ -90,6 +91,7 @@ export default function Dashboard() {
   const [draftUpdatedAt, setDraftUpdatedAt] = useState<string | null>(null);
   const [userCases, setUserCases] = useState<Case[]>([]);
   const [userCasesLoadedSuccessfully, setUserCasesLoadedSuccessfully] = useState(false);
+  const [priorityTimelineRevision, setPriorityTimelineRevision] = useState(0);
   const [linkedCaseLoading, setLinkedCaseLoading] = useState(false);
   const [linkedCaseLoadError, setLinkedCaseLoadError] = useState<TranslationKey | null>(null);
   const [draftHydrated, setDraftHydrated] = useState(false);
@@ -335,8 +337,26 @@ export default function Dashboard() {
       return null;
     }
   }, [effectiveSelectedCase, selectedCase]);
+
+  useEffect(() => {
+    let refreshTimer: number | undefined;
+
+    const scheduleNextCalendarDay = () => {
+      refreshTimer = window.setTimeout(() => {
+        setPriorityTimelineRevision((current) => current + 1);
+        scheduleNextCalendarDay();
+      }, getMillisecondsUntilNextSwissCalendarDay());
+    };
+
+    scheduleNextCalendarDay();
+    return () => {
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+    };
+  }, []);
+
   const dashboardPriorityCases = useMemo(
     () => {
+      void priorityTimelineRevision;
       if (!user || lastSuccessfulUserCasesUserIdRef.current !== user.id) {
         return [];
       }
@@ -363,7 +383,7 @@ export default function Dashboard() {
         })
       );
     },
-    [user, userCases]
+    [priorityTimelineRevision, user, userCases]
   );
   const hasPendingLinkedCaseContext = Boolean(effectiveSelectedCaseId && !selectedCaseContext && linkedCaseLoading && !linkedCaseLoadError);
   const finalReviewCaseSummary = selectedCaseContext

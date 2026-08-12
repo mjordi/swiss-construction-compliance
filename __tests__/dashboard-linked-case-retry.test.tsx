@@ -15,6 +15,10 @@ let checklistRpcCalls: Array<{ name: string; args: Record<string, unknown> }>;
 let protocolInsertFactory: (payload: Record<string, unknown>) => Promise<{ error: null }> | { error: null };
 let signaturePadIsEmpty = true;
 let signaturePadEndStrokeHandler: (() => void) | null = null;
+let defaultTimelineResult: { status: "ok" | "urgent"; daysRemaining: number } = {
+  status: "ok",
+  daysRemaining: 40,
+};
 let pdfToBlobFactory: () => Promise<Blob>;
 let lastPdfElement: { props?: Record<string, unknown> } | null;
 const createObjectURLMock = vi.fn(() => "blob:dashboard-pdf");
@@ -183,7 +187,7 @@ vi.mock("@/lib/legal-utils", () => ({
     } as const;
     const result = resultByDiscoveryDay[
       discoveryDate.getUTCDate() as keyof typeof resultByDiscoveryDay
-    ] ?? { status: "ok", daysRemaining: 40 };
+    ] ?? defaultTimelineResult;
     return {
       ruegefrist60: {
         ...result,
@@ -194,6 +198,7 @@ vi.mock("@/lib/legal-utils", () => ({
   determineLegalRegime: (contractDate: Date) => contractDate.getUTCFullYear() < 2020 ? "old" : "new",
   validateRuegefristInput: () => null,
   formatDateCH: () => "01.06.2026",
+  getMillisecondsUntilNextSwissCalendarDay: () => 3_600_000,
 }));
 
 vi.mock("@/lib/supabase", () => ({
@@ -260,6 +265,7 @@ describe("dashboard linked-case loading retry", () => {
     protocolInsertFactory = () => Promise.resolve({ error: null });
     signaturePadIsEmpty = true;
     signaturePadEndStrokeHandler = null;
+    defaultTimelineResult = { status: "ok", daysRemaining: 40 };
     pdfToBlobFactory = () => Promise.resolve(new Blob(["pdf"], { type: "application/pdf" }));
     lastPdfElement = null;
     createObjectURLMock.mockClear();
@@ -350,6 +356,36 @@ describe("dashboard linked-case loading retry", () => {
 
     expect(await screen.findByRole("option", { name: "On Track (ZH)" })).toBeTruthy();
     expect(screen.queryByRole("region", { name: "dashboard-action-cockpit-title" })).toBeNull();
+  });
+
+  it("refreshes priority cases when the Swiss calendar day changes", async () => {
+    let refreshCalendarDay: (() => void) | undefined;
+    const nativeSetTimeout = window.setTimeout.bind(window);
+    const setTimeoutSpy = vi.spyOn(window, "setTimeout").mockImplementation((handler, timeout, ...args) => {
+      if (typeof handler === "function" && timeout === 3_600_000) {
+        refreshCalendarDay = handler;
+        return nativeSetTimeout(() => {}, 0) as never;
+      }
+      return nativeSetTimeout(handler, timeout, ...args) as never;
+    });
+
+    try {
+      caseResponseFactory = () => ({ data: [buildCase("day-boundary", "Day Boundary")], error: null });
+      render(<DashboardPage />);
+
+      expect(await screen.findByRole("option", { name: "Day Boundary (ZH)" })).toBeTruthy();
+      expect(screen.queryByRole("region", { name: "dashboard-action-cockpit-title" })).toBeNull();
+
+      defaultTimelineResult = { status: "urgent", daysRemaining: 2 };
+      expect(refreshCalendarDay).toBeTypeOf("function");
+      act(() => refreshCalendarDay?.());
+
+      expect(
+        (await screen.findByRole("region", { name: "dashboard-action-cockpit-title" })).textContent
+      ).toContain("Day Boundary");
+    } finally {
+      setTimeoutSpy.mockRestore();
+    }
   });
 
   it("hides a prior owner's priority cases while the next owner's cases are loading", async () => {
