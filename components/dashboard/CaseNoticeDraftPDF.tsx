@@ -55,7 +55,7 @@ function UnicodeText({ children, style }: { children: string; style: "value" | "
 
 const styles = StyleSheet.create({
   page: {
-    paddingTop: 36,
+    paddingTop: 120,
     paddingBottom: 54,
     paddingHorizontal: 36,
     backgroundColor: "#ffffff",
@@ -73,11 +73,14 @@ const styles = StyleSheet.create({
   title: { fontSize: 20, fontWeight: "bold" },
   brand: { marginTop: 3, color: "#0e7490", fontSize: 9 },
   statusBox: {
+    position: "absolute",
+    top: 36,
+    left: 36,
+    right: 36,
     borderWidth: 1.5,
     borderColor: "#d97706",
     backgroundColor: "#fffbeb",
     padding: 10,
-    marginBottom: 14,
   },
   status: { color: "#92400e", fontSize: 13, fontWeight: "bold", textAlign: "center" },
   review: { marginTop: 6, color: "#78350f", textAlign: "center" },

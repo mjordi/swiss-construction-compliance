@@ -64,14 +64,26 @@ describe("CaseNoticeDraftPDF", () => {
     const document = CaseNoticeDraftPDF({ report });
     const text = collectText(document);
     const page = Children.toArray(document.props.children)[0];
-    const pageElement = isValidElement<{ children?: ReactNode; size?: string; wrap?: boolean }>(page) ? page : null;
+    const pageElement = isValidElement<{
+      children?: ReactNode;
+      size?: string;
+      style?: { paddingTop?: number };
+      wrap?: boolean;
+    }>(page) ? page : null;
     const statusBox = isValidElement<{ children?: ReactNode }>(page)
       ? Children.toArray(page.props.children).find((child) => collectText(child).includes("Not approved"))
       : null;
 
     expect(pageElement?.props.size).toBe("A4");
     expect(pageElement?.props.wrap).not.toBe(false);
-    expect(isValidElement<{ fixed?: boolean }>(statusBox) && statusBox.props.fixed).toBe(true);
+    expect(pageElement?.props.style?.paddingTop).toBe(120);
+    expect(isValidElement<{
+      fixed?: boolean;
+      style?: { position?: string; top?: number };
+    }>(statusBox) && statusBox.props).toMatchObject({
+      fixed: true,
+      style: { position: "absolute", top: 36 },
+    });
     expect(text).toContain("Saved notice draft");
     expect(text).toContain("Saved");
     expect(text).toContain("Not approved");
