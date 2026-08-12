@@ -21,6 +21,20 @@ describe("locales", () => {
     }
   });
 
+  it("includes dashboard priority action cockpit keys in every locale", () => {
+    const requiredCockpitKeys = [
+      "dashboard-action-cockpit-title",
+      "dashboard-action-cockpit-description",
+      "dashboard-action-cockpit-open",
+    ] as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      for (const key of requiredCockpitKeys) {
+        expect(translations[key], `Locale '${lang}' missing action cockpit key '${key}'`).toBeDefined();
+      }
+    }
+  });
+
   it("includes vault localization keys in every locale", () => {
     const requiredVaultKeys = [
       "vault-title",

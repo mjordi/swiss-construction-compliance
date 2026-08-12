@@ -143,6 +143,7 @@ vi.mock("@/lib/legal-utils", () => ({
   }),
   determineLegalRegime: () => "new",
   formatDateCH: () => "01.06.2026",
+  getMillisecondsUntilNextSwissCalendarDay: () => 3_600_000,
 }));
 
 vi.mock("@/lib/supabase", () => ({

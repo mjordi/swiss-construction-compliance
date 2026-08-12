@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import type { AnchorHTMLAttributes, HTMLAttributes, ReactNode } from "react";
 
 const authState = { user: { id: "user-1" } };
@@ -136,6 +136,7 @@ vi.mock("@/lib/legal-utils", () => ({
   }),
   determineLegalRegime: () => "new",
   formatDateCH: () => "01.06.2026",
+  getMillisecondsUntilNextSwissCalendarDay: () => 3_600_000,
 }));
 
 vi.mock("@/lib/case-timeline", () => ({
@@ -270,11 +271,14 @@ describe("dashboard photo vault handoff", () => {
     const selector = await screen.findByLabelText("wizard-case-selector");
     fireEvent.change(selector, { target: { value: "case-1" } });
 
-    expect(await screen.findByText("cases-next-legal-action")).toBeTruthy();
-    expect(screen.getByText("cases-status-urgent")).toBeTruthy();
-    expect(screen.getByText("cases-next-action-urgent")).toBeTruthy();
-    expect(screen.getByText("7 cases-countdown-days-left-suffix")).toBeTruthy();
-    expect(screen.getByText("dashboard-linked-case-deadline-date: 30.06.2026")).toBeTruthy();
+    const nextActionHeading = await screen.findByText("cases-next-legal-action");
+    const linkedCaseContext = nextActionHeading.closest("div.mt-2")?.parentElement;
+    expect(linkedCaseContext).toBeTruthy();
+    const linkedCaseView = within(linkedCaseContext as HTMLElement);
+    expect(linkedCaseView.getByText("cases-status-urgent")).toBeTruthy();
+    expect(linkedCaseView.getByText("cases-next-action-urgent")).toBeTruthy();
+    expect(linkedCaseView.getByText("7 cases-countdown-days-left-suffix")).toBeTruthy();
+    expect(linkedCaseView.getByText("dashboard-linked-case-deadline-date: 30.06.2026")).toBeTruthy();
   });
 
   it("exposes the Step 2 signature capture area by its visible label", async () => {
