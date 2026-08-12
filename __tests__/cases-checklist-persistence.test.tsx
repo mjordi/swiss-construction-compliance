@@ -91,6 +91,7 @@ vi.mock("@/components/dashboard/AuditReportPDF", () => ({
 }));
 
 vi.mock("@react-pdf/renderer", () => ({
+  Font: { register: vi.fn() },
   StyleSheet: { create: (styles: unknown) => styles },
   pdf: (document: unknown) => {
     pdfMock(document);

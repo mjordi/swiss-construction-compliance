@@ -313,6 +313,18 @@ describe("locales", () => {
       "cases-notice-draft-status",
       "cases-notice-draft-created-at",
       "cases-notice-draft-context",
+      "cases-notice-draft-download",
+      "cases-notice-draft-generating",
+      "cases-notice-draft-download-success",
+      "cases-notice-draft-download-error",
+      "cases-notice-draft-pdf-title",
+      "cases-notice-draft-pdf-saved",
+      "cases-notice-draft-pdf-not-approved",
+      "cases-notice-draft-pdf-not-sent",
+      "cases-notice-draft-pdf-review-disclaimer",
+      "cases-notice-draft-pdf-legal-disclaimer",
+      "cases-notice-draft-pdf-revision-id",
+      "cases-notice-draft-pdf-stored-deadline",
     ] as const;
 
     for (const [lang, translations] of Object.entries(locales)) {
