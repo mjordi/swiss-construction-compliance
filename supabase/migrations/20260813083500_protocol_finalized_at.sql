@@ -30,7 +30,9 @@ create trigger set_protocol_finalized_at
 before insert or update of status, finalized_at on public.protocols
 for each row execute function public.set_protocol_finalized_at();
 
-create or replace view public.protocol_register_records
+drop view public.protocol_register_records;
+
+create view public.protocol_register_records
 with (security_invoker = true)
 as
 select

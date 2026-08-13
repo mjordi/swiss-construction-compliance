@@ -48,6 +48,7 @@ describe("protocol finalization timestamp migration", () => {
     expect(sql).toMatch(/tg_op = 'INSERT' and new\.status = 'finalized'/);
     expect(sql).toMatch(/old\.status is distinct from 'finalized'/);
     expect(sql).toMatch(/new\.finalized_at := old\.finalized_at/);
+    expect(sql).toMatch(/drop view public\.protocol_register_records;\s+create view public\.protocol_register_records/);
     expect(sql).toMatch(/nullif\(btrim\(signature_data\), ''\) is not null as signature_captured/);
   });
 });
