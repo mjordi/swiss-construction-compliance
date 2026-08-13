@@ -155,13 +155,24 @@ export default function ProtocolRegisterPage() {
     };
 
     try {
-      const report = buildFinalizedProtocolReportFromRecord(record as Protocol & { status: "finalized" });
+      const { data, error } = await supabase
+        .from("protocols")
+        .select(PROTOCOL_COLUMNS)
+        .eq("id", record.id)
+        .eq("user_id", ownerId)
+        .eq("status", "finalized")
+        .single();
+      if (error || !data) throw error ?? new Error("Finalized protocol not found");
+
+      const finalizedProtocol = data as Protocol & { status: "finalized" };
+      if (!isCurrent()) return;
+      const report = buildFinalizedProtocolReportFromRecord(finalizedProtocol);
       const blob = await pdf(
         <AuditReportPDF
-          fileName={record.project_name}
-          caseId={record.id}
-          contractor={record.contractor}
-          client={record.client}
+          fileName={finalizedProtocol.project_name}
+          caseId={finalizedProtocol.id}
+          contractor={finalizedProtocol.contractor}
+          client={finalizedProtocol.client}
           report={report}
         />,
       ).toBlob();
@@ -171,7 +182,7 @@ export default function ProtocolRegisterPage() {
       const anchor = document.createElement("a");
       try {
         anchor.href = url;
-        anchor.download = protocolPdfFilename(record.id);
+        anchor.download = protocolPdfFilename(finalizedProtocol.id);
         anchor.click();
       } finally {
         anchor.remove();
@@ -190,7 +201,7 @@ export default function ProtocolRegisterPage() {
         });
       }
     }
-  }, []);
+  }, [supabase]);
 
   const locale = lang === "de" ? "de-CH" : lang === "fr" ? "fr-CH" : lang === "it" ? "it-CH" : "en-CH";
   const formatDate = (value: string) => new Intl.DateTimeFormat(locale, {

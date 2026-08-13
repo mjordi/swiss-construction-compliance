@@ -9,8 +9,12 @@ const mocks = vi.hoisted(() => ({
 }));
 let currentUser = mocks.currentUser;
 let queryResults: Array<Promise<{ data: Protocol[] | null; error: { message: string } | null }>> = [];
+let downloadResults: Array<Promise<{ data: Protocol | null; error: { message: string } | null }>> = [];
 const eqMock = vi.fn();
 const statusEqMock = vi.fn();
+const detailOwnerEqMock = vi.fn();
+const detailStatusEqMock = vi.fn();
+const singleMock = vi.fn();
 const orderMock = vi.fn();
 const idOrderMock = vi.fn();
 const rangeMock = vi.fn();
@@ -90,10 +94,14 @@ beforeEach(() => {
   currentUser = { id: "owner-1", email: "owner@example.ch", name: "Owner" };
   mocks.currentUser = currentUser;
   queryResults = [];
+  downloadResults = [];
   vi.clearAllMocks();
   selectMock.mockImplementation(() => ({ eq: eqMock }));
-  eqMock.mockImplementation(() => ({ eq: statusEqMock }));
+  eqMock.mockImplementation((column: string) => column === "id" ? { eq: detailOwnerEqMock } : { eq: statusEqMock });
   statusEqMock.mockImplementation(() => ({ order: orderMock }));
+  detailOwnerEqMock.mockImplementation(() => ({ eq: detailStatusEqMock }));
+  detailStatusEqMock.mockImplementation(() => ({ single: singleMock }));
+  singleMock.mockImplementation(() => downloadResults.shift() ?? Promise.resolve({ data: null, error: { message: "not found" } }));
   orderMock.mockImplementation(() => ({ order: idOrderMock }));
   idOrderMock.mockImplementation(() => ({ range: rangeMock }));
   rangeMock.mockImplementation(() => queryResults.shift() ?? Promise.resolve({ data: [], error: null }));
@@ -178,15 +186,20 @@ describe("ProtocolRegisterPage", () => {
     expect(eqMock).toHaveBeenCalledWith("user_id", "owner-2");
   });
 
-  it("generates the exact clicked persisted record with deterministic filename and cleans the URL", async () => {
-    queryResults.push(Promise.resolve({ data: [row({ id: "exact-record", project_name: "Exact project", case_id: null })], error: null }));
+  it("re-reads and generates the exact persisted record with deterministic filename and cleans the URL", async () => {
+    queryResults.push(Promise.resolve({ data: [row({ id: "exact-record", project_name: "Cached project", case_id: null })], error: null }));
+    downloadResults.push(Promise.resolve({ data: row({ id: "exact-record", project_name: "Fresh project", defect_description: "Fresh defect", case_id: null }), error: null }));
     render(<ProtocolRegisterPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
 
     await waitFor(() => expect(pdfMock).toHaveBeenCalledTimes(1));
+    expect(eqMock).toHaveBeenCalledWith("id", "exact-record");
+    expect(detailOwnerEqMock).toHaveBeenCalledWith("user_id", "owner-1");
+    expect(detailStatusEqMock).toHaveBeenCalledWith("status", "finalized");
+    expect(singleMock).toHaveBeenCalledTimes(1);
     const pdfElement = pdfMock.mock.calls[0][0];
     expect(pdfElement.props).toMatchObject({
-      fileName: "Exact project",
+      fileName: "Fresh project",
       caseId: "exact-record",
       contractor: "Contractor AG",
       client: "Client GmbH",
@@ -203,12 +216,16 @@ describe("ProtocolRegisterPage", () => {
     const blob = deferred<Blob>();
     toBlobMock.mockReturnValueOnce(blob.promise).mockRejectedValueOnce(new Error("failed"));
     queryResults.push(Promise.resolve({ data: [row({ id: "locked" })], error: null }));
+    downloadResults.push(
+      Promise.resolve({ data: row({ id: "locked" }), error: null }),
+      Promise.resolve({ data: row({ id: "locked" }), error: null }),
+    );
     render(<ProtocolRegisterPage />);
     const button = await screen.findByRole("button", { name: "Download PDF" });
 
     fireEvent.click(button);
     fireEvent.click(button);
-    expect(pdfMock).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(pdfMock).toHaveBeenCalledTimes(1));
     await act(async () => blob.resolve(new Blob(["pdf"])));
     await waitFor(() => expect(clickMock).toHaveBeenCalledTimes(1));
 
@@ -222,6 +239,7 @@ describe("ProtocolRegisterPage", () => {
     const blob = deferred<Blob>();
     toBlobMock.mockReturnValue(blob.promise);
     queryResults.push(Promise.resolve({ data: [row({ id: "owner-one-pdf" })], error: null }), Promise.resolve({ data: [], error: null }));
+    downloadResults.push(Promise.resolve({ data: row({ id: "owner-one-pdf" }), error: null }));
     const view = render(<ProtocolRegisterPage />);
     await act(async () => { await Promise.resolve(); });
     fireEvent.click(screen.getByRole("button", { name: "Download PDF" }));
@@ -242,6 +260,7 @@ describe("ProtocolRegisterPage", () => {
     const blob = deferred<Blob>();
     toBlobMock.mockReturnValue(blob.promise);
     queryResults.push(Promise.resolve({ data: [row({ id: "unmounted-pdf" })], error: null }));
+    downloadResults.push(Promise.resolve({ data: row({ id: "unmounted-pdf" }), error: null }));
     const view = render(<ProtocolRegisterPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
 
@@ -250,5 +269,17 @@ describe("ProtocolRegisterPage", () => {
 
     expect(clickMock).not.toHaveBeenCalled();
     expect(createObjectURLMock).not.toHaveBeenCalled();
+  });
+
+  it("does not generate a PDF when the persisted protocol is no longer finalized", async () => {
+    queryResults.push(Promise.resolve({ data: [row({ id: "stale-finalized" })], error: null }));
+    downloadResults.push(Promise.resolve({ data: null, error: { message: "not found" } }));
+    render(<ProtocolRegisterPage />);
+
+    fireEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
+
+    expect(await screen.findByText("PDF could not be created. Try again.")).toBeTruthy();
+    expect(pdfMock).not.toHaveBeenCalled();
+    expect(clickMock).not.toHaveBeenCalled();
   });
 });
