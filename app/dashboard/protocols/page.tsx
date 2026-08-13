@@ -9,21 +9,27 @@ import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
 import type { Protocol } from "@/lib/database.types";
 import { buildFinalizedProtocolReportFromRecord } from "@/lib/protocol-report";
-import { protocolPdfFilename, selectFinalizedProtocolRecords } from "@/lib/protocol-register";
+import {
+  protocolPdfFilename,
+  selectFinalizedProtocolRecords,
+  type ProtocolRegisterRecord,
+} from "@/lib/protocol-register";
 import { getSupabase } from "@/lib/supabase";
 import type { TranslationKey } from "@/locales";
 
 type Feedback = { key: TranslationKey; tone: "success" | "error" };
 
-const PROTOCOL_COLUMNS =
+const PROTOCOL_DETAIL_COLUMNS =
   "id, user_id, case_id, project_name, contractor, client, defect_description, signature_data, status, created_at";
+const PROTOCOL_REGISTER_COLUMNS =
+  "id, user_id, case_id, project_name, contractor, client, status, created_at, signature_captured";
 const PROTOCOL_PAGE_SIZE = 1000;
 
 export default function ProtocolRegisterPage() {
   const { user } = useAuth();
   const { lang, t } = useLanguage();
   const supabase = useMemo(() => getSupabase(), []);
-  const [records, setRecords] = useState<Protocol[]>([]);
+  const [records, setRecords] = useState<ProtocolRegisterRecord[]>([]);
   const [recordsOwnerId, setRecordsOwnerId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState(false);
@@ -32,7 +38,7 @@ export default function ProtocolRegisterPage() {
   const [feedbackById, setFeedbackById] = useState<Record<string, Feedback>>({});
   const mountedRef = useRef(false);
   const latestUserIdRef = useRef(user?.id ?? null);
-  const recordsRef = useRef<Protocol[]>([]);
+  const recordsRef = useRef<ProtocolRegisterRecord[]>([]);
   const loadRequestRef = useRef(0);
   const downloadRequestIdsRef = useRef<Record<string, number>>({});
   const inFlightIdsRef = useRef(new Set<string>());
@@ -74,18 +80,24 @@ export default function ProtocolRegisterPage() {
 
     setLoading(true);
     void (async () => {
-      const loaded: Protocol[] = [];
-      for (let page = 0; ; page += 1) {
-        const from = page * PROTOCOL_PAGE_SIZE;
-        const { data, error } = await supabase
-          .from("protocols")
-          .select(PROTOCOL_COLUMNS)
+      const loaded: ProtocolRegisterRecord[] = [];
+      let cursor: Pick<ProtocolRegisterRecord, "created_at" | "id"> | null = null;
+      for (;;) {
+        let query = supabase
+          .from("protocol_register_records")
+          .select(PROTOCOL_REGISTER_COLUMNS)
           .eq("user_id", ownerId)
           .eq("status", "finalized")
           .order("created_at", { ascending: false })
           .order("id", { ascending: true })
-          .range(from, from + PROTOCOL_PAGE_SIZE - 1) as {
-            data: Protocol[] | null;
+          .limit(PROTOCOL_PAGE_SIZE);
+        if (cursor) {
+          query = query.or(
+            `created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.gt.${cursor.id})`,
+          );
+        }
+        const { data, error } = await query as unknown as {
+            data: ProtocolRegisterRecord[] | null;
             error: { message: string } | null;
           };
 
@@ -93,6 +105,9 @@ export default function ProtocolRegisterPage() {
         const pageRecords = data ?? [];
         loaded.push(...pageRecords);
         if (pageRecords.length < PROTOCOL_PAGE_SIZE) break;
+        const lastRecord = pageRecords.at(-1);
+        if (!lastRecord) break;
+        cursor = { created_at: lastRecord.created_at, id: lastRecord.id };
       }
       return loaded;
     })()
@@ -117,7 +132,7 @@ export default function ProtocolRegisterPage() {
 
   const retryLoad = useCallback(() => setLoadGeneration((value) => value + 1), []);
 
-  const download = useCallback(async (record: Protocol) => {
+  const download = useCallback(async (record: ProtocolRegisterRecord) => {
     const ownerId = latestUserIdRef.current;
     if (!ownerId || record.user_id !== ownerId || record.status !== "finalized" || inFlightIdsRef.current.has(record.id)) return;
 
@@ -157,7 +172,7 @@ export default function ProtocolRegisterPage() {
     try {
       const { data, error } = await supabase
         .from("protocols")
-        .select(PROTOCOL_COLUMNS)
+        .select(PROTOCOL_DETAIL_COLUMNS)
         .eq("id", record.id)
         .eq("user_id", ownerId)
         .eq("status", "finalized")
@@ -247,7 +262,7 @@ export default function ProtocolRegisterPage() {
                       <div><dt className="text-muted">{t("protocols-contractor")}</dt><dd className="mt-1 text-cream">{record.contractor}</dd></div>
                       <div><dt className="text-muted">{t("protocols-client")}</dt><dd className="mt-1 text-cream">{record.client}</dd></div>
                       <div><dt className="text-muted">{t("protocols-record-date")}</dt><dd className="mt-1 text-cream">{formatDate(record.created_at)}</dd></div>
-                      <div><dt className="text-muted">{t("protocols-signature")}</dt><dd className="mt-1 text-cream">{record.signature_data ? t("protocols-signature-captured") : t("protocols-signature-missing")}</dd></div>
+                      <div><dt className="text-muted">{t("protocols-signature")}</dt><dd className="mt-1 text-cream">{record.signature_captured ? t("protocols-signature-captured") : t("protocols-signature-missing")}</dd></div>
                       <div className="sm:col-span-2"><dt className="text-muted">{t("protocols-context")}</dt><dd className="mt-1 text-cream">{record.case_id ? `${t("protocols-context-linked")}: ${record.case_id}` : t("protocols-context-standalone")}</dd></div>
                     </dl>
                     <div className="sm:w-44">

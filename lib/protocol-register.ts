@@ -1,8 +1,13 @@
 import type { Protocol } from "@/lib/database.types";
 
-export function selectFinalizedProtocolRecords(
-  records: readonly Protocol[],
-): Protocol[] {
+export type ProtocolRegisterRecord = Pick<
+  Protocol,
+  "id" | "user_id" | "case_id" | "project_name" | "contractor" | "client" | "status" | "created_at"
+> & { signature_captured: boolean };
+
+export function selectFinalizedProtocolRecords<
+  RecordType extends Pick<Protocol, "id" | "status" | "created_at">,
+>(records: readonly RecordType[]): RecordType[] {
   return [...records]
     .filter((record) => record.status === "finalized")
     .sort((left, right) => {

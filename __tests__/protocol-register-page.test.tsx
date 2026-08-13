@@ -1,6 +1,7 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { Protocol } from "@/lib/database.types";
+import type { ProtocolRegisterRecord } from "@/lib/protocol-register";
 
 const mocks = vi.hoisted(() => ({
   currentUser: { id: "owner-1", email: "owner@example.ch", name: "Owner" } as { id: string; email: string; name: string } | null,
@@ -8,7 +9,7 @@ const mocks = vi.hoisted(() => ({
   pdfMock: vi.fn(),
 }));
 let currentUser = mocks.currentUser;
-let queryResults: Array<Promise<{ data: Protocol[] | null; error: { message: string } | null }>> = [];
+let queryResults: Array<Promise<{ data: ProtocolRegisterRecord[] | null; error: { message: string } | null }>> = [];
 let downloadResults: Array<Promise<{ data: Protocol | null; error: { message: string } | null }>> = [];
 const eqMock = vi.fn();
 const statusEqMock = vi.fn();
@@ -17,7 +18,8 @@ const detailStatusEqMock = vi.fn();
 const singleMock = vi.fn();
 const orderMock = vi.fn();
 const idOrderMock = vi.fn();
-const rangeMock = vi.fn();
+const limitMock = vi.fn();
+const orMock = vi.fn();
 const selectMock = vi.fn();
 const fromMock = mocks.fromMock;
 const pdfMock = mocks.pdfMock;
@@ -32,7 +34,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-function row(overrides: Partial<Protocol>): Protocol {
+function protocolRow(overrides: Partial<Protocol>): Protocol {
   return {
     id: "protocol-1",
     user_id: "owner-1",
@@ -45,6 +47,21 @@ function row(overrides: Partial<Protocol>): Protocol {
     status: "finalized",
     created_at: "2026-08-13T08:00:00.000Z",
     ...overrides,
+  };
+}
+
+function registerRow(overrides: Partial<ProtocolRegisterRecord>): ProtocolRegisterRecord {
+  const protocol = protocolRow(overrides);
+  return {
+    id: protocol.id,
+    user_id: protocol.user_id,
+    case_id: protocol.case_id,
+    project_name: protocol.project_name,
+    contractor: protocol.contractor,
+    client: protocol.client,
+    status: protocol.status,
+    created_at: protocol.created_at,
+    signature_captured: overrides.signature_captured ?? true,
   };
 }
 
@@ -103,8 +120,13 @@ beforeEach(() => {
   detailStatusEqMock.mockImplementation(() => ({ single: singleMock }));
   singleMock.mockImplementation(() => downloadResults.shift() ?? Promise.resolve({ data: null, error: { message: "not found" } }));
   orderMock.mockImplementation(() => ({ order: idOrderMock }));
-  idOrderMock.mockImplementation(() => ({ range: rangeMock }));
-  rangeMock.mockImplementation(() => queryResults.shift() ?? Promise.resolve({ data: [], error: null }));
+  idOrderMock.mockImplementation(() => ({ limit: limitMock }));
+  limitMock.mockImplementation(() => ({
+    or: orMock,
+    then: (onFulfilled: (value: unknown) => unknown, onRejected?: (reason: unknown) => unknown) =>
+      (queryResults.shift() ?? Promise.resolve({ data: [], error: null })).then(onFulfilled, onRejected),
+  }));
+  orMock.mockImplementation(() => queryResults.shift() ?? Promise.resolve({ data: [], error: null }));
   fromMock.mockReturnValue({ select: selectMock });
   toBlobMock.mockResolvedValue(new Blob(["pdf"]));
   pdfMock.mockReturnValue({ toBlob: toBlobMock });
@@ -117,9 +139,9 @@ beforeEach(() => {
 describe("ProtocolRegisterPage", () => {
   it("queries by owner and renders finalized rows newest first, including standalone records", async () => {
     queryResults.push(Promise.resolve({ data: [
-      row({ id: "old", created_at: "2026-08-12T08:00:00.000Z", signature_data: null, case_id: "case-9" }),
-      row({ id: "draft", status: "draft" }),
-      row({ id: "standalone-new", created_at: "2026-08-14T08:00:00.000Z", case_id: null }),
+      registerRow({ id: "old", created_at: "2026-08-12T08:00:00.000Z", signature_captured: false, case_id: "case-9" }),
+      registerRow({ id: "draft", status: "draft" }),
+      registerRow({ id: "standalone-new", created_at: "2026-08-14T08:00:00.000Z", case_id: null }),
     ], error: null }));
 
     render(<ProtocolRegisterPage />);
@@ -133,23 +155,28 @@ describe("ProtocolRegisterPage", () => {
     expect(statusEqMock).toHaveBeenCalledWith("status", "finalized");
     expect(orderMock).toHaveBeenCalledWith("created_at", { ascending: false });
     expect(idOrderMock).toHaveBeenCalledWith("id", { ascending: true });
-    expect(rangeMock).toHaveBeenCalledWith(0, 999);
+    expect(fromMock).toHaveBeenCalledWith("protocol_register_records");
+    expect(selectMock).toHaveBeenCalledWith("id, user_id, case_id, project_name, contractor, client, status, created_at, signature_captured");
+    expect(limitMock).toHaveBeenCalledWith(1000);
+    expect(screen.getByText("Missing")).toBeTruthy();
   });
 
   it("loads every finalized page instead of silently stopping at the response limit", async () => {
     const firstPage = Array.from({ length: 1000 }, (_, index) =>
-      row({ id: `page-one-${index}`, created_at: `2026-08-12T08:${String(index % 60).padStart(2, "0")}:00.000Z` })
+      registerRow({ id: `page-one-${index}`, created_at: `2026-08-12T08:${String(index % 60).padStart(2, "0")}:00.000Z` })
     );
     queryResults.push(
       Promise.resolve({ data: firstPage, error: null }),
-      Promise.resolve({ data: [row({ id: "page-two-record", created_at: "2026-08-14T08:00:00.000Z" })], error: null }),
+      Promise.resolve({ data: [registerRow({ id: "page-two-record", created_at: "2026-08-14T08:00:00.000Z" })], error: null }),
     );
 
     render(<ProtocolRegisterPage />);
 
     expect(await screen.findByText("page-two-record")).toBeTruthy();
-    expect(rangeMock).toHaveBeenNthCalledWith(1, 0, 999);
-    expect(rangeMock).toHaveBeenNthCalledWith(2, 1000, 1999);
+    expect(limitMock).toHaveBeenCalledTimes(2);
+    expect(orMock).toHaveBeenCalledWith(
+      "created_at.lt.2026-08-12T08:39:00.000Z,and(created_at.eq.2026-08-12T08:39:00.000Z,id.gt.page-one-999)",
+    );
     expect(await screen.findAllByTestId("protocol-record")).toHaveLength(1001);
   });
 
@@ -167,12 +194,12 @@ describe("ProtocolRegisterPage", () => {
   });
 
   it("clears prior-owner rows immediately and ignores stale account completions", async () => {
-    const ownerOne = deferred<{ data: Protocol[] | null; error: null }>();
-    const ownerTwo = deferred<{ data: Protocol[] | null; error: null }>();
+    const ownerOne = deferred<{ data: ProtocolRegisterRecord[] | null; error: null }>();
+    const ownerTwo = deferred<{ data: ProtocolRegisterRecord[] | null; error: null }>();
     queryResults.push(ownerOne.promise, ownerTwo.promise);
     const view = render(<ProtocolRegisterPage />);
 
-    await act(async () => ownerOne.resolve({ data: [row({ id: "private-owner-1" })], error: null }));
+    await act(async () => ownerOne.resolve({ data: [registerRow({ id: "private-owner-1" })], error: null }));
     expect(await screen.findByText("private-owner-1")).toBeTruthy();
 
     currentUser = { id: "owner-2", email: "two@example.ch", name: "Two" };
@@ -180,15 +207,15 @@ describe("ProtocolRegisterPage", () => {
     view.rerender(<ProtocolRegisterPage />);
     expect(screen.queryByText("private-owner-1")).toBeNull();
 
-    await act(async () => ownerTwo.resolve({ data: [row({ id: "owner-2-row", user_id: "owner-2" })], error: null }));
+    await act(async () => ownerTwo.resolve({ data: [registerRow({ id: "owner-2-row", user_id: "owner-2" })], error: null }));
     expect(await screen.findByText("owner-2-row")).toBeTruthy();
     expect(screen.queryByText("private-owner-1")).toBeNull();
     expect(eqMock).toHaveBeenCalledWith("user_id", "owner-2");
   });
 
   it("re-reads and generates the exact persisted record with deterministic filename and cleans the URL", async () => {
-    queryResults.push(Promise.resolve({ data: [row({ id: "exact-record", project_name: "Cached project", case_id: null })], error: null }));
-    downloadResults.push(Promise.resolve({ data: row({ id: "exact-record", project_name: "Fresh project", defect_description: "Fresh defect", case_id: null }), error: null }));
+    queryResults.push(Promise.resolve({ data: [registerRow({ id: "exact-record", project_name: "Cached project", case_id: null })], error: null }));
+    downloadResults.push(Promise.resolve({ data: protocolRow({ id: "exact-record", project_name: "Fresh project", defect_description: "Fresh defect", case_id: null }), error: null }));
     render(<ProtocolRegisterPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
 
@@ -215,10 +242,10 @@ describe("ProtocolRegisterPage", () => {
   it("suppresses synchronous duplicate downloads per record and supports retry after failure", async () => {
     const blob = deferred<Blob>();
     toBlobMock.mockReturnValueOnce(blob.promise).mockRejectedValueOnce(new Error("failed"));
-    queryResults.push(Promise.resolve({ data: [row({ id: "locked" })], error: null }));
+    queryResults.push(Promise.resolve({ data: [registerRow({ id: "locked" })], error: null }));
     downloadResults.push(
-      Promise.resolve({ data: row({ id: "locked" }), error: null }),
-      Promise.resolve({ data: row({ id: "locked" }), error: null }),
+      Promise.resolve({ data: protocolRow({ id: "locked" }), error: null }),
+      Promise.resolve({ data: protocolRow({ id: "locked" }), error: null }),
     );
     render(<ProtocolRegisterPage />);
     const button = await screen.findByRole("button", { name: "Download PDF" });
@@ -238,8 +265,8 @@ describe("ProtocolRegisterPage", () => {
     vi.useFakeTimers();
     const blob = deferred<Blob>();
     toBlobMock.mockReturnValue(blob.promise);
-    queryResults.push(Promise.resolve({ data: [row({ id: "owner-one-pdf" })], error: null }), Promise.resolve({ data: [], error: null }));
-    downloadResults.push(Promise.resolve({ data: row({ id: "owner-one-pdf" }), error: null }));
+    queryResults.push(Promise.resolve({ data: [registerRow({ id: "owner-one-pdf" })], error: null }), Promise.resolve({ data: [], error: null }));
+    downloadResults.push(Promise.resolve({ data: protocolRow({ id: "owner-one-pdf" }), error: null }));
     const view = render(<ProtocolRegisterPage />);
     await act(async () => { await Promise.resolve(); });
     fireEvent.click(screen.getByRole("button", { name: "Download PDF" }));
@@ -259,8 +286,8 @@ describe("ProtocolRegisterPage", () => {
   it("ignores PDF completion after unmount", async () => {
     const blob = deferred<Blob>();
     toBlobMock.mockReturnValue(blob.promise);
-    queryResults.push(Promise.resolve({ data: [row({ id: "unmounted-pdf" })], error: null }));
-    downloadResults.push(Promise.resolve({ data: row({ id: "unmounted-pdf" }), error: null }));
+    queryResults.push(Promise.resolve({ data: [registerRow({ id: "unmounted-pdf" })], error: null }));
+    downloadResults.push(Promise.resolve({ data: protocolRow({ id: "unmounted-pdf" }), error: null }));
     const view = render(<ProtocolRegisterPage />);
     fireEvent.click(await screen.findByRole("button", { name: "Download PDF" }));
 
@@ -272,7 +299,7 @@ describe("ProtocolRegisterPage", () => {
   });
 
   it("does not generate a PDF when the persisted protocol is no longer finalized", async () => {
-    queryResults.push(Promise.resolve({ data: [row({ id: "stale-finalized" })], error: null }));
+    queryResults.push(Promise.resolve({ data: [registerRow({ id: "stale-finalized" })], error: null }));
     downloadResults.push(Promise.resolve({ data: null, error: { message: "not found" } }));
     render(<ProtocolRegisterPage />);
 

@@ -1,4 +1,6 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import type { Protocol } from "@/lib/database.types";
 import { protocolPdfFilename, selectFinalizedProtocolRecords } from "@/lib/protocol-register";
 
@@ -17,6 +19,21 @@ function protocol(overrides: Partial<Protocol>): Protocol {
     ...overrides,
   };
 }
+
+describe("protocol register projection", () => {
+  it("is RLS-aware and excludes full evidence payloads", () => {
+    const sql = readFileSync(
+      join(process.cwd(), "supabase/migrations/20260813081500_protocol_register_records.sql"),
+      "utf8",
+    );
+
+    expect(sql).toMatch(/create or replace view public\.protocol_register_records\s+with \(security_invoker = true\)/);
+    expect(sql).toMatch(/signature_data is not null as signature_captured/);
+    expect(sql).not.toMatch(/^\s*signature_data\s*,?\s*$/m);
+    expect(sql).not.toMatch(/defect_description/);
+    expect(sql).toMatch(/grant select on public\.protocol_register_records to authenticated/);
+  });
+});
 
 describe("selectFinalizedProtocolRecords", () => {
   it("returns only finalized records newest first with an ID tie-break", () => {
