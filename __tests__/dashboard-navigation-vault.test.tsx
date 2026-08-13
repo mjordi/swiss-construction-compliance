@@ -9,6 +9,7 @@ const translations: Record<string, string> = {
   "menu-audit": "Handover Engine",
   "menu-deadlines": "Deadline Calculator",
   "menu-cases": "Cases",
+  "menu-protocols": "Protocol register",
   "menu-vault": "Tech Vault",
   "menu-settings": "Settings",
   "menu-logout": "Log out",
@@ -55,6 +56,22 @@ describe("dashboard navigation Tech Vault item", () => {
 
     expect(screen.getByRole("link", { name: "Tech Vault" }).getAttribute("href")).toBe(
       "/dashboard/vault"
+    );
+  });
+
+  it("renders the shared Protocol register link on desktop and mobile", () => {
+    render(<Sidebar />);
+    expect(screen.getByRole("link", { name: "Protocol register" }).getAttribute("href")).toBe(
+      "/dashboard/protocols"
+    );
+
+    mockPathname = "/dashboard/protocols";
+    render(<MobileNav />);
+    expect(screen.getAllByText("Protocol register").length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation menu" }));
+    const dialog = screen.getByRole("dialog", { name: "Dashboard navigation" });
+    expect(within(dialog).getByRole("link", { name: "Protocol register" }).getAttribute("href")).toBe(
+      "/dashboard/protocols"
     );
   });
 

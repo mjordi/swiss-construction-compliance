@@ -10,6 +10,7 @@ describe("locales", () => {
       "menu-audit",
       "menu-deadlines",
       "menu-cases",
+      "menu-protocols",
       "menu-vault",
       "menu-settings",
     ] as const;
@@ -17,6 +18,23 @@ describe("locales", () => {
     for (const [lang, translations] of Object.entries(locales)) {
       for (const key of requiredDashboardMenuKeys) {
         expect(translations[key], `Locale '${lang}' missing dashboard menu key '${key}'`).toBeDefined();
+      }
+    }
+  });
+
+  it("includes complete protocol register copy in every locale", () => {
+    const keys = [
+      "protocols-title", "protocols-subtitle", "protocols-loading", "protocols-empty-title",
+      "protocols-empty-body", "protocols-error", "protocols-retry", "protocols-project",
+      "protocols-contractor", "protocols-client", "protocols-record-id", "protocols-record-date",
+      "protocols-signature", "protocols-signature-captured", "protocols-signature-missing",
+      "protocols-context", "protocols-context-linked", "protocols-context-standalone",
+      "protocols-download", "protocols-downloading", "protocols-download-success", "protocols-download-error",
+    ] as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      for (const key of keys) {
+        expect(translations[key], `Locale '${lang}' missing protocol register key '${key}'`).toBeDefined();
       }
     }
   });
