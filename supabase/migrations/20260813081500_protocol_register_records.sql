@@ -10,7 +10,7 @@ select
   client,
   status,
   created_at,
-  signature_data is not null as signature_captured
+  nullif(btrim(signature_data), '') is not null as signature_captured
 from public.protocols;
 
 revoke all on public.protocol_register_records from public;

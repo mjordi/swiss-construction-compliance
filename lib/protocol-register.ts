@@ -2,16 +2,16 @@ import type { Protocol } from "@/lib/database.types";
 
 export type ProtocolRegisterRecord = Pick<
   Protocol,
-  "id" | "user_id" | "case_id" | "project_name" | "contractor" | "client" | "status" | "created_at"
-> & { signature_captured: boolean };
+  "id" | "user_id" | "case_id" | "project_name" | "contractor" | "client" | "status"
+> & { finalized_at: string; signature_captured: boolean };
 
 export function selectFinalizedProtocolRecords<
-  RecordType extends Pick<Protocol, "id" | "status" | "created_at">,
+  RecordType extends Pick<Protocol, "id" | "status"> & { finalized_at: string },
 >(records: readonly RecordType[]): RecordType[] {
   return [...records]
     .filter((record) => record.status === "finalized")
     .sort((left, right) => {
-      const newestFirst = right.created_at.localeCompare(left.created_at);
+      const newestFirst = right.finalized_at.localeCompare(left.finalized_at);
       return newestFirst || left.id.localeCompare(right.id);
     });
 }

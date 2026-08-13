@@ -16,6 +16,7 @@ function protocol(overrides: Partial<Protocol>): Protocol {
     signature_data: null,
     status: "finalized",
     created_at: "2026-08-13T10:00:00.000Z",
+    finalized_at: "2026-08-13T10:05:00.000Z",
     ...overrides,
   };
 }
@@ -28,20 +29,36 @@ describe("protocol register projection", () => {
     );
 
     expect(sql).toMatch(/create or replace view public\.protocol_register_records\s+with \(security_invoker = true\)/);
-    expect(sql).toMatch(/signature_data is not null as signature_captured/);
+    expect(sql).toMatch(/nullif\(btrim\(signature_data\), ''\) is not null as signature_captured/);
     expect(sql).not.toMatch(/^\s*signature_data\s*,?\s*$/m);
     expect(sql).not.toMatch(/defect_description/);
     expect(sql).toMatch(/grant select on public\.protocol_register_records to authenticated/);
   });
 });
 
+describe("protocol finalization timestamp migration", () => {
+  it("backfills existing finalized rows and records later transitions server-side", () => {
+    const sql = readFileSync(
+      join(process.cwd(), "supabase/migrations/20260813083500_protocol_finalized_at.sql"),
+      "utf8",
+    );
+
+    expect(sql).toMatch(/add column if not exists finalized_at timestamptz/);
+    expect(sql).toMatch(/set finalized_at = created_at\s+where status = 'finalized'/);
+    expect(sql).toMatch(/tg_op = 'INSERT' and new\.status = 'finalized'/);
+    expect(sql).toMatch(/old\.status is distinct from 'finalized'/);
+    expect(sql).toMatch(/new\.finalized_at := old\.finalized_at/);
+    expect(sql).toMatch(/nullif\(btrim\(signature_data\), ''\) is not null as signature_captured/);
+  });
+});
+
 describe("selectFinalizedProtocolRecords", () => {
   it("returns only finalized records newest first with an ID tie-break", () => {
     const rows = [
-      protocol({ id: "z-final", created_at: "2026-08-13T10:00:00.000Z" }),
-      protocol({ id: "draft", status: "draft", created_at: "2026-08-14T10:00:00.000Z" }),
-      protocol({ id: "b-new", created_at: "2026-08-14T10:00:00.000Z" }),
-      protocol({ id: "a-new", created_at: "2026-08-14T10:00:00.000Z" }),
+      protocol({ id: "z-final", finalized_at: "2026-08-13T10:00:00.000Z" }),
+      protocol({ id: "draft", status: "draft", finalized_at: null }),
+      protocol({ id: "b-new", finalized_at: "2026-08-14T10:00:00.000Z" }),
+      protocol({ id: "a-new", finalized_at: "2026-08-14T10:00:00.000Z" }),
       protocol({ id: "awaiting", status: "awaiting-signature" }),
     ] as const;
 
@@ -54,8 +71,8 @@ describe("selectFinalizedProtocolRecords", () => {
 
   it("does not mutate the source array", () => {
     const rows = [
-      protocol({ id: "older", created_at: "2026-08-12T10:00:00.000Z" }),
-      protocol({ id: "newer", created_at: "2026-08-13T10:00:00.000Z" }),
+      protocol({ id: "older", finalized_at: "2026-08-12T10:00:00.000Z" }),
+      protocol({ id: "newer", finalized_at: "2026-08-13T10:00:00.000Z" }),
     ];
     const original = [...rows];
 

@@ -46,6 +46,7 @@ function protocolRow(overrides: Partial<Protocol>): Protocol {
     signature_data: "data:image/png;base64,signed",
     status: "finalized",
     created_at: "2026-08-13T08:00:00.000Z",
+    finalized_at: "2026-08-13T08:30:00.000Z",
     ...overrides,
   };
 }
@@ -60,7 +61,7 @@ function registerRow(overrides: Partial<ProtocolRegisterRecord>): ProtocolRegist
     contractor: protocol.contractor,
     client: protocol.client,
     status: protocol.status,
-    created_at: protocol.created_at,
+    finalized_at: protocol.finalized_at,
     signature_captured: overrides.signature_captured ?? true,
   };
 }
@@ -139,9 +140,9 @@ beforeEach(() => {
 describe("ProtocolRegisterPage", () => {
   it("queries by owner and renders finalized rows newest first, including standalone records", async () => {
     queryResults.push(Promise.resolve({ data: [
-      registerRow({ id: "old", created_at: "2026-08-12T08:00:00.000Z", signature_captured: false, case_id: "case-9" }),
+      registerRow({ id: "old", finalized_at: "2026-08-12T08:00:00.000Z", signature_captured: false, case_id: "case-9" }),
       registerRow({ id: "draft", status: "draft" }),
-      registerRow({ id: "standalone-new", created_at: "2026-08-14T08:00:00.000Z", case_id: null }),
+      registerRow({ id: "standalone-new", finalized_at: "2026-08-14T08:00:00.000Z", case_id: null }),
     ], error: null }));
 
     render(<ProtocolRegisterPage />);
@@ -153,21 +154,21 @@ describe("ProtocolRegisterPage", () => {
     expect(screen.getByText("Linked case: case-9")).toBeTruthy();
     expect(eqMock).toHaveBeenCalledWith("user_id", "owner-1");
     expect(statusEqMock).toHaveBeenCalledWith("status", "finalized");
-    expect(orderMock).toHaveBeenCalledWith("created_at", { ascending: false });
+    expect(orderMock).toHaveBeenCalledWith("finalized_at", { ascending: false });
     expect(idOrderMock).toHaveBeenCalledWith("id", { ascending: true });
     expect(fromMock).toHaveBeenCalledWith("protocol_register_records");
-    expect(selectMock).toHaveBeenCalledWith("id, user_id, case_id, project_name, contractor, client, status, created_at, signature_captured");
+    expect(selectMock).toHaveBeenCalledWith("id, user_id, case_id, project_name, contractor, client, status, finalized_at, signature_captured");
     expect(limitMock).toHaveBeenCalledWith(1000);
     expect(screen.getByText("Missing")).toBeTruthy();
   });
 
   it("loads every finalized page instead of silently stopping at the response limit", async () => {
     const firstPage = Array.from({ length: 1000 }, (_, index) =>
-      registerRow({ id: `page-one-${index}`, created_at: `2026-08-12T08:${String(index % 60).padStart(2, "0")}:00.000Z` })
+      registerRow({ id: `page-one-${index}`, finalized_at: `2026-08-12T08:${String(index % 60).padStart(2, "0")}:00.000Z` })
     );
     queryResults.push(
       Promise.resolve({ data: firstPage, error: null }),
-      Promise.resolve({ data: [registerRow({ id: "page-two-record", created_at: "2026-08-14T08:00:00.000Z" })], error: null }),
+      Promise.resolve({ data: [registerRow({ id: "page-two-record", finalized_at: "2026-08-14T08:00:00.000Z" })], error: null }),
     );
 
     render(<ProtocolRegisterPage />);
@@ -175,7 +176,7 @@ describe("ProtocolRegisterPage", () => {
     expect(await screen.findByText("page-two-record")).toBeTruthy();
     expect(limitMock).toHaveBeenCalledTimes(2);
     expect(orMock).toHaveBeenCalledWith(
-      "created_at.lt.2026-08-12T08:39:00.000Z,and(created_at.eq.2026-08-12T08:39:00.000Z,id.gt.page-one-999)",
+      "finalized_at.lt.2026-08-12T08:39:00.000Z,and(finalized_at.eq.2026-08-12T08:39:00.000Z,id.gt.page-one-999)",
     );
     expect(await screen.findAllByTestId("protocol-record")).toHaveLength(1001);
   });
@@ -231,7 +232,7 @@ describe("ProtocolRegisterPage", () => {
       contractor: "Contractor AG",
       client: "Client GmbH",
     });
-    expect(pdfElement.props.report).toMatchObject({ status: "finalized", linkedCaseId: null, signatureCaptured: true });
+    expect(pdfElement.props.report).toMatchObject({ status: "finalized", linkedCaseId: null, signatureCaptured: true, finalizedAt: "2026-08-13T08:30:00.000Z" });
     await waitFor(() => expect(clickMock).toHaveBeenCalledTimes(1));
     expect(createObjectURLMock).toHaveBeenCalledTimes(1);
     expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:protocol");

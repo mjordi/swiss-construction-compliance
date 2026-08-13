@@ -18,11 +18,15 @@ import { getSupabase } from "@/lib/supabase";
 import type { TranslationKey } from "@/locales";
 
 type Feedback = { key: TranslationKey; tone: "success" | "error" };
+type FinalizedProtocolDetail = Omit<Protocol, "status" | "finalized_at"> & {
+  status: "finalized";
+  finalized_at: string;
+};
 
 const PROTOCOL_DETAIL_COLUMNS =
-  "id, user_id, case_id, project_name, contractor, client, defect_description, signature_data, status, created_at";
+  "id, user_id, case_id, project_name, contractor, client, defect_description, signature_data, status, finalized_at";
 const PROTOCOL_REGISTER_COLUMNS =
-  "id, user_id, case_id, project_name, contractor, client, status, created_at, signature_captured";
+  "id, user_id, case_id, project_name, contractor, client, status, finalized_at, signature_captured";
 const PROTOCOL_PAGE_SIZE = 1000;
 
 export default function ProtocolRegisterPage() {
@@ -81,19 +85,19 @@ export default function ProtocolRegisterPage() {
     setLoading(true);
     void (async () => {
       const loaded: ProtocolRegisterRecord[] = [];
-      let cursor: Pick<ProtocolRegisterRecord, "created_at" | "id"> | null = null;
+      let cursor: Pick<ProtocolRegisterRecord, "finalized_at" | "id"> | null = null;
       for (;;) {
         let query = supabase
           .from("protocol_register_records")
           .select(PROTOCOL_REGISTER_COLUMNS)
           .eq("user_id", ownerId)
           .eq("status", "finalized")
-          .order("created_at", { ascending: false })
+          .order("finalized_at", { ascending: false })
           .order("id", { ascending: true })
           .limit(PROTOCOL_PAGE_SIZE);
         if (cursor) {
           query = query.or(
-            `created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.gt.${cursor.id})`,
+            `finalized_at.lt.${cursor.finalized_at},and(finalized_at.eq.${cursor.finalized_at},id.gt.${cursor.id})`,
           );
         }
         const { data, error } = await query as unknown as {
@@ -107,7 +111,7 @@ export default function ProtocolRegisterPage() {
         if (pageRecords.length < PROTOCOL_PAGE_SIZE) break;
         const lastRecord = pageRecords.at(-1);
         if (!lastRecord) break;
-        cursor = { created_at: lastRecord.created_at, id: lastRecord.id };
+        cursor = { finalized_at: lastRecord.finalized_at, id: lastRecord.id };
       }
       return loaded;
     })()
@@ -179,7 +183,7 @@ export default function ProtocolRegisterPage() {
         .single();
       if (error || !data) throw error ?? new Error("Finalized protocol not found");
 
-      const finalizedProtocol = data as Protocol & { status: "finalized" };
+      const finalizedProtocol = data as FinalizedProtocolDetail;
       if (!isCurrent()) return;
       const report = buildFinalizedProtocolReportFromRecord(finalizedProtocol);
       const blob = await pdf(
@@ -261,7 +265,7 @@ export default function ProtocolRegisterPage() {
                       <div><dt className="text-muted">{t("protocols-record-id")}</dt><dd className="mt-1 break-all font-mono text-xs text-cream">{record.id}</dd></div>
                       <div><dt className="text-muted">{t("protocols-contractor")}</dt><dd className="mt-1 text-cream">{record.contractor}</dd></div>
                       <div><dt className="text-muted">{t("protocols-client")}</dt><dd className="mt-1 text-cream">{record.client}</dd></div>
-                      <div><dt className="text-muted">{t("protocols-record-date")}</dt><dd className="mt-1 text-cream">{formatDate(record.created_at)}</dd></div>
+                      <div><dt className="text-muted">{t("protocols-record-date")}</dt><dd className="mt-1 text-cream">{formatDate(record.finalized_at)}</dd></div>
                       <div><dt className="text-muted">{t("protocols-signature")}</dt><dd className="mt-1 text-cream">{record.signature_captured ? t("protocols-signature-captured") : t("protocols-signature-missing")}</dd></div>
                       <div className="sm:col-span-2"><dt className="text-muted">{t("protocols-context")}</dt><dd className="mt-1 text-cream">{record.case_id ? `${t("protocols-context-linked")}: ${record.case_id}` : t("protocols-context-standalone")}</dd></div>
                     </dl>

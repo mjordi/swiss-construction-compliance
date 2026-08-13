@@ -67,7 +67,7 @@ describe("buildFinalizedProtocolReportFromRecord", () => {
         defect_description: "  Cracked balcony edge  ",
         signature_data: "data:image/png;base64,signature",
         case_id: "case-1",
-        created_at: "2026-07-29T21:30:00.000Z",
+        finalized_at: "2026-07-29T21:30:00.000Z",
       })
     ).toEqual({
       status: "finalized",
@@ -85,7 +85,7 @@ describe("buildFinalizedProtocolReportFromRecord", () => {
         defect_description: NO_VISIBLE_DEFECTS_CONFIRMED_MARKER,
         signature_data: "data:image/png;base64,signature",
         case_id: "case-1",
-        created_at: "2026-07-29T21:30:00.000Z",
+        finalized_at: "2026-07-29T21:30:00.000Z",
       }).defectEvidence
     ).toEqual({ kind: "none-visible-confirmed" });
   });
@@ -97,7 +97,7 @@ describe("buildFinalizedProtocolReportFromRecord", () => {
         defect_description: null,
         signature_data: null,
         case_id: null,
-        created_at: "2026-07-29T21:30:00.000Z",
+        finalized_at: "2026-07-29T21:30:00.000Z",
       })
     ).toEqual({
       status: "finalized",
@@ -106,5 +106,22 @@ describe("buildFinalizedProtocolReportFromRecord", () => {
       linkedCaseId: null,
       finalizedAt: "2026-07-29T21:30:00.000Z",
     });
+  });
+
+  it("treats empty and whitespace-only signature payloads as missing", () => {
+    expect(buildFinalizedProtocolReportFromRecord({
+      status: "finalized",
+      defect_description: null,
+      signature_data: "",
+      case_id: null,
+      finalized_at: "2026-07-29T21:30:00.000Z",
+    }).signatureCaptured).toBe(false);
+    expect(buildFinalizedProtocolReportFromRecord({
+      status: "finalized",
+      defect_description: null,
+      signature_data: "   ",
+      case_id: null,
+      finalized_at: "2026-07-29T21:30:00.000Z",
+    }).signatureCaptured).toBe(false);
   });
 });

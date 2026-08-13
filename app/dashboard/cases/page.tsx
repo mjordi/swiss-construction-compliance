@@ -61,28 +61,31 @@ type LinkedProtocolRow = Pick<
   | "id"
   | "case_id"
   | "status"
-  | "created_at"
+  | "finalized_at"
 >;
 
-type FinalizedProtocolPdfRow = Pick<
+type FinalizedProtocolPdfRow = Omit<Pick<
   Protocol,
   | "id"
   | "case_id"
   | "status"
-  | "created_at"
+  | "finalized_at"
   | "project_name"
   | "contractor"
   | "client"
   | "defect_description"
   | "signature_data"
-> & { status: "finalized" };
+>, "status" | "finalized_at"> & { status: "finalized"; finalized_at: string };
 
-type FinalizedLinkedProtocolRow = LinkedProtocolRow & { status: "finalized" };
+type FinalizedLinkedProtocolRow = Omit<LinkedProtocolRow, "status" | "finalized_at"> & {
+  status: "finalized";
+  finalized_at: string;
+};
 
 function isFinalizedLinkedProtocol(
   protocol: LinkedProtocolRow
 ): protocol is FinalizedLinkedProtocolRow {
-  return protocol.status === "finalized";
+  return protocol.status === "finalized" && Boolean(protocol.finalized_at);
 }
 
 const SWISS_CANTONS = [
@@ -501,7 +504,7 @@ export default function CasesPage() {
           .order("created_at", { ascending: false }),
         supabase
           .from("protocols")
-          .select("id, case_id, status, created_at")
+          .select("id, case_id, status, finalized_at")
           .eq("user_id", user.id)
           .not("case_id", "is", null),
       ]);
@@ -951,13 +954,13 @@ export default function CasesPage() {
     const result: Record<string, LinkedCaseProtocolEvent[]> = {};
 
     for (const protocol of linkedProtocols) {
-      if (!protocol.case_id || !protocol.id || !protocol.status || !protocol.created_at) continue;
+      if (!protocol.case_id || !protocol.id || !protocol.status || !protocol.finalized_at) continue;
 
       const events = result[protocol.case_id] ?? [];
       events.push({
         id: protocol.id,
         status: protocol.status,
-        createdAt: protocol.created_at,
+        createdAt: protocol.finalized_at,
       });
       result[protocol.case_id] = events;
     }
@@ -998,7 +1001,7 @@ export default function CasesPage() {
     for (const records of Object.values(result)) {
       records.sort(
         (a, b) =>
-          new Date(b.created_at).getTime() - new Date(a.created_at).getTime() ||
+          new Date(b.finalized_at).getTime() - new Date(a.finalized_at).getTime() ||
           a.id.localeCompare(b.id)
       );
     }
@@ -1493,7 +1496,7 @@ export default function CasesPage() {
     try {
       const { data, error } = await supabase
         .from("protocols")
-        .select("id, case_id, status, created_at, project_name, contractor, client, defect_description, signature_data")
+        .select("id, case_id, status, finalized_at, project_name, contractor, client, defect_description, signature_data")
         .eq("id", protocol.id)
         .eq("user_id", user?.id ?? "")
         .eq("status", "finalized")
@@ -2902,8 +2905,8 @@ export default function CasesPage() {
                           >
                             <div className="min-w-0 text-xs">
                               <div className="truncate font-mono text-cream">{protocol.id}</div>
-                              <time dateTime={protocol.created_at} className="mt-1 block text-muted">
-                                {formatTimestampDateCH(new Date(protocol.created_at))}
+                              <time dateTime={protocol.finalized_at} className="mt-1 block text-muted">
+                                {formatTimestampDateCH(new Date(protocol.finalized_at))}
                               </time>
                             </div>
                             <button
