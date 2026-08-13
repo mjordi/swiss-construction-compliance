@@ -163,8 +163,14 @@ describe("ProtocolRegisterPage", () => {
   });
 
   it("loads every finalized page instead of silently stopping at the response limit", async () => {
+    // Keep the mocked page full so pagination continues, but filter most rows before
+    // rendering; materializing 1,001 cards makes this query-focused test needlessly slow.
     const firstPage = Array.from({ length: 1000 }, (_, index) =>
-      registerRow({ id: `page-one-${index}`, finalized_at: `2026-08-12T08:${String(index % 60).padStart(2, "0")}:00.000Z` })
+      registerRow({
+        id: `page-one-${index}`,
+        finalized_at: `2026-08-12T08:${String(index % 60).padStart(2, "0")}:00.000Z`,
+        status: index === 999 ? "finalized" : "draft",
+      })
     );
     queryResults.push(
       Promise.resolve({ data: firstPage, error: null }),
@@ -178,7 +184,7 @@ describe("ProtocolRegisterPage", () => {
     expect(orMock).toHaveBeenCalledWith(
       "finalized_at.lt.2026-08-12T08:39:00.000Z,and(finalized_at.eq.2026-08-12T08:39:00.000Z,id.gt.page-one-999)",
     );
-    expect(await screen.findAllByTestId("protocol-record")).toHaveLength(1001);
+    expect(await screen.findAllByTestId("protocol-record")).toHaveLength(2);
   });
 
   it("shows empty and error states and retries", async () => {
