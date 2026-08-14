@@ -158,6 +158,28 @@ export default function DeadlinesPage() {
 
   currentUserIdRef.current = user?.id ?? null;
 
+  const fetchPortfolioSources = useCallback(async (
+    ownerId: string,
+    requestIsCurrent: () => boolean
+  ): Promise<CaseDeadlinePortfolioSource[] | null> => {
+    const sources: CaseDeadlinePortfolioSource[] = [];
+    for (let from = 0; ; from += CASE_DEADLINE_PORTFOLIO_PAGE_SIZE) {
+      if (!requestIsCurrent()) return null;
+      const result = await supabase
+        .from("cases")
+        .select("id, project_name, contract_date, discovery_date, status")
+        .eq("user_id", ownerId)
+        .order("id", { ascending: true })
+        .range(from, from + CASE_DEADLINE_PORTFOLIO_PAGE_SIZE - 1);
+      if (!requestIsCurrent()) return null;
+      if (result.error) throw result.error;
+
+      const page = (result.data ?? []) as CaseDeadlinePortfolioSource[];
+      sources.push(...page);
+      if (page.length < CASE_DEADLINE_PORTFOLIO_PAGE_SIZE) return sources;
+    }
+  }, [supabase]);
+
   const loadPortfolio = useCallback(async () => {
     const ownerId = user?.id ?? null;
     const fetchId = ++portfolioFetchIdRef.current;
@@ -177,27 +199,8 @@ export default function DeadlinesPage() {
       currentUserIdRef.current === ownerId;
 
     try {
-      const sources: CaseDeadlinePortfolioSource[] = [];
-      for (let from = 0; ; from += CASE_DEADLINE_PORTFOLIO_PAGE_SIZE) {
-        if (!requestIsCurrent()) return;
-        const result = await supabase
-          .from("cases")
-          .select("id, project_name, contract_date, discovery_date, status")
-          .eq("user_id", ownerId)
-          .order("id", { ascending: true })
-          .range(from, from + CASE_DEADLINE_PORTFOLIO_PAGE_SIZE - 1);
-        if (!requestIsCurrent()) return;
-        if (result.error) {
-          setPortfolioState({ ownerId, status: "error", sources: [], rows: [] });
-          return;
-        }
-
-        const page = (result.data ?? []) as CaseDeadlinePortfolioSource[];
-        sources.push(...page);
-        if (page.length < CASE_DEADLINE_PORTFOLIO_PAGE_SIZE) break;
-      }
-
-      if (!requestIsCurrent()) return;
+      const sources = await fetchPortfolioSources(ownerId, requestIsCurrent);
+      if (!sources || !requestIsCurrent()) return;
       setPortfolioState({
         ownerId,
         status: "ready",
@@ -208,7 +211,7 @@ export default function DeadlinesPage() {
       if (!requestIsCurrent()) return;
       setPortfolioState({ ownerId, status: "error", sources: [], rows: [] });
     }
-  }, [supabase, user?.id]);
+  }, [fetchPortfolioSources, user?.id]);
 
   const parsedContractDate = parseDateInputAsUTC(contractDate);
   const parsedAcceptanceDate = parseDateInputAsUTC(acceptanceDate);
@@ -482,10 +485,16 @@ export default function DeadlinesPage() {
       await Promise.resolve();
       if (!mountedRef.current || requestId !== portfolioExportIdRef.current || currentUserIdRef.current !== ownerId) return;
 
-      // Revalidate against the current Swiss day at the consequential export boundary.
-      const currentRows = buildCaseDeadlinePortfolio(visibleSources, new Date());
+      // Reload owner-scoped Cases and revalidate the current Swiss day at the
+      // consequential point-in-time export boundary.
+      const freshSources = await fetchPortfolioSources(
+        ownerId,
+        () => mountedRef.current && requestId === portfolioExportIdRef.current && currentUserIdRef.current === ownerId
+      );
+      if (!freshSources) return;
+      const currentRows = buildCaseDeadlinePortfolio(freshSources, new Date());
       setPortfolioState((current) => current.ownerId === ownerId
-        ? { ...current, rows: currentRows }
+        ? { ...current, sources: freshSources, rows: currentRows }
         : current
       );
       if (currentRows.length === 0) return;

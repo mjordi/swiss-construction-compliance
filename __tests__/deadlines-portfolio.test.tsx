@@ -183,6 +183,35 @@ describe("Case deadline portfolio on the deadlines page", () => {
     expect(await within(region).findByRole("button", { name: "deadlines-portfolio-ready" })).toBeTruthy();
   });
 
+  it("reloads owner-scoped Cases before creating the point-in-time snapshot", async () => {
+    let requestCount = 0;
+    responseFactory = () => {
+      requestCount += 1;
+      return requestCount === 1
+        ? { data: [caseRow("cached", "Cached Project")], error: null }
+        : {
+            data: [
+              caseRow("cached", "Cached Project", "2026-05-01", "archived"),
+              caseRow("fresh", "Fresh Project"),
+            ],
+            error: null,
+          };
+    };
+    render(<DeadlinesPage />);
+    const region = await screen.findByRole("region", { name: "deadlines-portfolio-title" });
+    expect(within(region).getByText("Cached Project")).toBeTruthy();
+
+    fireEvent.click(within(region).getByRole("button", { name: "deadlines-portfolio-download" }));
+
+    await waitFor(() => expect(portfolioMocks.generateICS).toHaveBeenCalledTimes(1));
+    expect(portfolioMocks.generateICS.mock.calls[0][0]).toMatchObject([
+      { caseId: "fresh", projectName: "Fresh Project" },
+    ]);
+    expect(within(region).queryByText("Cached Project")).toBeNull();
+    expect(within(region).getByText("Fresh Project")).toBeTruthy();
+    expect(ownerScopes).toEqual(["owner-1", "owner-1"]);
+  });
+
   it("reports blob preparation failure and permits a retry", async () => {
     responseFactory = () => ({ data: [caseRow("eligible", "Retry Project")], error: null });
     createObjectURL.mockImplementationOnce(() => { throw new Error("blob unavailable"); });
