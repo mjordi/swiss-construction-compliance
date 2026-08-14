@@ -163,20 +163,24 @@ export default function DeadlinesPage() {
     requestIsCurrent: () => boolean
   ): Promise<CaseDeadlinePortfolioSource[] | null> => {
     const sources: CaseDeadlinePortfolioSource[] = [];
-    for (let from = 0; ; from += CASE_DEADLINE_PORTFOLIO_PAGE_SIZE) {
+    let afterId: string | null = null;
+    for (;;) {
       if (!requestIsCurrent()) return null;
-      const result = await supabase
+      let query = supabase
         .from("cases")
         .select("id, project_name, contract_date, discovery_date, status")
-        .eq("user_id", ownerId)
+        .eq("user_id", ownerId);
+      if (afterId) query = query.gt("id", afterId);
+      const result = await query
         .order("id", { ascending: true })
-        .range(from, from + CASE_DEADLINE_PORTFOLIO_PAGE_SIZE - 1);
+        .limit(CASE_DEADLINE_PORTFOLIO_PAGE_SIZE);
       if (!requestIsCurrent()) return null;
       if (result.error) throw result.error;
 
       const page = (result.data ?? []) as CaseDeadlinePortfolioSource[];
       sources.push(...page);
       if (page.length < CASE_DEADLINE_PORTFOLIO_PAGE_SIZE) return sources;
+      afterId = page[page.length - 1].id;
     }
   }, [supabase]);
 

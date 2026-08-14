@@ -9,11 +9,27 @@ const portfolioMocks = vi.hoisted(() => ({
 const languageState = vi.hoisted(() => ({ lang: "en" }));
 
 const authState: { user: { id: string } | null } = { user: { id: "owner-1" } };
-let responseFactory: (ownerId: string, from: number, to: number) =>
+let responseFactory: (ownerId: string, afterId: string | null) =>
   | Promise<{ data: Array<Record<string, unknown>> | null; error: { message: string } | null }>
   | { data: Array<Record<string, unknown>> | null; error: { message: string } | null };
 const ownerScopes: string[] = [];
-const requestedRanges: Array<[number, number]> = [];
+const requestedCursors: Array<string | null> = [];
+
+function caseQuery(ownerId: string, afterId: string | null = null) {
+  return {
+    gt: vi.fn((_column: string, nextAfterId: string) => caseQuery(ownerId, nextAfterId)),
+    order: vi.fn((_column: string, options: { ascending: boolean }) => {
+      expect(options).toEqual({ ascending: true });
+      requestedCursors.push(afterId);
+      return {
+        limit: vi.fn((limit: number) => {
+          expect(limit).toBe(CASE_DEADLINE_PORTFOLIO_PAGE_SIZE);
+          return Promise.resolve().then(() => responseFactory(ownerId, afterId));
+        }),
+      };
+    }),
+  };
+}
 
 const supabaseMock = {
   from: vi.fn((table: string) => {
@@ -22,17 +38,7 @@ const supabaseMock = {
       select: vi.fn(() => ({
         eq: vi.fn((_column: string, ownerId: string) => {
           ownerScopes.push(ownerId);
-          return {
-            order: vi.fn((_column: string, options: { ascending: boolean }) => {
-              expect(options).toEqual({ ascending: true });
-              return {
-                range: vi.fn((from: number, to: number) => {
-                  requestedRanges.push([from, to]);
-                  return Promise.resolve().then(() => responseFactory(ownerId, from, to));
-                }),
-              };
-            }),
-          };
+          return caseQuery(ownerId);
         }),
       })),
     };
@@ -80,7 +86,7 @@ describe("Case deadline portfolio on the deadlines page", () => {
     languageState.lang = "en";
     responseFactory = () => ({ data: [], error: null });
     ownerScopes.length = 0;
-    requestedRanges.length = 0;
+    requestedCursors.length = 0;
     supabaseMock.from.mockClear();
     portfolioMocks.generateICS.mockClear();
     createObjectURL.mockReset();
@@ -251,8 +257,8 @@ describe("Case deadline portfolio on the deadlines page", () => {
     const firstPage = Array.from({ length: CASE_DEADLINE_PORTFOLIO_PAGE_SIZE }, (_, index) =>
       caseRow(`case-${String(index).padStart(4, "0")}`, `Project ${index}`)
     );
-    responseFactory = (_ownerId, from) => ({
-      data: from === 0 ? firstPage : [caseRow("case-final", "Final Page Project")],
+    responseFactory = (_ownerId, afterId) => ({
+      data: afterId === null ? firstPage : [caseRow("case-final", "Final Page Project")],
       error: null,
     });
 
@@ -260,17 +266,17 @@ describe("Case deadline portfolio on the deadlines page", () => {
 
     expect(await screen.findByText("Final Page Project")).toBeTruthy();
     expect(screen.getByText(String(CASE_DEADLINE_PORTFOLIO_PAGE_SIZE + 1))).toBeTruthy();
-    expect(requestedRanges).toEqual([
-      [0, CASE_DEADLINE_PORTFOLIO_PAGE_SIZE - 1],
-      [CASE_DEADLINE_PORTFOLIO_PAGE_SIZE, CASE_DEADLINE_PORTFOLIO_PAGE_SIZE * 2 - 1],
+    expect(requestedCursors).toEqual([
+      null,
+      `case-${String(CASE_DEADLINE_PORTFOLIO_PAGE_SIZE - 1).padStart(4, "0")}`,
     ]);
   });
 
   it("stops a stale paginated request when the owner changes", async () => {
     let resolveSecondPage: ((value: { data: Array<Record<string, unknown>>; error: null }) => void) | undefined;
-    responseFactory = (ownerId, from) => {
+    responseFactory = (ownerId, afterId) => {
       if (ownerId === "owner-2") return { data: [caseRow("owner-2", "Owner Two Current")], error: null };
-      if (from === 0) {
+      if (afterId === null) {
         return {
           data: Array.from({ length: CASE_DEADLINE_PORTFOLIO_PAGE_SIZE }, (_, index) =>
             caseRow(`stale-${index}`, `Stale ${index}`)
