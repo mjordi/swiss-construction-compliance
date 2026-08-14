@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Clock, Download, RotateCcw, AlertTriangle, CheckCircle, XCircle, Info } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
 import {
@@ -10,7 +10,9 @@ import {
   DEFAULT_DEADLINE_REMINDER_OFFSETS,
   generateDeadlineCalendarICS,
   getDaysRemaining,
+  getMillisecondsUntilNextSwissCalendarDay,
   getSwissCalendarDateInputValue,
+  normalizeDeadlineReminderOffsets,
   parseDateInputAsUTC,
   sanitizeDateQueryParam,
   sanitizeDeadlineReminderQueryParam,
@@ -20,6 +22,23 @@ import {
 } from "@/lib/legal-utils";
 import PageHeader from "@/components/dashboard/PageHeader";
 import type { TranslationKey } from "@/locales";
+import { useAuth } from "@/context/AuthContext";
+import { getSupabase } from "@/lib/supabase";
+import {
+  buildCaseDeadlinePortfolio,
+  CASE_DEADLINE_PORTFOLIO_PAGE_SIZE,
+  generateCaseDeadlinePortfolioICS,
+  type CaseDeadlinePortfolioCalendarCopy,
+  type CaseDeadlinePortfolioRow,
+  type CaseDeadlinePortfolioSource,
+} from "@/lib/case-deadline-portfolio";
+
+type PortfolioState = {
+  ownerId: string | null;
+  status: "loading" | "error" | "ready";
+  sources: CaseDeadlinePortfolioSource[];
+  rows: CaseDeadlinePortfolioRow[];
+};
 
 function getLongDeadlineStatus(days: number): "ok" | "warning" | "urgent" | "expired" {
   if (days < 0) return "expired";
@@ -109,6 +128,8 @@ function formatReminderSummary(
 
 export default function DeadlinesPage() {
   const { lang, t } = useLanguage();
+  const { user } = useAuth();
+  const supabase = useMemo(() => getSupabase(), []);
   const [contractDate, setContractDate] = useState("");
   const [acceptanceDate, setAcceptanceDate] = useState("");
   const [discoveryDate, setDiscoveryDate] = useState("");
@@ -121,6 +142,73 @@ export default function DeadlinesPage() {
   const shareLinkRequestIdRef = useRef(0);
   const downloadFeedbackResetTimerRef = useRef<number | null>(null);
   const downloadFeedbackRequestIdRef = useRef(0);
+  const [portfolioState, setPortfolioState] = useState<PortfolioState>({
+    ownerId: user?.id ?? null,
+    status: user ? "loading" : "ready",
+    sources: [],
+    rows: [],
+  });
+  const [portfolioFeedback, setPortfolioFeedback] = useState<TranslationKey | null>(null);
+  const portfolioFetchIdRef = useRef(0);
+  const portfolioExportIdRef = useRef(0);
+  const portfolioExportInFlightRef = useRef(false);
+  const portfolioFeedbackTimerRef = useRef<number | null>(null);
+  const mountedRef = useRef(true);
+  const currentUserIdRef = useRef<string | null>(user?.id ?? null);
+
+  currentUserIdRef.current = user?.id ?? null;
+
+  const loadPortfolio = useCallback(async () => {
+    const ownerId = user?.id ?? null;
+    const fetchId = ++portfolioFetchIdRef.current;
+    portfolioExportIdRef.current += 1;
+    portfolioExportInFlightRef.current = false;
+    if (portfolioFeedbackTimerRef.current !== null) {
+      window.clearTimeout(portfolioFeedbackTimerRef.current);
+      portfolioFeedbackTimerRef.current = null;
+    }
+    setPortfolioFeedback(null);
+    setPortfolioState({ ownerId, status: ownerId ? "loading" : "ready", sources: [], rows: [] });
+    if (!ownerId) return;
+
+    const requestIsCurrent = () =>
+      mountedRef.current &&
+      fetchId === portfolioFetchIdRef.current &&
+      currentUserIdRef.current === ownerId;
+
+    try {
+      const sources: CaseDeadlinePortfolioSource[] = [];
+      for (let from = 0; ; from += CASE_DEADLINE_PORTFOLIO_PAGE_SIZE) {
+        if (!requestIsCurrent()) return;
+        const result = await supabase
+          .from("cases")
+          .select("id, project_name, contract_date, discovery_date, status")
+          .eq("user_id", ownerId)
+          .order("id", { ascending: true })
+          .range(from, from + CASE_DEADLINE_PORTFOLIO_PAGE_SIZE - 1);
+        if (!requestIsCurrent()) return;
+        if (result.error) {
+          setPortfolioState({ ownerId, status: "error", sources: [], rows: [] });
+          return;
+        }
+
+        const page = (result.data ?? []) as CaseDeadlinePortfolioSource[];
+        sources.push(...page);
+        if (page.length < CASE_DEADLINE_PORTFOLIO_PAGE_SIZE) break;
+      }
+
+      if (!requestIsCurrent()) return;
+      setPortfolioState({
+        ownerId,
+        status: "ready",
+        sources,
+        rows: buildCaseDeadlinePortfolio(sources),
+      });
+    } catch {
+      if (!requestIsCurrent()) return;
+      setPortfolioState({ ownerId, status: "error", sources: [], rows: [] });
+    }
+  }, [supabase, user?.id]);
 
   const parsedContractDate = parseDateInputAsUTC(contractDate);
   const parsedAcceptanceDate = parseDateInputAsUTC(acceptanceDate);
@@ -205,15 +293,49 @@ export default function DeadlinesPage() {
     return () => window.cancelAnimationFrame(frame);
   }, []);
 
+  // Keep this lifecycle guard before effects that start async work so React
+  // Strict Mode restores it before replaying the portfolio loader.
   useEffect(() => {
+    mountedRef.current = true;
     return () => {
+      mountedRef.current = false;
+      portfolioFetchIdRef.current += 1;
+      portfolioExportIdRef.current += 1;
+      portfolioExportInFlightRef.current = false;
       shareLinkRequestIdRef.current += 1;
       downloadFeedbackRequestIdRef.current += 1;
       if (shareLinkResetTimerRef.current !== null) window.clearTimeout(shareLinkResetTimerRef.current);
       if (downloadFeedbackResetTimerRef.current !== null) window.clearTimeout(downloadFeedbackResetTimerRef.current);
+      if (portfolioFeedbackTimerRef.current !== null) window.clearTimeout(portfolioFeedbackTimerRef.current);
     };
   }, []);
 
+  useEffect(() => {
+    void loadPortfolio();
+  }, [loadPortfolio]);
+
+  useEffect(() => {
+    const ownerId = user?.id ?? null;
+    if (!ownerId) return;
+    let timer: number | null = null;
+
+    const scheduleNextCalendarDay = () => {
+      timer = window.setTimeout(() => {
+        if (mountedRef.current && currentUserIdRef.current === ownerId) {
+          setPortfolioState((current) => current.ownerId === ownerId
+            ? { ...current, rows: buildCaseDeadlinePortfolio(current.sources) }
+            : current
+          );
+          scheduleNextCalendarDay();
+        }
+      }, getMillisecondsUntilNextSwissCalendarDay());
+    };
+
+    scheduleNextCalendarDay();
+    return () => {
+      if (timer !== null) window.clearTimeout(timer);
+    };
+  }, [user?.id]);
 
   function clearDownloadFeedback() {
     downloadFeedbackRequestIdRef.current += 1;
@@ -343,9 +465,92 @@ export default function DeadlinesPage() {
     }, 2000);
   }
 
+  async function downloadPortfolioICS() {
+    const ownerId = user?.id ?? null;
+    const visibleSources = portfolioState.ownerId === ownerId ? portfolioState.sources : [];
+    if (!ownerId || visibleSources.length === 0 || portfolioExportInFlightRef.current) return;
+
+    portfolioExportInFlightRef.current = true;
+    const requestId = ++portfolioExportIdRef.current;
+    if (portfolioFeedbackTimerRef.current !== null) {
+      window.clearTimeout(portfolioFeedbackTimerRef.current);
+      portfolioFeedbackTimerRef.current = null;
+    }
+    setPortfolioFeedback(null);
+
+    try {
+      await Promise.resolve();
+      if (!mountedRef.current || requestId !== portfolioExportIdRef.current || currentUserIdRef.current !== ownerId) return;
+
+      // Revalidate against the current Swiss day at the consequential export boundary.
+      const currentRows = buildCaseDeadlinePortfolio(visibleSources, new Date());
+      setPortfolioState((current) => current.ownerId === ownerId
+        ? { ...current, rows: currentRows }
+        : current
+      );
+      if (currentRows.length === 0) return;
+
+      const calendarCopy: CaseDeadlinePortfolioCalendarCopy = {
+        summaryTemplate: t("deadlines-portfolio-ics-summary-template"),
+        deadline: t("deadlines-portfolio-ics-deadline"),
+        sourceLabel: t("deadlines-portfolio-ics-source-label"),
+        source: t("deadlines-portfolio-ics-source"),
+        projectLabel: t("deadlines-portfolio-ics-project-label"),
+        caseLabel: t("deadlines-portfolio-ics-case-label"),
+        contractDateLabel: t("deadlines-portfolio-ics-contract-label"),
+        discoveryDateLabel: t("deadlines-portfolio-ics-discovery-label"),
+        pointInTimeNotice: t("deadlines-portfolio-ics-point-in-time"),
+        alarmDescriptionSingular: t("deadlines-portfolio-ics-alarm-singular"),
+        alarmDescriptionPlural: t("deadlines-portfolio-ics-alarm-plural"),
+      };
+      const content = generateCaseDeadlinePortfolioICS(
+        currentRows,
+        normalizeDeadlineReminderOffsets(reminderOffsets),
+        calendarCopy
+      );
+      const blob = new Blob([content], { type: "text/calendar;charset=utf-8" });
+      let objectUrl: string | null = null;
+      try {
+        objectUrl = URL.createObjectURL(blob);
+        const anchor = document.createElement("a");
+        anchor.href = objectUrl;
+        anchor.download = `baucompliance-case-deadlines-${getSwissCalendarDateInputValue()}.ics`;
+        anchor.click();
+      } finally {
+        if (objectUrl) URL.revokeObjectURL(objectUrl);
+      }
+
+      if (!mountedRef.current || requestId !== portfolioExportIdRef.current || currentUserIdRef.current !== ownerId) return;
+      setPortfolioFeedback(
+        reminderOffsets.length > 0
+          ? "deadlines-portfolio-ready"
+          : "deadlines-portfolio-event-only-ready"
+      );
+    } catch {
+      if (!mountedRef.current || requestId !== portfolioExportIdRef.current || currentUserIdRef.current !== ownerId) return;
+      setPortfolioFeedback("deadlines-portfolio-download-error");
+    } finally {
+      if (requestId === portfolioExportIdRef.current) portfolioExportInFlightRef.current = false;
+    }
+
+    if (!mountedRef.current || requestId !== portfolioExportIdRef.current || currentUserIdRef.current !== ownerId) return;
+    portfolioFeedbackTimerRef.current = window.setTimeout(() => {
+      if (!mountedRef.current || requestId !== portfolioExportIdRef.current || currentUserIdRef.current !== ownerId) return;
+      setPortfolioFeedback(null);
+      portfolioFeedbackTimerRef.current = null;
+    }, 2000);
+  }
+
   function toggleReminder(offset: number) {
     clearShareLinkFeedback();
     clearDownloadFeedback();
+    portfolioExportIdRef.current += 1;
+    portfolioExportInFlightRef.current = false;
+    if (portfolioFeedbackTimerRef.current !== null) {
+      window.clearTimeout(portfolioFeedbackTimerRef.current);
+      portfolioFeedbackTimerRef.current = null;
+    }
+    setPortfolioFeedback(null);
     const next = reminderOffsets.includes(offset)
       ? reminderOffsets.filter((value) => value !== offset)
       : [...reminderOffsets, offset];
@@ -370,6 +575,12 @@ export default function DeadlinesPage() {
   const reminderGuidanceKey = reminderOffsets.length > 0
     ? "reminders-activation-guidance"
     : "reminders-event-only-guidance";
+  const portfolioGuidanceKey = reminderOffsets.length > 0
+    ? "deadlines-portfolio-guidance"
+    : "deadlines-portfolio-event-only-guidance";
+  const visiblePortfolioState: PortfolioState = portfolioState.ownerId === (user?.id ?? null)
+    ? portfolioState
+    : { ownerId: user?.id ?? null, status: user ? "loading" : "ready", sources: [], rows: [] };
   const maxDays = 1825;
   const inputClass = "w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-3 text-cream focus:outline-none focus:border-accent/40 transition-colors duration-300 [color-scheme:dark]";
 
@@ -428,6 +639,62 @@ export default function DeadlinesPage() {
           </div>
         </div>
       </div>
+
+      {user && (
+        <section
+          role="region"
+          aria-label={t("deadlines-portfolio-title")}
+          className="p-6 rounded-2xl bg-white/[0.02] border border-white/[0.05] mb-8"
+        >
+          <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
+            <div>
+              <h2 className="text-lg font-semibold text-cream">{t("deadlines-portfolio-title")}</h2>
+              <p className="mt-1 text-sm text-muted">{t("deadlines-portfolio-description")}</p>
+            </div>
+            {visiblePortfolioState.status === "ready" && visiblePortfolioState.rows.length > 0 && (
+              <button
+                type="button"
+                onClick={() => void downloadPortfolioICS()}
+                className="flex shrink-0 items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-4 py-2 text-[13px] font-medium text-accent transition-colors hover:bg-accent/20"
+              >
+                <Download className="w-4 h-4" />
+                {portfolioFeedback ? t(portfolioFeedback) : t("deadlines-portfolio-download")}
+              </button>
+            )}
+          </div>
+
+          {visiblePortfolioState.status === "loading" && (
+            <p className="mt-4 text-sm text-muted">{t("deadlines-portfolio-loading")}</p>
+          )}
+          {visiblePortfolioState.status === "error" && (
+            <div role="alert" className="mt-4 flex flex-wrap items-center gap-3 text-sm text-red-400">
+              <span>{t("deadlines-portfolio-error")}</span>
+              <button type="button" onClick={() => void loadPortfolio()} className="rounded-md border border-red-400/30 px-3 py-1.5">
+                {t("deadlines-portfolio-retry")}
+              </button>
+            </div>
+          )}
+          {visiblePortfolioState.status === "ready" && visiblePortfolioState.rows.length === 0 && (
+            <p className="mt-4 text-sm text-muted">{t("deadlines-portfolio-empty")}</p>
+          )}
+          {visiblePortfolioState.status === "ready" && visiblePortfolioState.rows.length > 0 && (
+            <div className="mt-4">
+              <p className="text-sm text-cream">
+                <span>{t("deadlines-portfolio-count")}</span> {visiblePortfolioState.rows.length}
+              </p>
+              <ul className="mt-3 space-y-2 text-sm text-muted">
+                {visiblePortfolioState.rows.map((row) => (
+                  <li key={`${row.caseId}-${row.deadlineDay}`} className="flex flex-wrap justify-between gap-2">
+                    <span className="text-cream">{row.projectName}</span>
+                    <time dateTime={row.deadlineDay}>{formatLocalizedDate(row.deadline, lang)}</time>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-4 text-xs leading-relaxed text-muted">{t(portfolioGuidanceKey)}</p>
+            </div>
+          )}
+        </section>
+      )}
 
       {deadlines && calculatedInputs && (
         <div className="space-y-5">

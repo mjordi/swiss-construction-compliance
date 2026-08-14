@@ -128,11 +128,102 @@ describe("locales", () => {
       "deadlines-share-link",
       "deadlines-share-link-copied",
       "deadlines-share-link-error",
+      "deadlines-portfolio-title",
+      "deadlines-portfolio-description",
+      "deadlines-portfolio-loading",
+      "deadlines-portfolio-error",
+      "deadlines-portfolio-retry",
+      "deadlines-portfolio-empty",
+      "deadlines-portfolio-count",
+      "deadlines-portfolio-download",
+      "deadlines-portfolio-ready",
+      "deadlines-portfolio-event-only-ready",
+      "deadlines-portfolio-download-error",
+      "deadlines-portfolio-guidance",
+      "deadlines-portfolio-event-only-guidance",
+      "deadlines-portfolio-ics-summary-template",
+      "deadlines-portfolio-ics-deadline",
+      "deadlines-portfolio-ics-source-label",
+      "deadlines-portfolio-ics-source",
+      "deadlines-portfolio-ics-project-label",
+      "deadlines-portfolio-ics-case-label",
+      "deadlines-portfolio-ics-contract-label",
+      "deadlines-portfolio-ics-discovery-label",
+      "deadlines-portfolio-ics-point-in-time",
+      "deadlines-portfolio-ics-alarm-singular",
+      "deadlines-portfolio-ics-alarm-plural",
     ] as const;
 
     for (const [lang, translations] of Object.entries(locales)) {
       for (const key of requiredDeadlineKeys) {
         expect(translations[key], `Locale '${lang}' missing deadlines key '${key}'`).toBeDefined();
+      }
+    }
+  });
+
+  it("keeps localized portfolio calendar templates complete and truthful", () => {
+    const importTerms = { de: /import/i, fr: /import/i, it: /importa/i, en: /import/i } as const;
+    const noDeliveryTerms = {
+      de: /keine e-mail- oder in-app-erinnerungen/i,
+      fr: /aucun rappel par e-mail ni dans l’application/i,
+      it: /non invia promemoria via e-mail o nell’app/i,
+      en: /no email or in-app reminders/i,
+    } as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      const locale = lang as keyof typeof importTerms;
+      expect(translations["deadlines-portfolio-ics-summary-template"]).toMatch(/\{deadline\}.*\{project\}/);
+      expect(translations["deadlines-portfolio-ics-alarm-singular"]).toMatch(/1/);
+      expect(translations["deadlines-portfolio-ics-alarm-plural"]).toContain("{days}");
+      expect(translations["deadlines-portfolio-ics-point-in-time"]).toMatch(/\.ics/i);
+      expect(translations["deadlines-portfolio-ics-point-in-time"]).toMatch(importTerms[locale]);
+      expect(translations["deadlines-portfolio-ics-point-in-time"]).toMatch(noDeliveryTerms[locale]);
+      for (const key of [
+        "deadlines-portfolio-ics-source-label",
+        "deadlines-portfolio-ics-project-label",
+        "deadlines-portfolio-ics-case-label",
+        "deadlines-portfolio-ics-contract-label",
+        "deadlines-portfolio-ics-discovery-label",
+      ] as const) {
+        expect(translations[key].trim(), `Locale '${lang}' calendar label '${key}' must not be blank`).not.toBe("");
+      }
+    }
+  });
+
+  it("states the portfolio snapshot/import boundary and delivery limits in every locale", () => {
+    const expectedTerms = {
+      de: [/momentaufnahme/i, /\.ics/i, /import/i, /keine e-mail- oder in-app-erinnerungen/i],
+      fr: [/instantané/i, /\.ics/i, /import/i, /aucun rappel par e-mail ni dans l’application/i],
+      it: [/istantanea/i, /\.ics/i, /importa/i, /promemoria via e-mail o nell’app/i],
+      en: [/point-in-time/i, /\.ics/i, /import/i, /no email or in-app reminders/i],
+    } as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      const copy = [
+        translations["deadlines-portfolio-guidance"],
+        translations["deadlines-portfolio-ready"],
+      ].join(" ");
+      for (const term of expectedTerms[lang as keyof typeof expectedTerms]) {
+        expect(copy, `Locale '${lang}' portfolio copy is missing ${term}`).toMatch(term);
+      }
+    }
+  });
+
+  it("states event-only portfolio behavior when reminders are empty in every locale", () => {
+    const expectedTerms = {
+      de: [/momentaufnahme/i, /import/i, /ohne (?:alarme|alarm).*erinner/i],
+      fr: [/instantané/i, /import/i, /sans alerte ni rappel/i],
+      it: [/istantanea/i, /importa/i, /senza avvisi né promemoria/i],
+      en: [/point-in-time/i, /import/i, /no alerts or reminders/i],
+    } as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      const copy = [
+        translations["deadlines-portfolio-event-only-guidance"],
+        translations["deadlines-portfolio-event-only-ready"],
+      ].join(" ");
+      for (const term of expectedTerms[lang as keyof typeof expectedTerms]) {
+        expect(copy, `Locale '${lang}' event-only portfolio copy is missing ${term}`).toMatch(term);
       }
     }
   });
