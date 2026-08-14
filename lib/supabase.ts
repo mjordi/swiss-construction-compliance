@@ -43,6 +43,7 @@ function createPlaceholderClient() {
     eq: () => noopQuery,
     not: () => noopQuery,
     order: () => noopQuery,
+    range: () => noopQuery,
     single: () => Promise.resolve({ data: null, error: createConfigError() }),
     maybeSingle: () => Promise.resolve({ data: null, error: createConfigError() }),
     then: (resolve: (v: { data: null; error: { message: string; name: string } }) => void) =>

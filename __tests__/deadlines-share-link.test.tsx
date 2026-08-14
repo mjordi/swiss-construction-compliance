@@ -23,6 +23,20 @@ vi.mock("@/components/dashboard/PageHeader", () => ({
   ),
 }));
 
+vi.mock("@/context/AuthContext", () => ({
+  useAuth: () => ({ user: null }),
+}));
+
+vi.mock("@/lib/supabase", () => ({
+  getSupabase: () => ({
+    from: () => ({
+      select: () => ({
+        eq: () => Promise.resolve({ data: [], error: null }),
+      }),
+    }),
+  }),
+}));
+
 vi.mock("@/lib/legal-utils", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/legal-utils")>();
 
