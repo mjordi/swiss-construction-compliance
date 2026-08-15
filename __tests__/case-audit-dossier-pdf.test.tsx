@@ -53,6 +53,15 @@ const report: CaseAuditDossierReport = {
       date: "2026-03-03T10:00:00.000Z",
       dateLabel: "03.03.2026, 11:00",
       sourceId: "protocol-1",
+      sourceName: null,
+    },
+    {
+      kind: "notice-dispatched",
+      label: "Notice dispatch recorded",
+      date: "2026-03-04T10:00:00.000Z",
+      dateLabel: "04.03.2026, 11:00",
+      sourceId: "draft-revision-9",
+      sourceName: "Registered post · TRACK-9",
     },
   ],
   legalDisclaimer: "This report is informational and is not legal advice.",
@@ -71,6 +80,9 @@ describe("CaseAuditDossierPDF", () => {
     expect(text).toContain("2 / 4");
     expect(text).toContain("Evidence attached");
     expect(text).toContain("protocol-1");
+    expect(text).toContain("Notice dispatch recorded");
+    expect(text).toContain("draft-revision-9");
+    expect(text).toContain("Registered post · TRACK-9");
     expect(text).toContain("Legal chronology");
     expect(text).toContain("not legal advice");
     expect(text).not.toContain("COMPLIANT");

@@ -20,6 +20,15 @@ import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { buildCaseAuditDossier } from "@/lib/case-audit-dossier";
 import { buildFinalizedProtocolReportFromRecord } from "@/lib/protocol-report";
 import type { Case, CaseActivityEvent, CaseNoticeDraft, Protocol } from "@/lib/database.types";
+import {
+  CASE_NOTICE_DISPATCH_CHANNELS,
+  CASE_NOTICE_DISPATCH_CHANNEL_KEYS,
+  buildCaseNoticeDispatchPayload,
+  normalizeCaseNoticeDispatch,
+  selectLatestNoticeDispatchByCase,
+  type CaseNoticeDispatch,
+  type CaseNoticeDispatchChannel,
+} from "@/lib/case-notice-dispatch";
 import { buildCaseNoticeDraftPayload } from "@/lib/case-notice-draft";
 import {
   buildCaseNoticeDraftReport,
@@ -154,6 +163,7 @@ const legalMilestoneLabelKey: Record<CaseLegalMilestoneKind, TranslationKey> = {
   discovery: "cases-legal-milestone-discovery",
   "evidence-uploaded": "cases-legal-milestone-evidence-uploaded",
   "protocol-finalized": "cases-legal-milestone-protocol-finalized",
+  "notice-dispatched": "cases-legal-milestone-notice-dispatched",
   "notice-deadline": "cases-legal-milestone-notice-deadline",
 };
 
@@ -379,10 +389,20 @@ export default function CasesPage() {
   const protocolPdfInFlightCaseIdsRef = useRef<Set<string>>(new Set());
   const [checklistSaveErrorByCase, setChecklistSaveErrorByCase] = useState<Record<string, TranslationKey>>({});
   const [checklistSavingByCase, setChecklistSavingByCase] = useState<Record<string, boolean>>({});
+  const checklistInFlightIdsRef = useRef<Set<string>>(new Set());
+  const deletingCaseIdsRef = useRef<Set<string>>(new Set());
+  const updatingCaseIdRef = useRef<string | null>(null);
+  const editingCaseIdRef = useRef<string | null>(null);
   const [protocolCounts, setProtocolCounts] = useState<Record<string, number>>({});
   const [linkedProtocols, setLinkedProtocols] = useState<LinkedProtocolRow[]>([]);
   const [caseActivityEvents, setCaseActivityEvents] = useState<CaseActivityEvent[]>([]);
   const [noticeDrafts, setNoticeDrafts] = useState<CaseNoticeDraft[]>([]);
+  const [noticeDispatches, setNoticeDispatches] = useState<CaseNoticeDispatch[]>([]);
+  const [noticeDispatchRecordingByCase, setNoticeDispatchRecordingByCase] = useState<Record<string, boolean>>({});
+  const [noticeDispatchFeedbackByCase, setNoticeDispatchFeedbackByCase] = useState<Record<string, TranslationKey>>({});
+  const noticeDispatchInFlightIdsRef = useRef<Set<string>>(new Set());
+  const noticeDispatchRequestIdsRef = useRef<Record<string, number>>({});
+  const latestNoticeDispatchLoadIdRef = useRef(0);
   const [noticeDraftCreatingByCase, setNoticeDraftCreatingByCase] = useState<Record<string, boolean>>({});
   const [noticeDraftFeedbackByCase, setNoticeDraftFeedbackByCase] = useState<Record<string, TranslationKey>>({});
   const noticeDraftInFlightIdsRef = useRef<Set<string>>(new Set());
@@ -447,11 +467,13 @@ export default function CasesPage() {
       lastSuccessfulNoticeDraftsRef.current = [];
       lastSuccessfulNoticeDraftsUserIdRef.current = null;
       latestNoticeDraftLoadIdRef.current += 1;
+      latestNoticeDispatchLoadIdRef.current += 1;
       setDbCases([]);
       setProtocolCounts({});
       setLinkedProtocols([]);
       setCaseActivityEvents([]);
       setNoticeDrafts([]);
+      setNoticeDispatches([]);
       setInitialLoadError(null);
       setLoading(false);
       return;
@@ -468,6 +490,7 @@ export default function CasesPage() {
 
     try {
       const noticeDraftLoadId = ++latestNoticeDraftLoadIdRef.current;
+      const noticeDispatchLoadId = ++latestNoticeDispatchLoadIdRef.current;
       const loadNoticeDrafts = async () => {
         try {
           const result = await supabase
@@ -478,6 +501,21 @@ export default function CasesPage() {
         } catch {
           // Draft revisions are additive; older deployments must still load Cases.
           return { data: [] as CaseNoticeDraft[], failed: true };
+        }
+      };
+      const loadNoticeDispatches = async () => {
+        try {
+          const result = await supabase
+            .from("case_notice_dispatches")
+            .select("*")
+            .eq("user_id", user.id)
+            .order("dispatched_at", { ascending: false });
+          return {
+            data: ((result.data ?? []) as unknown[]).map(normalizeCaseNoticeDispatch).filter((row): row is CaseNoticeDispatch => row !== null),
+            failed: Boolean(result.error),
+          };
+        } catch {
+          return { data: [] as CaseNoticeDispatch[], failed: true };
         }
       };
       const loadActivityEvents = async () => {
@@ -496,6 +534,7 @@ export default function CasesPage() {
       };
       const activityResultPromise = loadActivityEvents();
       const noticeDraftResultPromise = loadNoticeDrafts();
+      const noticeDispatchResultPromise = loadNoticeDispatches();
       const [casesResult, protocolsResult] = await Promise.all([
         supabase
           .from("cases")
@@ -561,6 +600,14 @@ export default function CasesPage() {
         } else {
           setCaseActivityEvents([]);
         }
+      });
+      void noticeDispatchResultPromise.then((dispatchResult) => {
+        if (
+          fetchId !== latestFetchIdRef.current
+          || noticeDispatchLoadId !== latestNoticeDispatchLoadIdRef.current
+          || currentUserIdRef.current !== user.id
+        ) return;
+        if (!dispatchResult.failed) setNoticeDispatches(dispatchResult.data);
       });
       void noticeDraftResultPromise.then((noticeDraftResult) => {
         if (
@@ -645,6 +692,14 @@ export default function CasesPage() {
 
     previousNoticeDraftUserIdRef.current = currentUserId;
     latestNoticeDraftLoadIdRef.current += 1;
+    latestNoticeDispatchLoadIdRef.current += 1;
+    for (const caseId of Object.keys(noticeDispatchRequestIdsRef.current)) {
+      noticeDispatchRequestIdsRef.current[caseId] += 1;
+    }
+    noticeDispatchInFlightIdsRef.current.clear();
+    setNoticeDispatches([]);
+    setNoticeDispatchRecordingByCase({});
+    setNoticeDispatchFeedbackByCase({});
     for (const caseId of Object.keys(noticeDraftRequestIdsRef.current)) {
       noticeDraftRequestIdsRef.current[caseId] += 1;
     }
@@ -1025,6 +1080,18 @@ export default function CasesPage() {
   }, [noticeDrafts]);
   latestNoticeDraftByCaseRef.current = latestNoticeDraftByCase;
 
+  const latestNoticeDispatchByCase = useMemo(
+    () => selectLatestNoticeDispatchByCase(noticeDispatches),
+    [noticeDispatches]
+  );
+  const noticeDispatchesByCase = useMemo(() => {
+    const result: Record<string, CaseNoticeDispatch[]> = {};
+    for (const dispatch of noticeDispatches) {
+      (result[dispatch.case_id] ??= []).push(dispatch);
+    }
+    return result;
+  }, [noticeDispatches]);
+
   // Derive effective checklists by layering persisted checklist state over timeline defaults.
   const effectiveChecklists = useMemo(() => {
     const persistedByCaseId = new Map(
@@ -1101,14 +1168,21 @@ export default function CasesPage() {
   }
 
   function openEditForm(item: Case) {
-    if (updatingCaseId || hasDeletingCases || noticeDraftCreatingByCase[item.id]) return;
+    if (
+      updatingCaseIdRef.current
+      || deletingCaseIdsRef.current.size > 0
+      || noticeDispatchInFlightIdsRef.current.has(item.id)
+      || noticeDraftCreatingByCase[item.id]
+    ) return;
     setCaseUpdateFeedback(null);
+    editingCaseIdRef.current = item.id;
     setEditingCaseId(item.id);
     setEditFormData(buildCaseFormState(item));
   }
 
   function closeEditForm() {
-    if (updatingCaseId) return;
+    if (updatingCaseIdRef.current) return;
+    editingCaseIdRef.current = null;
     setEditingCaseId(null);
     resetEditForm();
   }
@@ -1203,6 +1277,7 @@ export default function CasesPage() {
   const hasDossierGeneration = Object.values(dossierGeneratingByCase).some(Boolean);
   const hasProtocolPdfGeneration = Object.values(protocolPdfGeneratingByCase).some(Boolean);
   const hasNoticeDraftCreation = Object.values(noticeDraftCreatingByCase).some(Boolean);
+  const hasNoticeDispatchRecording = Object.values(noticeDispatchRecordingByCase).some(Boolean);
   const hasAnyRowLevelMutation = Boolean(
     editingCaseId
     || updatingCaseId
@@ -1211,6 +1286,7 @@ export default function CasesPage() {
     || hasDossierGeneration
     || hasProtocolPdfGeneration
     || hasNoticeDraftCreation
+    || hasNoticeDispatchRecording
   );
   const hasVisibleChecklistSave = visibleCases.some((item) =>
     Boolean(checklistSavingByCase[item.id])
@@ -1225,7 +1301,8 @@ export default function CasesPage() {
 
   async function setChecklistItem(caseId: string, key: FollowUpChecklistKey, value: boolean) {
     if (
-      checklistSavingByCase[caseId]
+      noticeDispatchInFlightIdsRef.current.has(caseId)
+      || checklistInFlightIdsRef.current.has(caseId)
       || noticeDraftCreatingByCase[caseId]
       || editingCaseId === caseId
       || updatingCaseId === caseId
@@ -1237,6 +1314,7 @@ export default function CasesPage() {
       return;
     }
 
+    checklistInFlightIdsRef.current.add(caseId);
     const previous = normalizeFollowUpChecklistState(effectiveChecklists[caseId]);
     const updated = normalizeFollowUpChecklistState({
       ...previous,
@@ -1286,6 +1364,7 @@ export default function CasesPage() {
         [caseId]: "cases-checklist-save-error",
       }));
     } finally {
+      checklistInFlightIdsRef.current.delete(caseId);
       setChecklistSavingByCase((current) => {
         const next = { ...current };
         delete next[caseId];
@@ -1301,7 +1380,8 @@ export default function CasesPage() {
 
   function downloadCaseReminder(item: ComplianceCaseViewModel) {
     if (
-      noticeDraftCreatingByCase[item.id]
+      noticeDispatchInFlightIdsRef.current.has(item.id)
+      || noticeDraftCreatingByCase[item.id]
       || editingCaseId === item.id
       || updatingCaseId === item.id
       || deletingCaseIds[item.id]
@@ -1399,7 +1479,8 @@ export default function CasesPage() {
 
   function downloadCaseChronology(item: ComplianceCaseViewModel) {
     if (
-      noticeDraftCreatingByCase[item.id]
+      noticeDispatchInFlightIdsRef.current.has(item.id)
+      || noticeDraftCreatingByCase[item.id]
       || editingCaseId === item.id
       || updatingCaseId === item.id
       || deletingCaseIds[item.id]
@@ -1407,6 +1488,7 @@ export default function CasesPage() {
       || dossierGeneratingByCase[item.id]
       || protocolPdfGeneratingByCase[item.id]
       || noticeDraftPdfGeneratingByCase[item.id]
+      || noticeDispatchRecordingByCase[item.id]
     ) return;
     const content = buildCaseLegalChronologyCsv(
       item,
@@ -1427,10 +1509,18 @@ export default function CasesPage() {
           discovery: t("cases-legal-milestone-discovery"),
           "evidence-uploaded": t("cases-legal-milestone-evidence-uploaded"),
           "protocol-finalized": t("cases-legal-milestone-protocol-finalized"),
+          "notice-dispatched": t("cases-legal-milestone-notice-dispatched"),
           "notice-deadline": t("cases-legal-milestone-notice-deadline"),
         },
+        dispatchChannels: {
+          "registered-mail": t("cases-notice-dispatch-channel-registered-mail"),
+          "a-mail-plus": t("cases-notice-dispatch-channel-a-mail-plus"),
+          courier: t("cases-notice-dispatch-channel-courier"),
+          "hand-delivery": t("cases-notice-dispatch-channel-hand-delivery"),
+        },
       },
-      new Date()
+      new Date(),
+      noticeDispatchesByCase[item.id] ?? []
     );
     const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -1451,6 +1541,7 @@ export default function CasesPage() {
     if (
       !caseId
       || protocolPdfInFlightCaseIdsRef.current.has(caseId)
+      || noticeDispatchInFlightIdsRef.current.has(caseId)
       || noticeDraftCreatingByCase[caseId]
       || editingCaseId === caseId
       || updatingCaseId === caseId
@@ -1548,6 +1639,7 @@ export default function CasesPage() {
   ) {
     if (
       dossierInFlightIdsRef.current.has(item.id)
+      || noticeDispatchInFlightIdsRef.current.has(item.id)
       || noticeDraftCreatingByCase[item.id]
       || editingCaseId === item.id
       || updatingCaseId === item.id
@@ -1556,6 +1648,7 @@ export default function CasesPage() {
       || dossierGeneratingByCase[item.id]
       || protocolPdfGeneratingByCase[item.id]
       || noticeDraftPdfGeneratingByCase[item.id]
+      || noticeDispatchRecordingByCase[item.id]
     ) return;
 
     dossierInFlightIdsRef.current.add(item.id);
@@ -1582,6 +1675,7 @@ export default function CasesPage() {
         },
         checklist,
         linkedProtocols: linkedProtocolEventsByCase[item.id] ?? [],
+        noticeDispatches: noticeDispatchesByCase[item.id] ?? [],
         labels: {
           title: t("cases-dossier-title"),
           generatedAt: t("cases-chronology-generated-at"),
@@ -1624,7 +1718,14 @@ export default function CasesPage() {
             discovery: t("cases-legal-milestone-discovery"),
             "evidence-uploaded": t("cases-legal-milestone-evidence-uploaded"),
             "protocol-finalized": t("cases-legal-milestone-protocol-finalized"),
+            "notice-dispatched": t("cases-legal-milestone-notice-dispatched"),
             "notice-deadline": t("cases-legal-milestone-notice-deadline"),
+          },
+          dispatchChannels: {
+            "registered-mail": t("cases-notice-dispatch-channel-registered-mail"),
+            "a-mail-plus": t("cases-notice-dispatch-channel-a-mail-plus"),
+            courier: t("cases-notice-dispatch-channel-courier"),
+            "hand-delivery": t("cases-notice-dispatch-channel-hand-delivery"),
           },
         },
         generatedAt: new Date(),
@@ -1693,6 +1794,7 @@ export default function CasesPage() {
       !userId
       || draft.user_id !== userId
       || noticeDraftPdfInFlightCaseIdsRef.current.has(caseId)
+      || noticeDispatchInFlightIdsRef.current.has(caseId)
       || noticeDraftCreatingByCase[caseId]
       || editingCaseId === caseId
       || updatingCaseId === caseId
@@ -1797,11 +1899,108 @@ export default function CasesPage() {
     }
   }
 
+  async function handleRecordNoticeDispatch(
+    event: React.FormEvent<HTMLFormElement>,
+    item: ComplianceCaseViewModel,
+    selectedDraft: CaseNoticeDraft
+  ) {
+    event.preventDefault();
+    const userId = user?.id;
+    const caseId = item.id;
+    if (
+      !userId
+      || selectedDraft.user_id !== userId
+      || selectedDraft.case_id !== caseId
+      || latestNoticeDraftByCaseRef.current[caseId]?.id !== selectedDraft.id
+      || noticeDispatchInFlightIdsRef.current.has(caseId)
+      || checklistInFlightIdsRef.current.has(caseId)
+      || deletingCaseIdsRef.current.has(caseId)
+      || updatingCaseIdRef.current !== null
+      || editingCaseIdRef.current !== null
+      || noticeDraftInFlightIdsRef.current.has(caseId)
+      || noticeDraftPdfInFlightCaseIdsRef.current.has(caseId)
+      || editingCaseId !== null
+      || updatingCaseId !== null
+      || hasDeletingCases
+      || hasChecklistSave
+      || hasDossierGeneration
+      || hasProtocolPdfGeneration
+      || dossierInFlightIdsRef.current.has(caseId)
+      || protocolPdfInFlightCaseIdsRef.current.has(caseId)
+    ) return;
+
+    const form = new FormData(event.currentTarget);
+    const payload = buildCaseNoticeDispatchPayload({
+      dispatchedAt: String(form.get("dispatched_at") ?? ""),
+      channel: String(form.get("channel") ?? "") as CaseNoticeDispatchChannel,
+      reference: String(form.get("reference") ?? ""),
+    });
+    if (!payload) {
+      setNoticeDispatchFeedbackByCase((current) => ({ ...current, [caseId]: "cases-notice-dispatch-invalid" }));
+      return;
+    }
+
+    noticeDispatchInFlightIdsRef.current.add(caseId);
+    const requestId = (noticeDispatchRequestIdsRef.current[caseId] ?? 0) + 1;
+    noticeDispatchRequestIdsRef.current[caseId] = requestId;
+    setNoticeDispatchRecordingByCase((current) => ({ ...current, [caseId]: true }));
+    setNoticeDispatchFeedbackByCase((current) => {
+      const next = { ...current };
+      delete next[caseId];
+      return next;
+    });
+    const requestIsCurrent = () =>
+      dossierMountedRef.current
+      && currentUserIdRef.current === userId
+      && noticeDispatchRequestIdsRef.current[caseId] === requestId
+      && latestNoticeDraftByCaseRef.current[caseId]?.id === selectedDraft.id;
+
+    try {
+      const { data, error } = await supabase
+        .from("case_notice_dispatches")
+        .insert({
+          user_id: userId,
+          case_id: caseId,
+          notice_draft_id: selectedDraft.id,
+          ...payload,
+        })
+        .select("*")
+        .single();
+      const saved = normalizeCaseNoticeDispatch(data);
+      if (error || !saved) throw error ?? new Error("Dispatch insert was not confirmed");
+      if (
+        !requestIsCurrent()
+        || saved.user_id !== userId
+        || saved.case_id !== caseId
+        || saved.notice_draft_id !== selectedDraft.id
+      ) return;
+      latestNoticeDispatchLoadIdRef.current += 1;
+      setNoticeDispatches((current) => [saved, ...current.filter((row) => row.id !== saved.id)]);
+      setNoticeDispatchFeedbackByCase((current) => ({ ...current, [caseId]: "cases-notice-dispatch-recorded" }));
+    } catch {
+      if (requestIsCurrent()) {
+        setNoticeDispatchFeedbackByCase((current) => ({ ...current, [caseId]: "cases-notice-dispatch-error" }));
+      }
+    } finally {
+      if (noticeDispatchRequestIdsRef.current[caseId] === requestId) {
+        noticeDispatchInFlightIdsRef.current.delete(caseId);
+      }
+      if (requestIsCurrent()) {
+        setNoticeDispatchRecordingByCase((current) => {
+          const next = { ...current };
+          delete next[caseId];
+          return next;
+        });
+      }
+    }
+  }
+
   async function handleCreateNoticeDraft(item: ComplianceCaseViewModel, persistedCase: Case) {
     const userId = user?.id;
     if (
       !userId
       || noticeDraftInFlightIdsRef.current.has(item.id)
+      || noticeDispatchInFlightIdsRef.current.has(item.id)
       || editingCaseId !== null
       || updatingCaseId !== null
       || hasDeletingCases
@@ -1925,8 +2124,9 @@ export default function CasesPage() {
   async function handleDeleteCase(caseId: string, projectName: string) {
     if (
       !user
-      || updatingCaseId
-      || deletingCaseIds[caseId]
+      || updatingCaseIdRef.current
+      || noticeDispatchInFlightIdsRef.current.has(caseId)
+      || deletingCaseIdsRef.current.has(caseId)
       || noticeDraftCreatingByCase[caseId]
       || checklistSavingByCase[caseId]
       || dossierGeneratingByCase[caseId]
@@ -1937,6 +2137,7 @@ export default function CasesPage() {
     const confirmed = window.confirm(confirmText);
     if (!confirmed) return;
 
+    deletingCaseIdsRef.current.add(caseId);
     setDeletingCaseIds((current) => ({ ...current, [caseId]: true }));
 
     try {
@@ -2025,6 +2226,7 @@ export default function CasesPage() {
     } catch {
       setDeleteError("cases-delete-error");
     } finally {
+      deletingCaseIdsRef.current.delete(caseId);
       setDeletingCaseIds((current) => {
         if (!(caseId in current)) return current;
         const next = { ...current };
@@ -2040,7 +2242,8 @@ export default function CasesPage() {
       !editFormData.contractDate ||
       !editFormData.discoveryDate ||
       editCaseDateValidationError ||
-      updatingCaseId ||
+      updatingCaseIdRef.current ||
+      noticeDispatchInFlightIdsRef.current.has(caseId) ||
       hasDeletingCases ||
       noticeDraftCreatingByCase[caseId] ||
       checklistSavingByCase[caseId] ||
@@ -2051,6 +2254,7 @@ export default function CasesPage() {
       return;
     }
 
+    updatingCaseIdRef.current = caseId;
     setUpdatingCaseId(caseId);
 
     try {
@@ -2091,12 +2295,15 @@ export default function CasesPage() {
 
       lastSuccessfulCasesRef.current = applyUpdatedCase(lastSuccessfulCasesRef.current);
       setDbCases((current) => applyUpdatedCase(current));
-      closeEditForm();
+      editingCaseIdRef.current = null;
+      setEditingCaseId(null);
+      resetEditForm();
       setCaseUpdateFeedback({ caseId, key: "cases-update-success", tone: "success" });
       triggerCasesRefresh();
     } catch {
       setCaseUpdateFeedback({ caseId, key: "cases-update-error", tone: "error" });
     } finally {
+      if (updatingCaseIdRef.current === caseId) updatingCaseIdRef.current = null;
       setUpdatingCaseId(null);
     }
   }
@@ -2388,9 +2595,11 @@ export default function CasesPage() {
             const hasCompleteNoticeSource = completeNoticeSource !== null;
             const noticeDraftPayload = persistedCase ? buildCaseNoticeDraftPayload(persistedCase, item) : null;
             const latestNoticeDraft = latestNoticeDraftByCase[item.id];
+            const latestNoticeDispatch = latestNoticeDispatchByCase[item.id];
+            const isNoticeDispatchRecording = Boolean(noticeDispatchRecordingByCase[item.id]);
             const isNoticeDraftCreating = Boolean(noticeDraftCreatingByCase[item.id]);
             const isNoticeDraftPdfGenerating = Boolean(noticeDraftPdfGeneratingByCase[item.id]);
-            const isCaseBusy = isChecklistSaving || isDossierGenerating || isProtocolPdfGenerating || isNoticeDraftCreating || isNoticeDraftPdfGenerating;
+            const isCaseBusy = isChecklistSaving || isDossierGenerating || isProtocolPdfGenerating || isNoticeDraftCreating || isNoticeDraftPdfGenerating || isNoticeDispatchRecording;
             const isNoticePreviewOpen = Boolean(noticePreviewOpenByCase[item.id] && completeNoticeSource);
             const noticePreviewUnavailableId = `cases-notice-preview-unavailable-${item.id}`;
 
@@ -2498,7 +2707,7 @@ export default function CasesPage() {
                   />
                   <InfoCell
                     label={t("cases-notice-readiness")}
-                    value={checklist.noticeDrafted ? t("cases-notice-ready") : t("cases-notice-pending")}
+                    value={latestNoticeDispatch ? t("cases-notice-dispatch-recorded") : (checklist.noticeDrafted ? t("cases-notice-ready") : t("cases-notice-pending"))}
                   />
                   <InfoCell
                     label={t("cases-reminder-readiness")}
@@ -2799,6 +3008,51 @@ export default function CasesPage() {
                           </p>
                         )}
                       </div>
+                      <form
+                        data-testid={`cases-notice-dispatch-form-${item.id}`}
+                        className="mt-4 rounded-lg border border-emerald-400/25 bg-emerald-500/[0.05] p-3"
+                        onSubmit={(event) => void handleRecordNoticeDispatch(event, item, latestNoticeDraft)}
+                      >
+                        <h4 className="text-sm font-semibold text-emerald-100">{t("cases-notice-dispatch-title")}</h4>
+                        <p className="mt-1 text-xs text-muted">{t("cases-notice-dispatch-semantics")}</p>
+                        <p className="mt-1 break-all font-mono text-xs text-cyan-100">
+                          {t("cases-notice-dispatch-revision")}: {latestNoticeDraft.id}
+                        </p>
+                        <div className="mt-3 grid gap-3 md:grid-cols-3">
+                          <label className="text-xs text-muted">
+                            {t("cases-notice-dispatch-at")} (Europe/Zurich)
+                            <input name="dispatched_at" type="datetime-local" required disabled={isCaseBusy} className="mt-1 w-full rounded border border-white/10 bg-black/20 p-2 text-cream [color-scheme:dark]" />
+                          </label>
+                          <label className="text-xs text-muted">
+                            {t("cases-notice-dispatch-channel")}
+                            <select name="channel" disabled={isCaseBusy} className="mt-1 w-full rounded border border-white/10 bg-black p-2 text-cream">
+                              {CASE_NOTICE_DISPATCH_CHANNELS.map((channel) => (
+                                <option key={channel} value={channel}>{t(CASE_NOTICE_DISPATCH_CHANNEL_KEYS[channel] as TranslationKey)}</option>
+                              ))}
+                            </select>
+                          </label>
+                          <label className="text-xs text-muted">
+                            {t("cases-notice-dispatch-reference")}
+                            <input name="reference" maxLength={200} disabled={isCaseBusy} className="mt-1 w-full rounded border border-white/10 bg-black/20 p-2 text-cream" />
+                          </label>
+                        </div>
+                        <button type="submit" disabled={isCaseBusy} className="mt-3 rounded-lg border border-emerald-400/30 px-3 py-2 text-sm text-emerald-100 disabled:opacity-50">
+                          {t(isNoticeDispatchRecording ? "cases-notice-dispatch-recording" : "cases-notice-dispatch-submit")}
+                        </button>
+                        {noticeDispatchFeedbackByCase[item.id] && (
+                          <p role="status" className={`mt-2 text-xs ${noticeDispatchFeedbackByCase[item.id] === "cases-notice-dispatch-recorded" ? "text-emerald-300" : "text-rose-300"}`}>
+                            {t(noticeDispatchFeedbackByCase[item.id])}
+                          </p>
+                        )}
+                        {latestNoticeDispatch && (
+                          <div data-testid={`cases-notice-dispatch-${item.id}`} className="mt-3 text-xs text-emerald-100">
+                            <div>{t("cases-notice-dispatch-recorded-at")}: {formatNoticeDraftCreatedAt(latestNoticeDispatch.dispatched_at, lang)}</div>
+                            <div>{t("cases-notice-dispatch-channel")}: {t(CASE_NOTICE_DISPATCH_CHANNEL_KEYS[latestNoticeDispatch.channel] as TranslationKey)}</div>
+                            <div>{t("cases-notice-dispatch-revision")}: {latestNoticeDispatch.notice_draft_id}</div>
+                            {latestNoticeDispatch.reference && <div>{t("cases-notice-dispatch-reference")}: {latestNoticeDispatch.reference}</div>}
+                          </div>
+                        )}
+                      </form>
                     </section>
                   )}
                 </section>
@@ -2832,7 +3086,14 @@ export default function CasesPage() {
                       {deriveCaseLegalMilestones(
                         item,
                         linkedProtocolEventsByCase[item.id] ?? [],
-                        evidenceEventsByCase[item.id] ?? []
+                        evidenceEventsByCase[item.id] ?? [],
+                        noticeDispatchesByCase[item.id] ?? [],
+                        {
+                          "registered-mail": t("cases-notice-dispatch-channel-registered-mail"),
+                          "a-mail-plus": t("cases-notice-dispatch-channel-a-mail-plus"),
+                          courier: t("cases-notice-dispatch-channel-courier"),
+                          "hand-delivery": t("cases-notice-dispatch-channel-hand-delivery"),
+                        }
                       ).map((milestone) => (
                         <li
                           key={milestone.id ?? milestone.kind}

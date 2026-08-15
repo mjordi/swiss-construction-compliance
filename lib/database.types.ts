@@ -42,6 +42,17 @@ export interface CaseNoticeDraft {
   created_at: string;
 }
 
+export interface CaseNoticeDispatch {
+  id: string;
+  user_id: string;
+  case_id: string;
+  notice_draft_id: string;
+  dispatched_at: string;
+  channel: "registered-mail" | "a-mail-plus" | "courier" | "hand-delivery";
+  reference: string | null;
+  created_at: string;
+}
+
 export interface CaseEvidence {
   id: string;
   user_id: string;

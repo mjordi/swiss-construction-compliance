@@ -42,7 +42,14 @@ const labels: CaseAuditDossierLabels = {
     discovery: "Defect discovered",
     "evidence-uploaded": "Evidence uploaded",
     "protocol-finalized": "Linked protocol finalized",
+    "notice-dispatched": "Notice dispatch recorded",
     "notice-deadline": "Notice deadline",
+  },
+  dispatchChannels: {
+    "registered-mail": "Registered post",
+    "a-mail-plus": "A Mail Plus",
+    courier: "Localized courier",
+    "hand-delivery": "Hand delivery",
   },
 };
 
@@ -68,6 +75,16 @@ describe("buildCaseAuditDossier", () => {
         { id: "protocol-final", status: "finalized", createdAt: "2026-03-03T10:00:00.000Z" },
         { id: "protocol-draft", status: "draft", createdAt: "2026-03-04T10:00:00.000Z" },
       ],
+      noticeDispatches: [{
+        id: "dispatch-1",
+        user_id: "user-1",
+        case_id: "case-1",
+        notice_draft_id: "draft-revision-1",
+        dispatched_at: "2026-03-02T10:00:00.000Z",
+        channel: "registered-mail",
+        reference: "TRACK-1",
+        created_at: "2026-03-02T10:01:00.000Z",
+      }],
       labels,
       generatedAt: new Date("2026-07-30T12:00:00.000Z"),
     });
@@ -80,8 +97,15 @@ describe("buildCaseAuditDossier", () => {
     expect(report.readiness.completed).toBe(2);
     expect(report.readiness.total).toBe(4);
     expect(report.readiness.missing).toEqual(["Evidence attached", "Calendar reminder exported"]);
-    expect(report.milestones.map((milestone) => milestone.sourceId).filter(Boolean)).toEqual(["protocol-final"]);
+    expect(report.milestones.some((milestone) => milestone.sourceId === "protocol-final")).toBe(true);
     expect(report.milestones.some((milestone) => milestone.sourceId === "protocol-draft")).toBe(false);
+    expect(report.milestones.find((milestone) => milestone.kind === "notice-dispatched")).toEqual(
+      expect.objectContaining({
+        label: "Notice dispatch recorded",
+        sourceId: "draft-revision-1",
+        sourceName: "Registered post · TRACK-1",
+      })
+    );
     expect(report.legalDisclaimer).toBe("Not legal advice.");
   });
 

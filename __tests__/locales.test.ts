@@ -443,6 +443,34 @@ describe("locales", () => {
     }
   });
 
+  it("includes factual notice dispatch labels in every locale", () => {
+    const requiredNoticeDispatchKeys = [
+      "cases-legal-milestone-notice-dispatched",
+      "cases-notice-dispatch-title",
+      "cases-notice-dispatch-semantics",
+      "cases-notice-dispatch-revision",
+      "cases-notice-dispatch-at",
+      "cases-notice-dispatch-channel",
+      "cases-notice-dispatch-reference",
+      "cases-notice-dispatch-submit",
+      "cases-notice-dispatch-recording",
+      "cases-notice-dispatch-invalid",
+      "cases-notice-dispatch-recorded",
+      "cases-notice-dispatch-error",
+      "cases-notice-dispatch-recorded-at",
+      "cases-notice-dispatch-channel-registered-mail",
+      "cases-notice-dispatch-channel-a-mail-plus",
+      "cases-notice-dispatch-channel-courier",
+      "cases-notice-dispatch-channel-hand-delivery",
+    ] as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      for (const key of requiredNoticeDispatchKeys) {
+        expect(translations[key], `Locale '${lang}' missing notice dispatch key '${key}'`).toBeDefined();
+      }
+    }
+  });
+
   it("includes login localization and feedback keys in every locale", () => {
     const requiredLoginKeys = [
       "login-subtitle",

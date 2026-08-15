@@ -128,6 +128,7 @@ export function CaseAuditDossierPDF({ report }: { report: CaseAuditDossierReport
               <View style={styles.milestoneContext}>
                 <Text>{milestone.label}</Text>
                 {milestone.sourceId ? <Text style={styles.source}>{milestone.sourceId}</Text> : null}
+                {milestone.sourceName ? <Text style={styles.source}>{milestone.sourceName}</Text> : null}
               </View>
               <Text style={styles.milestoneDate}>{milestone.dateLabel}</Text>
             </View>
