@@ -34,7 +34,7 @@ let protocolRows: Array<{
   id?: string;
   case_id: string;
   status?: "draft" | "awaiting-signature" | "finalized";
-  created_at?: string;
+  finalized_at?: string;
   project_name?: string;
   contractor?: string;
   client?: string;
@@ -430,13 +430,13 @@ describe("cases checklist persistence", () => {
         id: "protocol-finalized-1",
         case_id: "case-1",
         status: "finalized",
-        created_at: "2026-03-25T10:00:00.000Z",
+        finalized_at: "2026-03-25T10:00:00.000Z",
       },
       {
         id: "protocol-draft-1",
         case_id: "case-1",
         status: "draft",
-        created_at: "2026-03-24T10:00:00.000Z",
+        finalized_at: "2026-03-24T10:00:00.000Z",
       },
     ];
 
@@ -505,7 +505,7 @@ describe("cases checklist persistence", () => {
         id: "protocol-finalized-1",
         case_id: "case-1",
         status: "finalized",
-        created_at: "2026-03-25T10:00:00.000Z",
+        finalized_at: "2026-03-25T10:00:00.000Z",
         project_name: "Alpine Tower handover",
         contractor: "Alpine Build AG",
         client: "Owner AG",
@@ -516,7 +516,7 @@ describe("cases checklist persistence", () => {
         id: "protocol-draft-1",
         case_id: "case-1",
         status: "draft",
-        created_at: "2026-03-24T10:00:00.000Z",
+        finalized_at: "2026-03-24T10:00:00.000Z",
         project_name: "Draft protocol",
         contractor: "Alpine Build AG",
         client: "Owner AG",
@@ -535,13 +535,13 @@ describe("cases checklist persistence", () => {
       expect(records.textContent).toContain("protocol-finalized-1");
       expect(records.textContent).not.toContain("protocol-draft-1");
       expect(protocolSelectColumns.length).toBeGreaterThan(0);
-      expect(protocolSelectColumns.every((columns) => columns === "id, case_id, status, created_at")).toBe(true);
+      expect(protocolSelectColumns.every((columns) => columns === "id, case_id, status, finalized_at")).toBe(true);
 
       fireEvent.click(screen.getByRole("button", { name: "cases-download-finalized-protocol" }));
 
       await screen.findByText("cases-finalized-protocol-download-success");
       expect(protocolSelectColumns).toContain(
-        "id, case_id, status, created_at, project_name, contractor, client, defect_description, signature_data"
+        "id, case_id, status, finalized_at, project_name, contractor, client, defect_description, signature_data"
       );
       expect(pdfMock).toHaveBeenCalledTimes(1);
       const pdfDocument = pdfMock.mock.calls[0][0] as {
@@ -585,7 +585,7 @@ describe("cases checklist persistence", () => {
         id: "protocol-finalized-1",
         case_id: "case-1",
         status: "finalized",
-        created_at: "2026-03-25T10:00:00.000Z",
+        finalized_at: "2026-03-25T10:00:00.000Z",
         project_name: "Alpine Tower handover",
         contractor: "Alpine Build AG",
         client: "Owner AG",
@@ -617,7 +617,7 @@ describe("cases checklist persistence", () => {
         id: "protocol-finalized-1",
         case_id: "case-1",
         status: "finalized",
-        created_at: "2026-03-25T10:00:00.000Z",
+        finalized_at: "2026-03-25T10:00:00.000Z",
       },
     ];
     activityRows = [
@@ -726,7 +726,7 @@ describe("cases checklist persistence", () => {
         id: "protocol-finalized-1",
         case_id: "case-1",
         status: "finalized",
-        created_at: "2026-03-25T10:00:00.000Z",
+        finalized_at: "2026-03-25T10:00:00.000Z",
       },
     ];
     caseChecklistData = {

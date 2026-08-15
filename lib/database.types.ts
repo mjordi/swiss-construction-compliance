@@ -76,4 +76,5 @@ export interface Protocol {
   signature_data: string | null;
   status: "draft" | "awaiting-signature" | "finalized";
   created_at: string;
+  finalized_at: string | null;
 }

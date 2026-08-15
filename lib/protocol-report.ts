@@ -26,7 +26,7 @@ export interface PersistedFinalizedProtocolReportInput {
   defect_description: string | null;
   signature_data: string | null;
   case_id: string | null;
-  created_at: string;
+  finalized_at: string;
 }
 
 export function buildFinalizedProtocolReport(
@@ -57,8 +57,8 @@ export function buildFinalizedProtocolReportFromRecord(
   return buildFinalizedProtocolReport({
     defectDescription: noDefectsConfirmed ? "" : (record.defect_description ?? ""),
     noDefectsConfirmed,
-    signatureCaptured: Boolean(record.signature_data),
+    signatureCaptured: Boolean(record.signature_data?.trim()),
     linkedCaseId: record.case_id,
-    finalizedAt: record.created_at,
+    finalizedAt: record.finalized_at,
   });
 }
