@@ -51,6 +51,7 @@ describe("case notice dispatch", () => {
 
   it("parses browser wall-clock values in Europe/Zurich and rejects DST gaps or overlaps", () => {
     expect(parseSwissDispatchWallClock("2026-08-01T10:30")?.toISOString()).toBe("2026-08-01T08:30:00.000Z");
+    expect(parseSwissDispatchWallClock("2026-08-01T10:30:45")?.toISOString()).toBe("2026-08-01T08:30:45.000Z");
     expect(parseSwissDispatchWallClock("2026-01-15T10:30")?.toISOString()).toBe("2026-01-15T09:30:00.000Z");
     expect(parseSwissDispatchWallClock("2026-03-29T02:30")).toBeNull();
     expect(parseSwissDispatchWallClock("2026-10-25T02:30")).toBeNull();

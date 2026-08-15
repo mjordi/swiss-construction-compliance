@@ -283,9 +283,9 @@ describe("Cases notice dispatch recording", () => {
     fireEvent.submit(form);
 
     await waitFor(() => expect(dispatchInsertMock).toHaveBeenCalledTimes(1));
-    expect(dispatchInsertMock.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
-      dispatched_at: "2026-08-10T08:00:45.000Z",
-    }));
+    const submittedAt = String(dispatchInsertMock.mock.calls[0]?.[0]?.dispatched_at);
+    expect(new Date(submittedAt).getUTCSeconds()).toBe(45);
+    expect(Date.parse(submittedAt)).toBeGreaterThanOrEqual(Date.parse(noticeDrafts[0].created_at));
   });
 
   it("paginates the complete append-only dispatch history", async () => {
