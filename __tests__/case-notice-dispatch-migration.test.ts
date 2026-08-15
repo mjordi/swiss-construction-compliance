@@ -17,6 +17,7 @@ describe("case notice dispatch migration", () => {
     expect(text).toMatch(/case_id uuid references public\.cases\(id\) on delete cascade not null/);
     expect(text).toMatch(/create trigger case_notice_dispatches_source_guard[\s\S]*before insert/);
     expect(text).toMatch(/draft\.id = new\.notice_draft_id[\s\S]*draft\.case_id = new\.case_id[\s\S]*draft\.user_id = new\.user_id[\s\S]*compliance_case\.user_id = new\.user_id/);
+    expect(text).toMatch(/new\.dispatched_at >= draft\.created_at/);
     expect(text).not.toMatch(/alter table public\.(cases|case_notice_drafts)[\s\S]*add constraint/);
   });
 

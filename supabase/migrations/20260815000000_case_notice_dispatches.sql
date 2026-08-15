@@ -31,6 +31,7 @@ begin
     where draft.id = new.notice_draft_id
       and draft.case_id = new.case_id
       and draft.user_id = new.user_id
+      and new.dispatched_at >= draft.created_at
       and compliance_case.id = new.case_id
       and compliance_case.user_id = new.user_id
   ) then
