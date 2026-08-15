@@ -91,6 +91,8 @@ type FinalizedLinkedProtocolRow = Omit<LinkedProtocolRow, "status" | "finalized_
   finalized_at: string;
 };
 
+const NOTICE_DISPATCH_PAGE_SIZE = 1000;
+
 function isFinalizedLinkedProtocol(
   protocol: LinkedProtocolRow
 ): protocol is FinalizedLinkedProtocolRow {
@@ -398,6 +400,7 @@ export default function CasesPage() {
   const [caseActivityEvents, setCaseActivityEvents] = useState<CaseActivityEvent[]>([]);
   const [noticeDrafts, setNoticeDrafts] = useState<CaseNoticeDraft[]>([]);
   const [noticeDispatches, setNoticeDispatches] = useState<CaseNoticeDispatch[]>([]);
+  const [noticeDispatchHistoryState, setNoticeDispatchHistoryState] = useState<"loading" | "ready" | "error">("loading");
   const [noticeDispatchRecordingByCase, setNoticeDispatchRecordingByCase] = useState<Record<string, boolean>>({});
   const [noticeDispatchFeedbackByCase, setNoticeDispatchFeedbackByCase] = useState<Record<string, TranslationKey>>({});
   const noticeDispatchInFlightIdsRef = useRef<Set<string>>(new Set());
@@ -474,6 +477,7 @@ export default function CasesPage() {
       setCaseActivityEvents([]);
       setNoticeDrafts([]);
       setNoticeDispatches([]);
+      setNoticeDispatchHistoryState("loading");
       setInitialLoadError(null);
       setLoading(false);
       return;
@@ -491,6 +495,7 @@ export default function CasesPage() {
     try {
       const noticeDraftLoadId = ++latestNoticeDraftLoadIdRef.current;
       const noticeDispatchLoadId = ++latestNoticeDispatchLoadIdRef.current;
+      setNoticeDispatchHistoryState("loading");
       const loadNoticeDrafts = async () => {
         try {
           const result = await supabase
@@ -505,15 +510,33 @@ export default function CasesPage() {
       };
       const loadNoticeDispatches = async () => {
         try {
-          const result = await supabase
-            .from("case_notice_dispatches")
-            .select("*")
-            .eq("user_id", user.id)
-            .order("dispatched_at", { ascending: false });
-          return {
-            data: ((result.data ?? []) as unknown[]).map(normalizeCaseNoticeDispatch).filter((row): row is CaseNoticeDispatch => row !== null),
-            failed: Boolean(result.error),
-          };
+          const loaded: CaseNoticeDispatch[] = [];
+          let cursor: Pick<CaseNoticeDispatch, "dispatched_at" | "id"> | null = null;
+          for (;;) {
+            let query = supabase
+              .from("case_notice_dispatches")
+              .select("*")
+              .eq("user_id", user.id)
+              .order("dispatched_at", { ascending: false })
+              .order("id", { ascending: true })
+              .limit(NOTICE_DISPATCH_PAGE_SIZE);
+            if (cursor) {
+              query = query.or(
+                `dispatched_at.lt.${cursor.dispatched_at},and(dispatched_at.eq.${cursor.dispatched_at},id.gt.${cursor.id})`
+              );
+            }
+            const result = await query;
+            if (result.error) throw result.error;
+            const page = ((result.data ?? []) as unknown[])
+              .map(normalizeCaseNoticeDispatch)
+              .filter((row): row is CaseNoticeDispatch => row !== null);
+            loaded.push(...page);
+            if ((result.data?.length ?? 0) < NOTICE_DISPATCH_PAGE_SIZE) break;
+            const lastRecord = page.at(-1);
+            if (!lastRecord) throw new Error("Dispatch history page could not be normalized");
+            cursor = { dispatched_at: lastRecord.dispatched_at, id: lastRecord.id };
+          }
+          return { data: loaded, failed: false };
         } catch {
           return { data: [] as CaseNoticeDispatch[], failed: true };
         }
@@ -607,7 +630,13 @@ export default function CasesPage() {
           || noticeDispatchLoadId !== latestNoticeDispatchLoadIdRef.current
           || currentUserIdRef.current !== user.id
         ) return;
-        if (!dispatchResult.failed) setNoticeDispatches(dispatchResult.data);
+        if (!dispatchResult.failed) {
+          setNoticeDispatches(dispatchResult.data);
+          setNoticeDispatchHistoryState("ready");
+        } else {
+          setNoticeDispatches([]);
+          setNoticeDispatchHistoryState("error");
+        }
       });
       void noticeDraftResultPromise.then((noticeDraftResult) => {
         if (
@@ -1479,7 +1508,8 @@ export default function CasesPage() {
 
   function downloadCaseChronology(item: ComplianceCaseViewModel) {
     if (
-      noticeDispatchInFlightIdsRef.current.has(item.id)
+      noticeDispatchHistoryState !== "ready"
+      || noticeDispatchInFlightIdsRef.current.has(item.id)
       || noticeDraftCreatingByCase[item.id]
       || editingCaseId === item.id
       || updatingCaseId === item.id
@@ -1638,7 +1668,8 @@ export default function CasesPage() {
     checklist: FollowUpChecklistState
   ) {
     if (
-      dossierInFlightIdsRef.current.has(item.id)
+      noticeDispatchHistoryState !== "ready"
+      || dossierInFlightIdsRef.current.has(item.id)
       || noticeDispatchInFlightIdsRef.current.has(item.id)
       || noticeDraftCreatingByCase[item.id]
       || editingCaseId === item.id
@@ -3021,7 +3052,7 @@ export default function CasesPage() {
                         <div className="mt-3 grid gap-3 md:grid-cols-3">
                           <label className="text-xs text-muted">
                             {t("cases-notice-dispatch-at")} (Europe/Zurich)
-                            <input name="dispatched_at" type="datetime-local" required disabled={isCaseBusy} className="mt-1 w-full rounded border border-white/10 bg-black/20 p-2 text-cream [color-scheme:dark]" />
+                            <input name="dispatched_at" type="datetime-local" step="1" required disabled={isCaseBusy} className="mt-1 w-full rounded border border-white/10 bg-black/20 p-2 text-cream [color-scheme:dark]" />
                           </label>
                           <label className="text-xs text-muted">
                             {t("cases-notice-dispatch-channel")}
@@ -3111,11 +3142,17 @@ export default function CasesPage() {
                         </li>
                       ))}
                     </ol>
+                    {noticeDispatchHistoryState === "error" && (
+                      <p id={`cases-notice-dispatch-history-error-${item.id}`} role="alert" className="mt-4 text-sm text-rose-200">
+                        {t("cases-notice-dispatch-history-unavailable")}
+                      </p>
+                    )}
                     <div className="mt-4 flex flex-wrap justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => downloadCaseChronology(item)}
-                        disabled={isCaseBusy}
+                        aria-describedby={noticeDispatchHistoryState === "error" ? `cases-notice-dispatch-history-error-${item.id}` : undefined}
+                        disabled={isCaseBusy || noticeDispatchHistoryState !== "ready"}
                         className="rounded-lg border border-blue-400/30 px-3 py-2 text-sm text-blue-100 hover:bg-blue-500/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {t("cases-export-chronology-csv")}
@@ -3123,7 +3160,8 @@ export default function CasesPage() {
                       <button
                         type="button"
                         onClick={() => void downloadCaseAuditDossier(item, checklist)}
-                        disabled={isCaseBusy}
+                        aria-describedby={noticeDispatchHistoryState === "error" ? `cases-notice-dispatch-history-error-${item.id}` : undefined}
+                        disabled={isCaseBusy || noticeDispatchHistoryState !== "ready"}
                         className="rounded-lg border border-accent/40 px-3 py-2 text-sm text-accent hover:bg-accent/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {isDossierGenerating ? t("cases-dossier-title") : t("cases-export-dossier-pdf")}

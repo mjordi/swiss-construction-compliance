@@ -248,6 +248,17 @@ vi.mock("@/lib/supabase", () => ({
         };
       }
 
+      if (table === "case_notice_dispatches") {
+        const query = {
+          select: () => query,
+          eq: () => query,
+          order: () => query,
+          or: () => query,
+          limit: () => Promise.resolve({ data: [], error: null }),
+        };
+        return query;
+      }
+
       if (table === "case_activity_events") {
         return {
           select: () => ({

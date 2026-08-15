@@ -12,6 +12,8 @@ let authUserMock = { id: "user-1" };
 
 let noticeDrafts: NoticeDraftRecord[] = [];
 let noticeDispatches: NoticeDispatchRecord[] = [];
+let noticeDispatchLoadError = false;
+let noticeDispatchPageQueries = 0;
 
 type NoticeDraftRecord = {
   id: string;
@@ -174,8 +176,29 @@ vi.mock("@/lib/supabase", () => {
         return { select: () => ({ eq: async () => ({ data: noticeDrafts, error: null }) }) };
       }
       if (table === "case_notice_dispatches") {
+        let dispatchPageSize = 1000;
+        const dispatchQuery = {
+          select: () => dispatchQuery,
+          eq: () => dispatchQuery,
+          order: () => dispatchQuery,
+          or: () => dispatchQuery,
+          limit: (pageSize: number) => {
+            dispatchPageSize = pageSize;
+            return dispatchQuery;
+          },
+          then: (resolve: (value: { data: NoticeDispatchRecord[] | null; error: { message: string } | null }) => unknown) => {
+            const page = noticeDispatchPageQueries++;
+            const result = noticeDispatchLoadError
+              ? { data: null, error: { message: "dispatch load failed" } }
+              : {
+                  data: noticeDispatches.slice(page * dispatchPageSize, (page + 1) * dispatchPageSize),
+                  error: null,
+                };
+            return Promise.resolve(result).then(resolve);
+          },
+        };
         return {
-          select: () => ({ eq: () => ({ order: async () => ({ data: noticeDispatches, error: null }) }) }),
+          select: dispatchQuery.select,
           insert: (payload: Record<string, unknown>) => ({
             select: () => ({ single: () => dispatchInsertMock(payload) }),
           }),
@@ -223,6 +246,8 @@ describe("Cases notice dispatch recording", () => {
     }));
     noticeDrafts = [draft("draft-latest", "2026-08-10T10:00:00.000Z")];
     noticeDispatches = [];
+    noticeDispatchLoadError = false;
+    noticeDispatchPageQueries = 0;
     authUserMock = { id: "user-1" };
     rpcMock.mockClear();
   });
@@ -246,6 +271,48 @@ describe("Cases notice dispatch recording", () => {
       channel: "courier",
       reference: "TRACK-123",
     });
+  });
+
+  it("captures second precision so a same-minute dispatch can follow its saved draft", async () => {
+    noticeDrafts = [draft("draft-latest", "2026-08-10T08:00:30.000Z")];
+    render(<CasesPage />);
+    const form = await screen.findByTestId("cases-notice-dispatch-form-case-1");
+    const dispatchedAt = within(form).getByLabelText(/cases-notice-dispatch-at/) as HTMLInputElement;
+    expect(dispatchedAt.step).toBe("1");
+    fireEvent.change(dispatchedAt, { target: { value: "2026-08-10T10:00:45" } });
+    fireEvent.submit(form);
+
+    await waitFor(() => expect(dispatchInsertMock).toHaveBeenCalledTimes(1));
+    expect(dispatchInsertMock.mock.calls[0]?.[0]).toEqual(expect.objectContaining({
+      dispatched_at: "2026-08-10T08:00:45.000Z",
+    }));
+  });
+
+  it("paginates the complete append-only dispatch history", async () => {
+    noticeDispatches = Array.from({ length: 1001 }, (_, index) => ({
+      id: `dispatch-${index}`,
+      user_id: "user-1",
+      case_id: "case-1",
+      notice_draft_id: "draft-latest",
+      dispatched_at: new Date(Date.UTC(2026, 7, 15, 9, 0, 0) - index * 1000).toISOString(),
+      channel: "courier" as const,
+      reference: null,
+      created_at: "2026-08-15T09:00:00.000Z",
+    }));
+    render(<CasesPage />);
+
+    await waitFor(() => expect(noticeDispatchPageQueries).toBe(2));
+    expect(await screen.findByTestId("cases-notice-dispatch-case-1")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "cases-export-chronology-csv" }) as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("marks dispatch history unavailable and blocks legal exports when loading fails", async () => {
+    noticeDispatchLoadError = true;
+    render(<CasesPage />);
+
+    expect(await screen.findByText("cases-notice-dispatch-history-unavailable")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "cases-export-chronology-csv" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "cases-export-dossier-pdf" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
   it("does not render a dispatch form without a saved draft", async () => {
