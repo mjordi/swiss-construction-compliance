@@ -248,6 +248,17 @@ vi.mock("@/lib/supabase", () => ({
         };
       }
 
+      if (table === "case_notice_dispatches") {
+        const query = {
+          select: () => query,
+          eq: () => query,
+          order: () => query,
+          or: () => query,
+          limit: () => Promise.resolve({ data: [], error: null }),
+        };
+        return query;
+      }
+
       if (table === "case_activity_events") {
         return {
           select: () => ({
@@ -681,10 +692,18 @@ describe("cases checklist persistence", () => {
             discovery: "cases-legal-milestone-discovery",
             "evidence-uploaded": "cases-legal-milestone-evidence-uploaded",
             "protocol-finalized": "cases-legal-milestone-protocol-finalized",
+            "notice-dispatched": "cases-legal-milestone-notice-dispatched",
             "notice-deadline": "cases-legal-milestone-notice-deadline",
           },
+          dispatchChannels: {
+            "registered-mail": "cases-notice-dispatch-channel-registered-mail",
+            "a-mail-plus": "cases-notice-dispatch-channel-a-mail-plus",
+            courier: "cases-notice-dispatch-channel-courier",
+            "hand-delivery": "cases-notice-dispatch-channel-hand-delivery",
+          },
         },
-        expect.any(Date)
+        expect.any(Date),
+        []
       );
       expect(createObjectURLMock).toHaveBeenCalledTimes(1);
       const blob = createObjectURLMock.mock.calls[0][0] as Blob;

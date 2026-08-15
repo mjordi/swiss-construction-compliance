@@ -9,6 +9,10 @@ import {
   type LinkedCaseProtocolEvent,
 } from "@/lib/case-timeline";
 import type { LegalRegime } from "@/lib/legal-utils";
+import type {
+  CaseNoticeDispatch,
+  CaseNoticeDispatchChannel,
+} from "@/lib/case-notice-dispatch";
 
 export interface CaseAuditDossierLabels {
   title: string;
@@ -34,6 +38,7 @@ export interface CaseAuditDossierLabels {
   statuses: Record<CaseDeadlineStatus, string>;
   checklistItems: Record<FollowUpChecklistKey, string>;
   milestones: Record<CaseLegalMilestoneKind, string>;
+  dispatchChannels?: Partial<Record<CaseNoticeDispatchChannel, string>>;
 }
 
 export interface CaseAuditDossierMilestone {
@@ -42,6 +47,7 @@ export interface CaseAuditDossierMilestone {
   date: string;
   dateLabel: string;
   sourceId: string | null;
+  sourceName: string | null;
 }
 
 export interface CaseAuditDossierReport {
@@ -96,12 +102,14 @@ export function buildCaseAuditDossier({
   item,
   checklist,
   linkedProtocols,
+  noticeDispatches = [],
   labels,
   generatedAt,
 }: {
   item: ComplianceCaseViewModel;
   checklist: FollowUpChecklistState;
   linkedProtocols: LinkedCaseProtocolEvent[];
+  noticeDispatches?: CaseNoticeDispatch[];
   labels: CaseAuditDossierLabels;
   generatedAt: Date;
 }): CaseAuditDossierReport {
@@ -115,15 +123,23 @@ export function buildCaseAuditDossier({
   const missing = applicableChecklistKeys
     .filter((key) => !normalizedChecklist[key])
     .map((key) => labels.checklistItems[key]);
-  const milestones = deriveCaseLegalMilestones(item, linkedProtocols).map((milestone) => ({
+  const milestones = deriveCaseLegalMilestones(
+    item,
+    linkedProtocols,
+    [],
+    noticeDispatches,
+    labels.dispatchChannels
+  ).map((milestone) => ({
     kind: milestone.kind,
     label: labels.milestones[milestone.kind],
     date: milestone.date.toISOString(),
     dateLabel: milestone.dateLabel,
-    sourceId:
+    sourceId: milestone.sourceId ?? (
       milestone.kind === "protocol-finalized" && milestone.id
         ? milestone.id.replace(/^protocol-finalized-/, "")
-        : null,
+        : null
+    ),
+    sourceName: milestone.sourceName ?? null,
   }));
   const finalizedProtocolCount = milestones.filter(
     (milestone) => milestone.kind === "protocol-finalized"

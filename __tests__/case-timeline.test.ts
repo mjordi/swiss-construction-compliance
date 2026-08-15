@@ -227,7 +227,14 @@ describe("case legal chronology CSV", () => {
       discovery: "Defect discovered",
       "evidence-uploaded": "Evidence uploaded",
       "protocol-finalized": "Protocol finalized",
+      "notice-dispatched": "Notice dispatch recorded",
       "notice-deadline": "Notice deadline",
+    },
+    dispatchChannels: {
+      "registered-mail": "Registered post",
+      "a-mail-plus": "A Mail Plus",
+      courier: "Localized courier",
+      "hand-delivery": "Hand delivery",
     },
   };
 
@@ -250,7 +257,17 @@ describe("case legal chronology CSV", () => {
         occurredAt: "2026-03-18T10:30:00.000Z",
       }],
       labels,
-      new Date("2026-07-26T12:34:56.000Z")
+      new Date("2026-07-26T12:34:56.000Z"),
+      [{
+        id: "dispatch-9",
+        user_id: "user-1",
+        case_id: "case-42",
+        notice_draft_id: "draft-revision-9",
+        dispatched_at: "2026-03-16T10:30:00.000Z",
+        channel: "courier",
+        reference: "TRACK-9",
+        created_at: "2026-03-16T10:31:00.000Z",
+      }]
     );
 
     expect(csv.charCodeAt(0)).toBe(0xfeff);
@@ -265,6 +282,7 @@ describe("case legal chronology CSV", () => {
         '"2026-01-10","Contract concluded","",""\r\n' +
         '"2026-03-01","Defect discovered","",""\r\n' +
         '"2026-03-15","Protocol finalized","protocol-7",""\r\n' +
+        '"2026-03-16","Notice dispatch recorded","draft-revision-9","Localized courier · TRACK-9"\r\n' +
         '"2026-03-18","Evidence uploaded","evidence-8","balcony crack.jpg"\r\n' +
         '"2026-04-30","Notice deadline","",""'
     );

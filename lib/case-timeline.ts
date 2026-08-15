@@ -8,6 +8,10 @@ import {
   type LegalRegime,
   type DeadlineResult,
 } from "@/lib/legal-utils";
+import type {
+  CaseNoticeDispatch,
+  CaseNoticeDispatchChannel,
+} from "@/lib/case-notice-dispatch";
 
 export type CaseDeadlineStatus = DeadlineResult["status"] | "immediate-notice";
 
@@ -96,6 +100,7 @@ export type CaseLegalMilestoneKind =
   | "discovery"
   | "evidence-uploaded"
   | "protocol-finalized"
+  | "notice-dispatched"
   | "notice-deadline";
 
 export interface LinkedCaseProtocolEvent {
@@ -132,6 +137,7 @@ export interface CaseLegalChronologyCsvLabels {
   sourceId: string;
   sourceName: string;
   milestones: Record<CaseLegalMilestoneKind, string>;
+  dispatchChannels?: Partial<Record<CaseNoticeDispatchChannel, string>>;
 }
 
 export interface CaseAuditRegisterCsvRow {
@@ -263,7 +269,9 @@ export function buildComplianceCaseTimeline(
 export function deriveCaseLegalMilestones(
   item: ComplianceCaseViewModel,
   linkedProtocols: LinkedCaseProtocolEvent[] = [],
-  evidenceEvents: LinkedCaseEvidenceEvent[] = []
+  evidenceEvents: LinkedCaseEvidenceEvent[] = [],
+  noticeDispatches: CaseNoticeDispatch[] = [],
+  dispatchChannelLabels: Partial<Record<CaseNoticeDispatchChannel, string>> = {}
 ): CaseLegalMilestone[] {
   const milestones: CaseLegalMilestone[] = [
     {
@@ -316,12 +324,30 @@ export function deriveCaseLegalMilestones(
     });
   }
 
+  for (const dispatch of noticeDispatches) {
+    if (dispatch.case_id !== item.id) continue;
+    const dispatchedAt = new Date(dispatch.dispatched_at);
+    if (Number.isNaN(dispatchedAt.getTime())) continue;
+
+    milestones.push({
+      id: `notice-dispatched-${dispatch.id}`,
+      kind: "notice-dispatched",
+      date: dispatchedAt,
+      dateLabel: formatTimestampDateCH(dispatchedAt),
+      sourceId: dispatch.notice_draft_id,
+      sourceName: dispatch.reference
+        ? `${dispatchChannelLabels[dispatch.channel] ?? dispatch.channel} · ${dispatch.reference}`
+        : (dispatchChannelLabels[dispatch.channel] ?? dispatch.channel),
+    });
+  }
+
   const milestoneOrder: Record<CaseLegalMilestoneKind, number> = {
     contract: 0,
     discovery: 1,
     "evidence-uploaded": 2,
     "protocol-finalized": 3,
-    "notice-deadline": 4,
+    "notice-dispatched": 4,
+    "notice-deadline": 5,
   };
 
   return milestones.sort(
@@ -384,7 +410,8 @@ export function buildCaseLegalChronologyCsv(
   linkedProtocols: LinkedCaseProtocolEvent[],
   evidenceEvents: LinkedCaseEvidenceEvent[],
   labels: CaseLegalChronologyCsvLabels,
-  generatedAt: Date
+  generatedAt: Date,
+  noticeDispatches: CaseNoticeDispatch[] = []
 ): string {
   const protocolSourceIds = new Map(
     linkedProtocols.map((protocol) => [`protocol-finalized-${protocol.id}`, protocol.id])
@@ -397,7 +424,13 @@ export function buildCaseLegalChronologyCsv(
     [labels.canton, item.canton],
     [""],
     [labels.date, labels.milestone, labels.sourceId, labels.sourceName],
-    ...deriveCaseLegalMilestones(item, linkedProtocols, evidenceEvents).map((milestone) => [
+    ...deriveCaseLegalMilestones(
+      item,
+      linkedProtocols,
+      evidenceEvents,
+      noticeDispatches,
+      labels.dispatchChannels
+    ).map((milestone) => [
       formatSwissCalendarDate(milestone.date),
       labels.milestones[milestone.kind],
       milestone.sourceId ?? (milestone.id ? (protocolSourceIds.get(milestone.id) ?? "") : ""),
