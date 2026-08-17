@@ -2238,14 +2238,10 @@ export default function CasesPage() {
     const requestIsCurrent = () => dossierMountedRef.current
       && currentUserIdRef.current === userId
       && dispatchEvidenceRequestIdsRef.current[dispatch.id] === requestId;
-    try {
-      const { data, error } = await supabase.from("case_notice_dispatch_evidence").insert({
-        user_id: userId, case_id: caseId, dispatch_id: dispatch.id, evidence_id: evidenceId,
-      }).select("*").single();
-      const saved = normalizeCaseNoticeDispatchEvidence(data);
-      if (error || !saved) throw error ?? new Error("Evidence association was not confirmed");
-      if (!requestIsCurrent() || saved.user_id !== userId || saved.case_id !== caseId
-        || saved.dispatch_id !== dispatch.id || saved.evidence_id !== evidenceId) return;
+    const acceptSavedAssociation = (candidate: unknown) => {
+      const saved = normalizeCaseNoticeDispatchEvidence(candidate);
+      if (!saved || !requestIsCurrent() || saved.user_id !== userId || saved.case_id !== caseId
+        || saved.dispatch_id !== dispatch.id || saved.evidence_id !== evidenceId) return false;
       setNoticeDispatchEvidence((current) => {
         const next = [saved, ...current.filter((row) => row.dispatch_id !== dispatch.id)];
         lastSuccessfulDispatchEvidenceRef.current = next;
@@ -2253,8 +2249,29 @@ export default function CasesPage() {
         return next;
       });
       setDispatchEvidenceFeedbackByCase((current) => ({ ...current, [caseId]: "cases-notice-dispatch-evidence-linked" }));
+      return true;
+    };
+    try {
+      const { data, error } = await supabase.from("case_notice_dispatch_evidence").insert({
+        user_id: userId, case_id: caseId, dispatch_id: dispatch.id, evidence_id: evidenceId,
+      }).select("*").single();
+      if (error || !data) throw error ?? new Error("Evidence association was not confirmed");
+      acceptSavedAssociation(data);
     } catch {
-      if (requestIsCurrent()) setDispatchEvidenceFeedbackByCase((current) => ({ ...current, [caseId]: "cases-notice-dispatch-evidence-error" }));
+      let reconciled = false;
+      try {
+        const { data, error } = await supabase.from("case_notice_dispatch_evidence")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("dispatch_id", dispatch.id)
+          .maybeSingle();
+        reconciled = !error && acceptSavedAssociation(data);
+      } catch {
+        // The original insert and reconciliation are both ambiguous; report failure below.
+      }
+      if (!reconciled && requestIsCurrent()) {
+        setDispatchEvidenceFeedbackByCase((current) => ({ ...current, [caseId]: "cases-notice-dispatch-evidence-error" }));
+      }
     } finally {
       if (dispatchEvidenceRequestIdsRef.current[dispatch.id] === requestId) dispatchEvidenceInFlightRef.current.delete(caseId);
       if (requestIsCurrent()) setDispatchEvidenceLinkingByCase((current) => {

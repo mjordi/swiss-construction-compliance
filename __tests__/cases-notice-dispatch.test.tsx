@@ -235,11 +235,18 @@ vi.mock("@/lib/supabase", () => {
       }
       if (table === "case_notice_dispatch_evidence") {
         let pageSize = 1000;
+        const filters: Record<string, string> = {};
         const query = {
-          eq: () => query,
+          eq: (column: string, value: string) => { filters[column] = value; return query; },
           order: () => query,
           or: () => query,
           limit: (size: number) => { pageSize = size; return query; },
+          maybeSingle: async () => ({
+            data: dispatchEvidence.find((record) => Object.entries(filters).every(
+              ([column, value]) => record[column as keyof DispatchEvidenceRecord] === value
+            )) ?? null,
+            error: null,
+          }),
           then: (resolve: (value: { data: DispatchEvidenceRecord[] | null; error: { message: string } | null }) => unknown) => {
             const page = dispatchEvidencePageQueries++;
             const result = dispatchEvidenceLoadDeferred?.promise ?? Promise.resolve(
@@ -624,6 +631,30 @@ describe("Cases notice dispatch recording", () => {
     expect(linked.textContent).toContain("association-1");
     fireEvent.submit(form);
     expect(dispatchEvidenceInsertMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("reconciles a committed evidence link when the insert response is lost", async () => {
+    noticeDispatches = [savedDispatch({
+      user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",
+      dispatched_at: "2026-08-15T09:00:00.000Z", channel: "courier", reference: null,
+    })];
+    caseEvidence = [{
+      id: "evidence-1", user_id: "user-1", case_id: "case-1", original_name: "posting-receipt.pdf",
+      storage_path: "user-1/case-1/posting-receipt.pdf", mime_type: "application/pdf", size_bytes: 123,
+      created_at: "2026-08-14T09:00:00.000Z",
+    }];
+    dispatchEvidenceInsertMock.mockImplementationOnce(async (payload: Record<string, unknown>) => {
+      dispatchEvidence = [{ id: "association-committed", ...payload, created_at: "2026-08-17T08:00:00.000Z" } as DispatchEvidenceRecord];
+      throw new Error("response lost after commit");
+    });
+    render(<CasesPage />);
+
+    fireEvent.submit(await screen.findByTestId("cases-notice-dispatch-evidence-form-case-1"));
+
+    const linked = await screen.findByTestId("cases-notice-dispatch-evidence-case-1");
+    expect(linked.textContent).toContain("association-committed");
+    expect(screen.getByText("cases-notice-dispatch-evidence-linked")).toBeTruthy();
+    expect(screen.queryByText("cases-notice-dispatch-evidence-error")).toBeNull();
   });
 
   it("blocks every rendered same-row navigation link in the submission tick and restores native links after failure", async () => {
