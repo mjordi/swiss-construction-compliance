@@ -11,7 +11,9 @@ import {
 import type {
   CaseNoticeDispatch,
   CaseNoticeDispatchChannel,
+  CaseNoticeDispatchEvidence,
 } from "@/lib/case-notice-dispatch";
+import type { CaseEvidence } from "@/lib/database.types";
 
 export type CaseDeadlineStatus = DeadlineResult["status"] | "immediate-notice";
 
@@ -124,6 +126,9 @@ export interface CaseLegalMilestone {
   dateLabel: string;
   sourceId?: string;
   sourceName?: string;
+  supportingEvidenceId?: string;
+  supportingEvidenceAssociationId?: string;
+  supportingEvidenceName?: string;
 }
 
 export interface CaseLegalChronologyCsvLabels {
@@ -138,6 +143,9 @@ export interface CaseLegalChronologyCsvLabels {
   sourceName: string;
   milestones: Record<CaseLegalMilestoneKind, string>;
   dispatchChannels?: Partial<Record<CaseNoticeDispatchChannel, string>>;
+  supportingEvidenceId?: string;
+  supportingEvidenceAssociationId?: string;
+  supportingEvidenceName?: string;
 }
 
 export interface CaseAuditRegisterCsvRow {
@@ -271,7 +279,9 @@ export function deriveCaseLegalMilestones(
   linkedProtocols: LinkedCaseProtocolEvent[] = [],
   evidenceEvents: LinkedCaseEvidenceEvent[] = [],
   noticeDispatches: CaseNoticeDispatch[] = [],
-  dispatchChannelLabels: Partial<Record<CaseNoticeDispatchChannel, string>> = {}
+  dispatchChannelLabels: Partial<Record<CaseNoticeDispatchChannel, string>> = {},
+  dispatchEvidence: CaseNoticeDispatchEvidence[] = [],
+  evidence: CaseEvidence[] = []
 ): CaseLegalMilestone[] {
   const milestones: CaseLegalMilestone[] = [
     {
@@ -329,6 +339,13 @@ export function deriveCaseLegalMilestones(
     const dispatchedAt = new Date(dispatch.dispatched_at);
     if (Number.isNaN(dispatchedAt.getTime())) continue;
 
+    const association = dispatchEvidence.find((link) =>
+      link.dispatch_id === dispatch.id && link.case_id === item.id && link.user_id === dispatch.user_id
+    );
+    const linkedEvidence = association && evidence.find((record) =>
+      record.id === association.evidence_id && record.case_id === item.id && record.user_id === dispatch.user_id
+    );
+
     milestones.push({
       id: `notice-dispatched-${dispatch.id}`,
       kind: "notice-dispatched",
@@ -338,6 +355,11 @@ export function deriveCaseLegalMilestones(
       sourceName: dispatch.reference
         ? `${dispatchChannelLabels[dispatch.channel] ?? dispatch.channel} · ${dispatch.reference}`
         : (dispatchChannelLabels[dispatch.channel] ?? dispatch.channel),
+      ...(association && linkedEvidence ? {
+        supportingEvidenceId: linkedEvidence.id,
+        supportingEvidenceAssociationId: association.id,
+        supportingEvidenceName: linkedEvidence.original_name,
+      } : {}),
     });
   }
 
@@ -411,7 +433,9 @@ export function buildCaseLegalChronologyCsv(
   evidenceEvents: LinkedCaseEvidenceEvent[],
   labels: CaseLegalChronologyCsvLabels,
   generatedAt: Date,
-  noticeDispatches: CaseNoticeDispatch[] = []
+  noticeDispatches: CaseNoticeDispatch[] = [],
+  dispatchEvidence: CaseNoticeDispatchEvidence[] = [],
+  evidence: CaseEvidence[] = []
 ): string {
   const protocolSourceIds = new Map(
     linkedProtocols.map((protocol) => [`protocol-finalized-${protocol.id}`, protocol.id])
@@ -423,18 +447,25 @@ export function buildCaseLegalChronologyCsv(
     [labels.projectName, item.projectName],
     [labels.canton, item.canton],
     [""],
-    [labels.date, labels.milestone, labels.sourceId, labels.sourceName],
+    [labels.date, labels.milestone, labels.sourceId, labels.sourceName,
+      ...(labels.supportingEvidenceName ? [labels.supportingEvidenceName,
+        labels.supportingEvidenceId ?? "Supporting evidence ID",
+        labels.supportingEvidenceAssociationId ?? "Association ID"] : [])],
     ...deriveCaseLegalMilestones(
       item,
       linkedProtocols,
       evidenceEvents,
       noticeDispatches,
-      labels.dispatchChannels
+      labels.dispatchChannels,
+      dispatchEvidence,
+      evidence
     ).map((milestone) => [
       formatSwissCalendarDate(milestone.date),
       labels.milestones[milestone.kind],
       milestone.sourceId ?? (milestone.id ? (protocolSourceIds.get(milestone.id) ?? "") : ""),
       milestone.sourceName ?? "",
+      ...(labels.supportingEvidenceName ? [milestone.supportingEvidenceName ?? "",
+        milestone.supportingEvidenceId ?? "", milestone.supportingEvidenceAssociationId ?? ""] : []),
     ]),
   ];
 

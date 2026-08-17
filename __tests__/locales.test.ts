@@ -462,12 +462,42 @@ describe("locales", () => {
       "cases-notice-dispatch-channel-a-mail-plus",
       "cases-notice-dispatch-channel-courier",
       "cases-notice-dispatch-channel-hand-delivery",
+      "cases-notice-dispatch-evidence-title",
+      "cases-notice-dispatch-evidence-semantics",
+      "cases-notice-dispatch-evidence-select",
+      "cases-notice-dispatch-evidence-submit",
+      "cases-notice-dispatch-evidence-linking",
+      "cases-notice-dispatch-evidence-linked",
+      "cases-notice-dispatch-evidence-error",
+      "cases-notice-dispatch-evidence-file",
+      "cases-notice-dispatch-evidence-id",
+      "cases-notice-dispatch-evidence-association-id",
+      "cases-notice-dispatch-evidence-empty",
+      "cases-notice-dispatch-evidence-open-vault",
+      "cases-evidence-history-loading",
+      "cases-evidence-history-unavailable",
+      "cases-evidence-history-retry",
     ] as const;
 
     for (const [lang, translations] of Object.entries(locales)) {
       for (const key of requiredNoticeDispatchKeys) {
         expect(translations[key], `Locale '${lang}' missing notice dispatch key '${key}'`).toBeDefined();
       }
+    }
+  });
+
+  it("describes dispatch evidence as user-linked without verification claims", () => {
+    const userLinkedTerms = {
+      de: /von ihnen verknüpft/i,
+      fr: /liée par vos soins/i,
+      it: /collegata da te/i,
+      en: /user-linked/i,
+    } as const;
+    for (const [lang, translations] of Object.entries(locales)) {
+      const copy = translations["cases-notice-dispatch-evidence-semantics"];
+      expect(copy).toMatch(userLinkedTerms[lang as keyof typeof userLinkedTerms]);
+      expect(copy).toMatch(/zustellung|réception|consegna|delivery/i);
+      expect(copy).not.toMatch(/ist ein verifizierter nachweis|est une preuve vérifiée|è una prova verificata|is verified proof/i);
     }
   });
 

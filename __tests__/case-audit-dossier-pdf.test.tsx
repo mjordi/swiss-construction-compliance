@@ -29,6 +29,7 @@ const report: CaseAuditDossierReport = {
     checklistMissing: "Missing",
     linkedProtocols: "Linked finalized protocols",
     chronology: "Legal chronology",
+    supportingEvidence: "User-linked supporting evidence",
   },
   caseId: "case-1",
   projectName: "Alpine Tower",
@@ -62,6 +63,9 @@ const report: CaseAuditDossierReport = {
       dateLabel: "04.03.2026, 11:00",
       sourceId: "draft-revision-9",
       sourceName: "Registered post · TRACK-9",
+      supportingEvidenceName: "posting-receipt.pdf",
+      supportingEvidenceId: "evidence-9",
+      supportingEvidenceAssociationId: "association-9",
     },
   ],
   legalDisclaimer: "This report is informational and is not legal advice.",
@@ -83,6 +87,10 @@ describe("CaseAuditDossierPDF", () => {
     expect(text).toContain("Notice dispatch recorded");
     expect(text).toContain("draft-revision-9");
     expect(text).toContain("Registered post · TRACK-9");
+    expect(text).toContain("User-linked supporting evidence");
+    expect(text).toContain("posting-receipt.pdf");
+    expect(text).toContain("evidence-9");
+    expect(text).toContain("association-9");
     expect(text).toContain("Legal chronology");
     expect(text).toContain("not legal advice");
     expect(text).not.toContain("COMPLIANT");

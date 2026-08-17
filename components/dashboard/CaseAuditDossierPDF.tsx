@@ -129,6 +129,13 @@ export function CaseAuditDossierPDF({ report }: { report: CaseAuditDossierReport
                 <Text>{milestone.label}</Text>
                 {milestone.sourceId ? <Text style={styles.source}>{milestone.sourceId}</Text> : null}
                 {milestone.sourceName ? <Text style={styles.source}>{milestone.sourceName}</Text> : null}
+                {milestone.supportingEvidenceName ? (
+                  <Text style={styles.source}>
+                    {report.labels.supportingEvidence ?? "User-linked supporting evidence"}: {milestone.supportingEvidenceName}
+                  </Text>
+                ) : null}
+                {milestone.supportingEvidenceId ? <Text style={styles.source}>{milestone.supportingEvidenceId}</Text> : null}
+                {milestone.supportingEvidenceAssociationId ? <Text style={styles.source}>{milestone.supportingEvidenceAssociationId}</Text> : null}
               </View>
               <Text style={styles.milestoneDate}>{milestone.dateLabel}</Text>
             </View>

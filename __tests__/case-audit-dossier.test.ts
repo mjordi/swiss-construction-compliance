@@ -51,6 +51,7 @@ const labels: CaseAuditDossierLabels = {
     courier: "Localized courier",
     "hand-delivery": "Hand delivery",
   },
+  supportingEvidence: "User-linked supporting evidence",
 };
 
 const item = toComplianceCaseViewModel({
@@ -119,6 +120,33 @@ describe("buildCaseAuditDossier", () => {
     });
 
     expect(report.linkedProtocolsSummary).toBe("No finalized protocol linked");
+  });
+
+  it("includes only source-consistent user-linked supporting evidence", () => {
+    const report = buildCaseAuditDossier({
+      item, checklist: item.checklistDefaults, linkedProtocols: [],
+      noticeDispatches: [{
+        id: "dispatch-1", user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-1",
+        dispatched_at: "2026-03-02T10:00:00.000Z", channel: "courier", reference: null,
+        created_at: "2026-03-02T10:01:00.000Z",
+      }],
+      dispatchEvidence: [{
+        id: "association-1", user_id: "user-1", case_id: "case-1", dispatch_id: "dispatch-1",
+        evidence_id: "evidence-1", created_at: "2026-03-03T10:00:00.000Z",
+      }],
+      evidence: [{
+        id: "evidence-1", user_id: "user-1", case_id: "case-1", original_name: "receipt.jpg",
+        storage_path: "user-1/case-1/receipt.jpg", mime_type: "image/jpeg", size_bytes: 50,
+        created_at: "2026-03-01T10:00:00.000Z",
+      }],
+      labels, generatedAt: new Date("2026-07-30T12:00:00.000Z"),
+    });
+    expect(report.milestones.find((entry) => entry.kind === "notice-dispatched")).toMatchObject({
+      supportingEvidenceName: "receipt.jpg",
+      supportingEvidenceId: "evidence-1",
+      supportingEvidenceAssociationId: "association-1",
+    });
+    expect(report.labels.supportingEvidence).toBe("User-linked supporting evidence");
   });
 
   it("omits an inapplicable calendar reminder and localizes the old-law deadline", () => {

@@ -3,8 +3,10 @@ import {
   CASE_NOTICE_DISPATCH_CHANNELS,
   buildCaseNoticeDispatchPayload,
   normalizeCaseNoticeDispatch,
+  normalizeCaseNoticeDispatchEvidence,
   parseSwissDispatchWallClock,
   selectLatestNoticeDispatchByCase,
+  selectNoticeDispatchEvidenceByDispatch,
 } from "@/lib/case-notice-dispatch";
 
 const now = new Date("2026-08-15T12:00:00.000Z");
@@ -69,5 +71,25 @@ describe("case notice dispatch", () => {
       { ...base, id: "bad", dispatched_at: "not-a-date" },
     ]);
     expect(latest.c?.id).toBe("b");
+  });
+
+  it("strictly normalizes and deterministically indexes evidence associations by dispatch", () => {
+    const first = {
+      id: "link-1", user_id: "u", case_id: "c", dispatch_id: "dispatch-1",
+      evidence_id: "evidence-1", created_at: "2026-08-17T08:00:00Z",
+    };
+    expect(normalizeCaseNoticeDispatchEvidence(first)).toEqual({
+      ...first, created_at: "2026-08-17T08:00:00.000Z",
+    });
+    expect(normalizeCaseNoticeDispatchEvidence({ ...first, evidence_id: "" })).toBeNull();
+    for (const field of ["id", "user_id", "case_id", "dispatch_id", "evidence_id"] as const) {
+      expect(normalizeCaseNoticeDispatchEvidence({ ...first, [field]: " \t\n " })).toBeNull();
+    }
+    expect(normalizeCaseNoticeDispatchEvidence({ ...first, created_at: "bad" })).toBeNull();
+    expect(selectNoticeDispatchEvidenceByDispatch([
+      { ...first, id: "link-2", evidence_id: "evidence-2" },
+      first,
+      { dispatch_id: "dispatch-2" },
+    ])).toEqual({ "dispatch-1": { ...first, created_at: "2026-08-17T08:00:00.000Z" } });
   });
 });

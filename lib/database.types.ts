@@ -53,6 +53,15 @@ export interface CaseNoticeDispatch {
   created_at: string;
 }
 
+export interface CaseNoticeDispatchEvidence {
+  id: string;
+  user_id: string;
+  case_id: string;
+  dispatch_id: string;
+  evidence_id: string;
+  created_at: string;
+}
+
 export interface CaseEvidence {
   id: string;
   user_id: string;

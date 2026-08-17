@@ -337,6 +337,46 @@ describe("case legal chronology CSV", () => {
     expect(csv).toContain('"2026-07-16","Protocol finalized","protocol-late"');
     expect(csv).not.toContain('"2026-07-15","Protocol finalized","protocol-late"');
   });
+
+  it("adds factual user-linked supporting evidence to the matching dispatch chronology row", () => {
+    const vm = toComplianceCaseViewModel({
+      id: "case-linked", projectName: "Linked evidence", canton: "ZH",
+      contractDate: new Date("2026-01-10"), discoveryDate: new Date("2026-03-01"),
+    });
+    const dispatch = {
+      id: "dispatch-linked", user_id: "user-1", case_id: "case-linked",
+      notice_draft_id: "draft-linked", dispatched_at: "2026-03-16T10:30:00.000Z",
+      channel: "courier" as const, reference: null, created_at: "2026-03-16T10:31:00.000Z",
+    };
+    const association = {
+      id: "association-1", user_id: "user-1", case_id: "case-linked",
+      dispatch_id: "dispatch-linked", evidence_id: "evidence-1", created_at: "2026-03-17T10:00:00.000Z",
+    };
+    const evidence = {
+      id: "evidence-1", user_id: "user-1", case_id: "case-linked", original_name: "posting-receipt.pdf",
+      storage_path: "user-1/case-linked/evidence-1.pdf", mime_type: "application/pdf" as const, size_bytes: 100,
+      created_at: "2026-03-15T10:00:00.000Z",
+    };
+
+    expect(deriveCaseLegalMilestones(vm, [], [], [dispatch], {}, [association], [evidence]))
+      .toContainEqual(expect.objectContaining({
+        id: "notice-dispatched-dispatch-linked",
+        supportingEvidenceName: "posting-receipt.pdf",
+        supportingEvidenceId: "evidence-1",
+        supportingEvidenceAssociationId: "association-1",
+      }));
+
+    const csv = buildCaseLegalChronologyCsv(
+      vm, [], [], {
+        ...labels,
+        supportingEvidenceName: "User-linked supporting evidence",
+        supportingEvidenceId: "Evidence ID",
+        supportingEvidenceAssociationId: "Association ID",
+      }, new Date("2026-07-26T12:34:56.000Z"), [dispatch], [association], [evidence]
+    );
+    expect(csv).toContain('"User-linked supporting evidence","Evidence ID","Association ID"');
+    expect(csv).toContain('"posting-receipt.pdf","evidence-1","association-1"');
+  });
 });
 
 describe("case audit register CSV", () => {

@@ -1,7 +1,8 @@
-import { fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dispatchInsertMock = vi.fn();
+const dispatchEvidenceInsertMock = vi.fn();
 const { rpcMock } = vi.hoisted(() => ({
   rpcMock: vi.fn(async () => ({ data: true, error: null })),
 }));
@@ -12,8 +13,16 @@ let authUserMock = { id: "user-1" };
 
 let noticeDrafts: NoticeDraftRecord[] = [];
 let noticeDispatches: NoticeDispatchRecord[] = [];
+let dispatchEvidence: DispatchEvidenceRecord[] = [];
+let caseEvidence: CaseEvidenceRecord[] = [];
 let noticeDispatchLoadError = false;
 let noticeDispatchPageQueries = 0;
+let dispatchEvidenceLoadError = false;
+let caseEvidenceLoadError = false;
+let dispatchEvidencePageQueries = 0;
+let caseEvidencePageQueries = 0;
+let dispatchEvidenceLoadDeferred: { promise: Promise<{ data: DispatchEvidenceRecord[] | null; error: { message: string } | null }>; resolve: (value: { data: DispatchEvidenceRecord[] | null; error: { message: string } | null }) => void; reject: (reason?: unknown) => void } | null = null;
+let caseEvidenceLoadDeferred: { promise: Promise<{ data: CaseEvidenceRecord[] | null; error: { message: string } | null }>; resolve: (value: { data: CaseEvidenceRecord[] | null; error: { message: string } | null }) => void; reject: (reason?: unknown) => void } | null = null;
 
 type NoticeDraftRecord = {
   id: string;
@@ -40,6 +49,15 @@ type NoticeDispatchRecord = {
   channel: "registered-mail" | "a-mail-plus" | "courier" | "hand-delivery";
   reference: string | null;
   created_at: string;
+};
+
+type DispatchEvidenceRecord = {
+  id: string; user_id: string; case_id: string; dispatch_id: string; evidence_id: string; created_at: string;
+};
+
+type CaseEvidenceRecord = {
+  id: string; user_id: string; case_id: string; original_name: string; storage_path: string;
+  mime_type: "application/pdf"; size_bytes: number; created_at: string;
 };
 
 const caseRecord = {
@@ -91,8 +109,9 @@ function savedDispatch(payload: Record<string, unknown>): NoticeDispatchRecord {
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
-  const promise = new Promise<T>((done) => { resolve = done; });
-  return { promise, resolve };
+  let reject!: (reason?: unknown) => void;
+  const promise = new Promise<T>((done, fail) => { resolve = done; reject = fail; });
+  return { promise, resolve, reject };
 }
 
 vi.mock("next/navigation", () => ({
@@ -207,6 +226,49 @@ vi.mock("@/lib/supabase", () => {
       if (table === "case_activity_events") {
         return { select: () => ({ eq: () => ({ order: async () => ({ data: [], error: null }) }) }) };
       }
+      if (table === "case_notice_dispatch_evidence") {
+        let pageSize = 1000;
+        const query = {
+          eq: () => query,
+          order: () => query,
+          or: () => query,
+          limit: (size: number) => { pageSize = size; return query; },
+          then: (resolve: (value: { data: DispatchEvidenceRecord[] | null; error: { message: string } | null }) => unknown) => {
+            const page = dispatchEvidencePageQueries++;
+            const result = dispatchEvidenceLoadDeferred?.promise ?? Promise.resolve(
+              dispatchEvidenceLoadError
+                ? { data: null, error: { message: "association load failed" } }
+                : { data: dispatchEvidence.slice(page * pageSize, (page + 1) * pageSize), error: null }
+            );
+            return result.then(resolve);
+          },
+        };
+        return {
+          select: () => query,
+          insert: (payload: Record<string, unknown>) => ({
+            select: () => ({ single: () => dispatchEvidenceInsertMock(payload) }),
+          }),
+        };
+      }
+      if (table === "case_evidence") {
+        let pageSize = 1000;
+        const query = {
+          eq: () => query,
+          order: () => query,
+          or: () => query,
+          limit: (size: number) => { pageSize = size; return query; },
+          then: (resolve: (value: { data: CaseEvidenceRecord[] | null; error: { message: string } | null }) => unknown) => {
+            const page = caseEvidencePageQueries++;
+            const result = caseEvidenceLoadDeferred?.promise ?? Promise.resolve(
+              caseEvidenceLoadError
+                ? { data: null, error: { message: "evidence load failed" } }
+                : { data: caseEvidence.slice(page * pageSize, (page + 1) * pageSize), error: null }
+            );
+            return result.then(resolve);
+          },
+        };
+        return { select: () => query };
+      }
       if (table === "case_notice_drafts") {
         return { insert: () => ({ select: () => ({ single: async () => ({ data: null, error: null }) }) }) };
       }
@@ -246,8 +308,20 @@ describe("Cases notice dispatch recording", () => {
     }));
     noticeDrafts = [draft("draft-latest", "2026-08-10T10:00:00.000Z")];
     noticeDispatches = [];
+    dispatchEvidence = [];
+    caseEvidence = [];
+    dispatchEvidenceInsertMock.mockReset().mockImplementation(async (payload: Record<string, unknown>) => ({
+      data: { id: "association-1", ...payload, created_at: "2026-08-17T08:00:00.000Z" },
+      error: null,
+    }));
     noticeDispatchLoadError = false;
     noticeDispatchPageQueries = 0;
+    dispatchEvidenceLoadError = false;
+    caseEvidenceLoadError = false;
+    dispatchEvidencePageQueries = 0;
+    caseEvidencePageQueries = 0;
+    dispatchEvidenceLoadDeferred = null;
+    caseEvidenceLoadDeferred = null;
     authUserMock = { id: "user-1" };
     rpcMock.mockClear();
   });
@@ -313,6 +387,81 @@ describe("Cases notice dispatch recording", () => {
     expect(await screen.findByText("cases-notice-dispatch-history-unavailable")).toBeTruthy();
     expect((screen.getByRole("button", { name: "cases-export-chronology-csv" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "cases-export-dossier-pdf" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("blocks evidence-dependent actions until both evidence-bearing sources settle", async () => {
+    dispatchEvidenceLoadDeferred = deferred();
+    caseEvidenceLoadDeferred = deferred();
+    render(<CasesPage />);
+
+    expect(await screen.findByText("cases-evidence-history-loading")).toBeTruthy();
+    expect((screen.getByRole("button", { name: "cases-export-chronology-csv" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "cases-export-dossier-pdf" }) as HTMLButtonElement).disabled).toBe(true);
+
+    dispatchEvidenceLoadDeferred.resolve({ data: [], error: null });
+    await act(async () => undefined);
+    expect((screen.getByRole("button", { name: "cases-export-chronology-csv" }) as HTMLButtonElement).disabled).toBe(true);
+
+    caseEvidenceLoadDeferred.resolve({ data: [], error: null });
+    await waitFor(() => {
+      expect((screen.getByRole("button", { name: "cases-export-chronology-csv" }) as HTMLButtonElement).disabled).toBe(false);
+      expect((screen.getByRole("button", { name: "cases-export-dossier-pdf" }) as HTMLButtonElement).disabled).toBe(false);
+    });
+  });
+
+  it.each([
+    ["association", true, false],
+    ["evidence metadata", false, true],
+  ])("keeps evidence history unavailable when the %s load fails", async (_source: string, associationFails: boolean, evidenceFails: boolean) => {
+    noticeDispatches = [savedDispatch({
+      user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",
+      dispatched_at: "2026-08-15T09:00:00.000Z", channel: "courier", reference: null,
+    })];
+    dispatchEvidence = [{
+      id: "association-1", user_id: "user-1", case_id: "case-1", dispatch_id: "dispatch-1",
+      evidence_id: "evidence-1", created_at: "2026-08-17T08:00:00.000Z",
+    }];
+    caseEvidence = [{
+      id: "evidence-1", user_id: "user-1", case_id: "case-1", original_name: "posting-receipt.pdf",
+      storage_path: "user-1/case-1/posting-receipt.pdf", mime_type: "application/pdf", size_bytes: 123,
+      created_at: "2026-08-14T09:00:00.000Z",
+    }];
+    dispatchEvidenceLoadError = associationFails;
+    caseEvidenceLoadError = evidenceFails;
+    render(<CasesPage />);
+
+    expect(await screen.findByText("cases-evidence-history-unavailable")).toBeTruthy();
+    expect(screen.queryByTestId("cases-notice-dispatch-evidence-form-case-1")).toBeNull();
+    expect(screen.queryByText("cases-notice-dispatch-evidence-empty")).toBeNull();
+    expect((screen.getByRole("button", { name: "cases-export-chronology-csv" }) as HTMLButtonElement).disabled).toBe(true);
+    expect((screen.getByRole("button", { name: "cases-export-dossier-pdf" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("paginates and preserves evidence associations and metadata beyond the first page", async () => {
+    noticeDispatches = [savedDispatch({
+      user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",
+      dispatched_at: "2026-08-15T09:00:00.000Z", channel: "courier", reference: null,
+    })];
+    dispatchEvidence = Array.from({ length: 1001 }, (_, index) => ({
+      id: `association-${index}`, user_id: "user-1", case_id: "case-1",
+      dispatch_id: index === 1000 ? "dispatch-1" : `other-dispatch-${index}`,
+      evidence_id: index === 1000 ? "evidence-target" : `other-evidence-${index}`,
+      created_at: new Date(Date.UTC(2026, 7, 17, 8, 0, 0) - index * 1000).toISOString(),
+    }));
+    caseEvidence = Array.from({ length: 1001 }, (_, index) => ({
+      id: index === 1000 ? "evidence-target" : `other-evidence-${index}`,
+      user_id: "user-1", case_id: "case-1",
+      original_name: index === 1000 ? "target-receipt.pdf" : `other-${index}.pdf`,
+      storage_path: `user-1/case-1/${index}.pdf`, mime_type: "application/pdf" as const, size_bytes: 123,
+      created_at: new Date(Date.UTC(2026, 7, 14, 9, 0, 0) - index * 1000).toISOString(),
+    }));
+    render(<CasesPage />);
+
+    const linked = await screen.findByTestId("cases-notice-dispatch-evidence-case-1");
+    expect(dispatchEvidencePageQueries).toBe(2);
+    expect(caseEvidencePageQueries).toBe(2);
+    expect(linked.textContent).toContain("target-receipt.pdf");
+    expect(linked.textContent).toContain("association-1000");
   });
 
   it("does not render a dispatch form without a saved draft", async () => {
@@ -426,5 +575,168 @@ describe("Cases notice dispatch recording", () => {
       expect(screen.queryByTestId("cases-notice-dispatch-case-1")).toBeNull();
       expect(screen.queryByText("cases-notice-dispatch-recorded")).toBeNull();
     });
+  });
+
+  it("links one existing same-Case file to only the latest dispatch and shows stable IDs", async () => {
+    noticeDispatches = [savedDispatch({
+      user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",
+      dispatched_at: "2026-08-15T09:00:00.000Z", channel: "courier", reference: null,
+    })];
+    caseEvidence = [{
+      id: "evidence-1", user_id: "user-1", case_id: "case-1", original_name: "posting-receipt.pdf",
+      storage_path: "user-1/case-1/posting-receipt.pdf", mime_type: "application/pdf", size_bytes: 123,
+      created_at: "2026-08-14T09:00:00.000Z",
+    }];
+    render(<CasesPage />);
+
+    const form = await screen.findByTestId("cases-notice-dispatch-evidence-form-case-1");
+    expect(within(form).getAllByRole("option")).toHaveLength(1);
+    fireEvent.submit(form);
+    await waitFor(() => expect(dispatchEvidenceInsertMock).toHaveBeenCalledTimes(1));
+    expect(dispatchEvidenceInsertMock).toHaveBeenCalledWith({
+      user_id: "user-1", case_id: "case-1", dispatch_id: "dispatch-1", evidence_id: "evidence-1",
+    });
+    const linked = await screen.findByTestId("cases-notice-dispatch-evidence-case-1");
+    expect(linked.textContent).toContain("posting-receipt.pdf");
+    expect(linked.textContent).toContain("evidence-1");
+    expect(linked.textContent).toContain("association-1");
+    fireEvent.submit(form);
+    expect(dispatchEvidenceInsertMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("blocks every rendered same-row navigation link in the submission tick and restores native links after failure", async () => {
+    noticeDispatches = [savedDispatch({
+      user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",
+      dispatched_at: "2026-08-15T09:00:00.000Z", channel: "courier", reference: null,
+    })];
+    caseEvidence = [{
+      id: "evidence-1", user_id: "user-1", case_id: "case-1", original_name: "posting-receipt.pdf",
+      storage_path: "user-1/case-1/posting-receipt.pdf", mime_type: "application/pdf", size_bytes: 123,
+      created_at: "2026-08-14T09:00:00.000Z",
+    }];
+    const pending = deferred<{ data: null; error: { message: string } }>();
+    dispatchEvidenceInsertMock.mockImplementationOnce(() => pending.promise);
+    render(<CasesPage />);
+    const form = await screen.findByTestId("cases-notice-dispatch-evidence-form-case-1");
+    const vaultLink = screen.getByText("cases-open-in-vault").closest("a") as HTMLAnchorElement;
+    const protocolLink = screen.getByText("cases-create-protocol").closest("a") as HTMLAnchorElement;
+
+    const submit = new Event("submit", { bubbles: true, cancelable: true });
+    form.dispatchEvent(submit);
+    expect(submit.defaultPrevented).toBe(true);
+
+    for (const link of [vaultLink, protocolLink]) {
+      const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+      expect(link.dispatchEvent(click)).toBe(false);
+      expect(click.defaultPrevented).toBe(true);
+    }
+
+    pending.resolve({ data: null, error: { message: "denied" } });
+    await screen.findByText("cases-notice-dispatch-evidence-error");
+    await waitFor(() => {
+      expect(screen.getByText("cases-open-in-vault").closest("a")?.getAttribute("href")).toContain("/dashboard/vault");
+      expect(screen.getByText("cases-create-protocol").closest("a")?.getAttribute("href")).toContain("/dashboard");
+    });
+  });
+
+  it.each(["returned", "thrown"] as const)(
+    "locks sibling Case actions synchronously and unlocks after a %s evidence insert error",
+    async (failureKind: "returned" | "thrown") => {
+      noticeDispatches = [savedDispatch({
+        user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",
+        dispatched_at: "2026-08-15T09:00:00.000Z", channel: "courier", reference: null,
+      })];
+      caseEvidence = [{
+        id: "evidence-1", user_id: "user-1", case_id: "case-1", original_name: "posting-receipt.pdf",
+        storage_path: "user-1/case-1/posting-receipt.pdf", mime_type: "application/pdf", size_bytes: 123,
+        created_at: "2026-08-14T09:00:00.000Z",
+      }];
+      const pending = deferred<{ data: null; error: { message: string } }>();
+      dispatchEvidenceInsertMock.mockImplementationOnce(() => pending.promise);
+      const confirmMock = vi.spyOn(window, "confirm").mockReturnValue(true);
+      render(<CasesPage />);
+      const form = await screen.findByTestId("cases-notice-dispatch-evidence-form-case-1");
+      const recordingForm = await dispatchForm();
+      const checklist = screen.getByLabelText("cases-checklist-evidence-attached") as HTMLInputElement;
+
+      fireEvent.submit(form);
+      // Exercise sibling handler guards before React can rerender disabled state.
+      fireEvent.click(checklist);
+      fireEvent.submit(recordingForm);
+      fireEvent.click(screen.getByRole("button", { name: "cases-delete" }));
+
+      expect(dispatchEvidenceInsertMock).toHaveBeenCalledTimes(1);
+      expect(dispatchInsertMock).not.toHaveBeenCalled();
+      expect(rpcMock).not.toHaveBeenCalledWith("set_case_checklist_item", expect.anything());
+      expect(confirmMock).not.toHaveBeenCalled();
+      await waitFor(() => {
+        expect((screen.getByRole("button", { name: "cases-edit" }) as HTMLButtonElement).disabled).toBe(true);
+        expect((screen.getByRole("button", { name: "cases-delete" }) as HTMLButtonElement).disabled).toBe(true);
+        expect(checklist.disabled).toBe(true);
+        expect((screen.getByRole("button", { name: "cases-notice-draft-create" }) as HTMLButtonElement).disabled).toBe(true);
+        expect((screen.getByRole("button", { name: "cases-notice-draft-download" }) as HTMLButtonElement).disabled).toBe(true);
+        expect((within(recordingForm).getByRole("button", { name: "cases-notice-dispatch-submit" }) as HTMLButtonElement).disabled).toBe(true);
+        expect((screen.getByRole("button", { name: "cases-export-chronology-csv" }) as HTMLButtonElement).disabled).toBe(true);
+        expect((screen.getByRole("button", { name: "cases-export-dossier-pdf" }) as HTMLButtonElement).disabled).toBe(true);
+      });
+
+      if (failureKind === "returned") pending.resolve({ data: null, error: { message: "denied" } });
+      else pending.reject(new Error("network"));
+
+      expect((await screen.findByRole("status")).textContent).toContain("cases-notice-dispatch-evidence-error");
+      await waitFor(() => {
+        expect((screen.getByRole("button", { name: "cases-edit" }) as HTMLButtonElement).disabled).toBe(false);
+        expect((screen.getByRole("button", { name: "cases-delete" }) as HTMLButtonElement).disabled).toBe(false);
+        expect(checklist.disabled).toBe(false);
+        expect((screen.getByRole("button", { name: "cases-notice-draft-create" }) as HTMLButtonElement).disabled).toBe(false);
+        expect((screen.getByRole("button", { name: "cases-notice-draft-download" }) as HTMLButtonElement).disabled).toBe(false);
+        expect((within(recordingForm).getByRole("button", { name: "cases-notice-dispatch-submit" }) as HTMLButtonElement).disabled).toBe(false);
+        expect((screen.getByRole("button", { name: "cases-export-chronology-csv" }) as HTMLButtonElement).disabled).toBe(false);
+        expect((screen.getByRole("button", { name: "cases-export-dossier-pdf" }) as HTMLButtonElement).disabled).toBe(false);
+      });
+      confirmMock.mockRestore();
+    }
+  );
+
+  it("invalidates delayed evidence completion across an A-to-B-to-A identity transition", async () => {
+    noticeDispatches = [savedDispatch({
+      user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",
+      dispatched_at: "2026-08-15T09:00:00.000Z", channel: "courier", reference: null,
+    })];
+    caseEvidence = [{
+      id: "evidence-1", user_id: "user-1", case_id: "case-1", original_name: "posting-receipt.pdf",
+      storage_path: "user-1/case-1/posting-receipt.pdf", mime_type: "application/pdf", size_bytes: 123,
+      created_at: "2026-08-14T09:00:00.000Z",
+    }];
+    const pending = deferred<void>();
+    dispatchEvidenceInsertMock.mockImplementationOnce((payload: Record<string, unknown>) =>
+      pending.promise.then(() => ({
+        data: { id: "association-stale", ...payload, created_at: "2026-08-17T08:00:00.000Z" },
+        error: null,
+      }))
+    );
+    const { rerender } = render(<CasesPage />);
+    const form = await screen.findByTestId("cases-notice-dispatch-evidence-form-case-1");
+    fireEvent.submit(form);
+    expect(dispatchEvidenceInsertMock).toHaveBeenCalledTimes(1);
+
+    await act(async () => { authUserMock = { id: "user-2" }; rerender(<CasesPage />); });
+    await act(async () => { authUserMock = { id: "user-1" }; rerender(<CasesPage />); });
+    pending.resolve();
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("cases-notice-dispatch-evidence-case-1")).toBeNull();
+      expect(screen.queryByText("cases-notice-dispatch-evidence-linked")).toBeNull();
+    });
+  });
+
+  it("points to the existing Vault when the Case has no evidence file", async () => {
+    noticeDispatches = [savedDispatch({
+      user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",
+      dispatched_at: "2026-08-15T09:00:00.000Z", channel: "courier", reference: null,
+    })];
+    render(<CasesPage />);
+    expect(await screen.findByText("cases-notice-dispatch-evidence-empty")).toBeTruthy();
+    expect(screen.getByText("cases-notice-dispatch-evidence-open-vault").closest("a")?.getAttribute("href")).toContain("/dashboard/vault");
   });
 });
