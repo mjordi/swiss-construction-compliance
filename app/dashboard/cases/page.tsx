@@ -639,7 +639,7 @@ export default function CasesPage() {
       const caseEvidenceResultPromise = loadCaseEvidence();
       // Attach before the core queries settle so an early return cannot strand
       // the additive readiness gates in their loading state.
-      consumeAdditiveResultPromises();
+      consumeAdditiveResultPromises(user);
       const [casesResult, protocolsResult] = await Promise.all([
         supabase
           .from("cases")
@@ -692,7 +692,7 @@ export default function CasesPage() {
       lastSuccessfulCasesRef.current = (casesResult.data as Case[]) ?? [];
       setLoading(false);
 
-      function consumeAdditiveResultPromises() {
+      function consumeAdditiveResultPromises(user: { id: string }) {
         // Consume additive records independently: either source may be unavailable
         // forever without delaying core Cases or the other additive source.
         void activityResultPromise.then((activityResult) => {
