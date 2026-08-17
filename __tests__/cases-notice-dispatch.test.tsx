@@ -15,6 +15,7 @@ let noticeDrafts: NoticeDraftRecord[] = [];
 let noticeDispatches: NoticeDispatchRecord[] = [];
 let dispatchEvidence: DispatchEvidenceRecord[] = [];
 let caseEvidence: CaseEvidenceRecord[] = [];
+let casesLoadError = false;
 let noticeDispatchLoadError = false;
 let noticeDispatchPageQueries = 0;
 let dispatchEvidenceLoadError = false;
@@ -185,7 +186,13 @@ vi.mock("@/lib/supabase", () => {
     from: (table: string) => {
       if (table === "cases") {
         return {
-          select: () => ({ eq: () => ({ order: async () => ({ data: [caseRecord], error: null }) }) }),
+          select: () => ({
+            eq: () => ({
+              order: async () => casesLoadError
+                ? { data: null, error: { message: "cases refresh failed" } }
+                : { data: [caseRecord], error: null },
+            }),
+          }),
         };
       }
       if (table === "protocols") {
@@ -310,6 +317,7 @@ describe("Cases notice dispatch recording", () => {
     noticeDispatches = [];
     dispatchEvidence = [];
     caseEvidence = [];
+    casesLoadError = false;
     dispatchEvidenceInsertMock.mockReset().mockImplementation(async (payload: Record<string, unknown>) => ({
       data: { id: "association-1", ...payload, created_at: "2026-08-17T08:00:00.000Z" },
       error: null,
@@ -387,6 +395,20 @@ describe("Cases notice dispatch recording", () => {
     expect(await screen.findByText("cases-notice-dispatch-history-unavailable")).toBeTruthy();
     expect((screen.getByRole("button", { name: "cases-export-chronology-csv" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "cases-export-dossier-pdf" }) as HTMLButtonElement).disabled).toBe(true);
+  });
+
+  it("keeps the cached legal timeline visible when a same-user Cases refresh fails", async () => {
+    const { rerender } = render(<CasesPage />);
+
+    const timelineHeading = await screen.findByText("cases-legal-timeline-title");
+    await waitFor(() => expect(timelineHeading.parentElement?.querySelector("ol")).toBeTruthy());
+
+    casesLoadError = true;
+    authUserMock = { id: "user-1" };
+    rerender(<CasesPage />);
+
+    await waitFor(() => expect(screen.queryByText("cases-evidence-history-loading")).toBeNull());
+    expect(screen.getByText("cases-legal-timeline-title").parentElement?.querySelector("ol")).toBeTruthy();
   });
 
   it("blocks evidence-dependent actions until both evidence-bearing sources settle", async () => {

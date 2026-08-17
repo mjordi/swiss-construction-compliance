@@ -637,6 +637,9 @@ export default function CasesPage() {
       const noticeDispatchResultPromise = loadNoticeDispatches();
       const dispatchEvidenceResultPromise = loadDispatchEvidence();
       const caseEvidenceResultPromise = loadCaseEvidence();
+      // Attach before the core queries settle so an early return cannot strand
+      // the additive readiness gates in their loading state.
+      consumeAdditiveResultPromises();
       const [casesResult, protocolsResult] = await Promise.all([
         supabase
           .from("cases")
@@ -689,9 +692,10 @@ export default function CasesPage() {
       lastSuccessfulCasesRef.current = (casesResult.data as Case[]) ?? [];
       setLoading(false);
 
-      // Consume additive records independently: either source may be unavailable
-      // forever without delaying core Cases or the other additive source.
-      void activityResultPromise.then((activityResult) => {
+      function consumeAdditiveResultPromises() {
+        // Consume additive records independently: either source may be unavailable
+        // forever without delaying core Cases or the other additive source.
+        void activityResultPromise.then((activityResult) => {
         if (fetchId !== latestFetchIdRef.current || currentUserIdRef.current !== user.id) return;
         if (!activityResult.failed) {
           lastSuccessfulCaseActivityEventsRef.current = activityResult.data;
@@ -759,6 +763,7 @@ export default function CasesPage() {
           setNoticeDrafts([]);
         }
       });
+      }
     } catch {
       if (fetchId !== latestFetchIdRef.current) return;
       if (!hasLoadedInitialCasesRef.current) {
