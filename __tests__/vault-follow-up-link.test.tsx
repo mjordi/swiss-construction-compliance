@@ -573,7 +573,7 @@ describe("vault follow-up links", () => {
     expect(screen.queryByText("Harbor Retrofit")).toBeNull();
   });
 
-  it("replaces an invalidated evidence refresh after archive persistence fails", async () => {
+  it("does not start a reconciliation refresh after a definitive archive failure", async () => {
     updateResponses.push({ error: { message: "boom" } });
 
     render(<TechVault />);
@@ -590,7 +590,7 @@ describe("vault follow-up links", () => {
     fireEvent.click(archiveButton);
 
     await waitFor(() => {
-      expect(within(getProjectCard("Harbor Retrofit")).getByText("2/4 checklist items ready")).toBeTruthy();
+      expect(within(getProjectCard("Harbor Retrofit")).getByText("1/4 checklist items ready")).toBeTruthy();
     });
     expect((await screen.findByRole("alert")).textContent).toContain("vault-update-status-error");
   });

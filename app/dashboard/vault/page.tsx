@@ -574,7 +574,27 @@ export default function TechVault() {
         .eq("user_id", user.id);
 
       if (updateError) {
-        throw updateError;
+        setProjects((current) =>
+          current.map((project) =>
+            project.id === projectId
+              ? previousProject
+              : project
+          )
+        );
+        setStatusMutationErrors((current) => ({
+          ...current,
+          [projectId]: "vault-update-status-error",
+        }));
+        setStatusMutationFeedback((current) =>
+          current?.projectId === projectId ? null : current
+        );
+        pendingStatusMutationProjectIdsRef.current.delete(projectId);
+        ambiguousStatusExpectedRef.current.delete(projectId);
+        statusMutationRefreshProjectIdsRef.current.delete(projectId);
+        setStatusMutationProjectIds((current) =>
+          current.filter((currentProjectId) => currentProjectId !== projectId)
+        );
+        return;
       }
 
       setStatusMutationErrors((current) => {

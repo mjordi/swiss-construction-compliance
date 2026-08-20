@@ -356,12 +356,14 @@ describe("Vault portfolio audit export", () => {
   });
 
   it("keeps export blocked while reconciling a failed mutation response", async () => {
-    statusUpdateResult = Promise.resolve({ error: { message: "response lost" } });
+    let rejectUpdate!: (reason: Error) => void;
+    statusUpdateResult = new Promise((_, reject) => { rejectUpdate = reject; });
     render(<TechVault />);
     await screen.findByText("Alpine Tower");
     casesSelectResults = [Promise.resolve({ data: cases, error: { message: "offline" } })];
 
     fireEvent.click(screen.getByRole("button", { name: "vault-archive-project" }));
+    rejectUpdate(new Error("response lost"));
 
     expect((await screen.findByRole("alert")).textContent).toContain("vault-error-load");
     expect(screen.queryByRole("button", { name: "vault-audit-export-action" })).toBeNull();
@@ -385,8 +387,25 @@ describe("Vault portfolio audit export", () => {
     });
   });
 
+  it("clears mutation guards after a definitive status update error", async () => {
+    statusUpdateResult = Promise.resolve({ error: { message: "permission denied" } });
+    render(<TechVault />);
+    await screen.findByText("Alpine Tower");
+
+    fireEvent.click(screen.getByRole("button", { name: "vault-archive-project" }));
+
+    expect(await screen.findByText("vault-update-status-error")).toBeTruthy();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "vault-audit-export-action" }).getAttribute("disabled")).toBeNull();
+      expect(screen.getByRole("button", { name: "vault-archive-project" }).getAttribute("disabled")).toBeNull();
+    });
+    expect(rpcMock).toHaveBeenCalledTimes(1);
+    expect(screen.getByRole("button", { name: "vault-load-retry" })).toBeTruthy();
+  });
+
   it("keeps an ambiguous archive retryable until a snapshot observes the expected status", async () => {
-    statusUpdateResult = Promise.resolve({ error: { message: "response lost" } });
+    let rejectUpdate!: (reason: Error) => void;
+    statusUpdateResult = new Promise((_, reject) => { rejectUpdate = reject; });
     render(<TechVault />);
     await screen.findByText("Alpine Tower");
     rpcMock
@@ -402,6 +421,7 @@ describe("Vault portfolio audit export", () => {
       });
 
     fireEvent.click(screen.getByRole("button", { name: "vault-archive-project" }));
+    rejectUpdate(new Error("response lost"));
 
     await waitFor(() => expect(rpcMock).toHaveBeenCalledTimes(2));
     const exportWhileOldSnapshotIsVisible = screen.getByRole("button", { name: "vault-audit-export-action" });
