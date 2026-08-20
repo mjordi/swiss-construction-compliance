@@ -1,0 +1,91 @@
+export interface VaultAuditExportRow {
+  caseId: string;
+  project: string;
+  lifecycleStatus: string;
+  legalStatus: string | null;
+  legalRegime: string | null;
+  deadlineContext: string | null;
+  checklistCompleted: number;
+  checklistTotal: number;
+  missingAuditItems: string[];
+  linkedProtocols: number;
+  sourceUpdatedAt: string | null;
+}
+
+export interface VaultAuditCsvLabels {
+  generatedAt: string;
+  scope: string;
+  scopeValue: string;
+  caseId: string;
+  project: string;
+  lifecycleStatus: string;
+  legalStatus: string;
+  legalRegime: string;
+  deadlineContext: string;
+  checklistCompleted: string;
+  checklistTotal: string;
+  missingAuditItems: string;
+  linkedProtocols: string;
+  sourceUpdatedAt: string;
+  noMissingItems: string;
+  unavailable: string;
+}
+
+const SPREADSHEET_FORMULA_PREFIX = /^[\t\n\r ]*[=+\-@]/;
+
+function csvCell(value: string | number): string {
+  const text = String(value);
+  const safeText = SPREADSHEET_FORMULA_PREFIX.test(text) ? `'${text}` : text;
+  return `"${safeText.replaceAll('"', '""')}"`;
+}
+
+function csvLine(values: Array<string | number>): string {
+  return values.map(csvCell).join(",");
+}
+
+export function buildVaultAuditCsv(
+  rows: readonly VaultAuditExportRow[],
+  labels: VaultAuditCsvLabels,
+  generatedAt: Date = new Date(),
+): string {
+  const orderedRows = [...rows].sort((left, right) => left.caseId.localeCompare(right.caseId));
+  const lines = [
+    csvLine([labels.generatedAt, generatedAt.toISOString()]),
+    csvLine([labels.scope, labels.scopeValue]),
+    "",
+    csvLine([
+      labels.caseId,
+      labels.project,
+      labels.lifecycleStatus,
+      labels.legalStatus,
+      labels.legalRegime,
+      labels.deadlineContext,
+      labels.checklistCompleted,
+      labels.checklistTotal,
+      labels.missingAuditItems,
+      labels.linkedProtocols,
+      labels.sourceUpdatedAt,
+    ]),
+    ...orderedRows.map((row) =>
+      csvLine([
+        row.caseId,
+        row.project,
+        row.lifecycleStatus,
+        row.legalStatus ?? labels.unavailable,
+        row.legalRegime ?? labels.unavailable,
+        row.deadlineContext ?? labels.unavailable,
+        row.checklistCompleted,
+        row.checklistTotal,
+        row.missingAuditItems.length > 0 ? row.missingAuditItems.join("; ") : labels.noMissingItems,
+        row.linkedProtocols,
+        row.sourceUpdatedAt ?? labels.unavailable,
+      ]),
+    ),
+  ];
+
+  return `\uFEFF${lines.join("\r\n")}\r\n`;
+}
+
+export function vaultAuditCsvFilename(generatedAt: Date = new Date()): string {
+  return `baucompliance-vault-audit-${generatedAt.toISOString().slice(0, 10)}.csv`;
+}

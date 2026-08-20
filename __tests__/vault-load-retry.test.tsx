@@ -61,20 +61,38 @@ vi.mock("@/lib/case-timeline", () => ({
 }));
 
 const supabaseMock = {
+  rpc: async () => {
+    caseFetchCount += 1;
+    protocolFetchCount += 1;
+    const [caseResult, protocolResult] = await Promise.all([
+      caseResponsesQueue.length > 0 ? caseResponsesQueue.shift()! : caseResponseFactory(),
+      protocolResponsesQueue.length > 0 ? protocolResponsesQueue.shift()! : protocolResponseFactory(),
+    ]);
+    const error = caseResult.error ?? protocolResult.error;
+    return {
+      data: error ? null : { cases: caseResult.data, protocols: protocolResult.data },
+      error,
+    };
+  },
   from: (table: string) => {
     if (table === "cases") {
       return {
         select: () => ({
-          eq: () => ({
-            order: () => {
+          eq: () => {
+            const query = {
+              gt: () => query,
+              order: () => query,
+              limit: () => {
               caseFetchCount += 1;
               if (caseResponsesQueue.length > 0) {
                 return Promise.resolve(caseResponsesQueue.shift());
               }
 
               return Promise.resolve().then(() => caseResponseFactory());
-            },
-          }),
+              },
+            };
+            return query;
+          },
         }),
       };
     }
@@ -83,12 +101,19 @@ const supabaseMock = {
       return {
         select: () => ({
           eq: () => {
-            protocolFetchCount += 1;
-            if (protocolResponsesQueue.length > 0) {
-              return Promise.resolve(protocolResponsesQueue.shift());
-            }
+            const query = {
+              gt: () => query,
+              order: () => query,
+              limit: () => {
+                protocolFetchCount += 1;
+                if (protocolResponsesQueue.length > 0) {
+                  return Promise.resolve(protocolResponsesQueue.shift());
+                }
 
-            return Promise.resolve().then(() => protocolResponseFactory());
+                return Promise.resolve().then(() => protocolResponseFactory());
+              },
+            };
+            return query;
           },
         }),
       };

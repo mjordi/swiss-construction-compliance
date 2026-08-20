@@ -148,17 +148,31 @@ vi.mock("@/lib/case-timeline", () => ({
 
 vi.mock("@/lib/supabase", () => ({
   getSupabase: () => ({
+    rpc: async () => {
+      const error = casesSelectError ?? protocolsSelectError;
+      return {
+        data: error ? null : {
+          cases: mockCases,
+          protocols: [{ id: "protocol-1", case_id: "case-review", project_name: "Riverside Bridge" }],
+        },
+        error,
+      };
+    },
     from: (table: string) => {
       if (table === "cases") {
         return {
           select: () => ({
-            eq: () => ({
-              order: () =>
-                Promise.resolve({
+            eq: () => {
+              const query = {
+                gt: () => query,
+                order: () => query,
+                limit: () => Promise.resolve({
                   data: casesSelectError ? null : mockCases,
                   error: casesSelectError,
                 }),
-            }),
+              };
+              return query;
+            },
           }),
           update: (payload: Record<string, unknown>) => {
             updateMock(payload);
@@ -212,11 +226,17 @@ vi.mock("@/lib/supabase", () => ({
       if (table === "protocols") {
         return {
           select: () => ({
-            eq: () =>
-              Promise.resolve({
+            eq: () => {
+              const query = {
+                gt: () => query,
+                order: () => query,
+                limit: () => Promise.resolve({
                 data: protocolsSelectError ? null : [{ id: "protocol-1", case_id: "case-review", project_name: "Riverside Bridge" }],
                 error: protocolsSelectError,
-              }),
+                }),
+              };
+              return query;
+            },
           }),
         };
       }
@@ -553,7 +573,7 @@ describe("vault follow-up links", () => {
     expect(screen.queryByText("Harbor Retrofit")).toBeNull();
   });
 
-  it("replaces an invalidated evidence refresh after archive persistence fails", async () => {
+  it("does not start a reconciliation refresh after a definitive archive failure", async () => {
     updateResponses.push({ error: { message: "boom" } });
 
     render(<TechVault />);
@@ -570,7 +590,7 @@ describe("vault follow-up links", () => {
     fireEvent.click(archiveButton);
 
     await waitFor(() => {
-      expect(within(getProjectCard("Harbor Retrofit")).getByText("2/4 checklist items ready")).toBeTruthy();
+      expect(within(getProjectCard("Harbor Retrofit")).getByText("1/4 checklist items ready")).toBeTruthy();
     });
     expect((await screen.findByRole("alert")).textContent).toContain("vault-update-status-error");
   });
@@ -721,7 +741,7 @@ describe("vault follow-up links", () => {
     updateResponses.shift();
   });
 
-  it("clears archive error feedback when a retry succeeds", async () => {
+  it("clears archive error feedback when reconciliation observes the committed write", async () => {
     updateResponses.push({ error: { message: "boom" } });
 
     render(<TechVault />);
@@ -736,9 +756,11 @@ describe("vault follow-up links", () => {
 
     expect((await screen.findByRole("alert")).textContent).toContain("vault-update-status-error");
 
-    const retryButton = within(getProjectCard("Harbor Retrofit")).getByRole("button", { name: "vault-archive-project" });
+    mockCases = mockCases.map((item) => item.project_name === "Harbor Retrofit"
+      ? { ...item, status: "archived", updated_at: "2026-08-20T10:00:00.000Z" }
+      : item);
     act(() => {
-      fireEvent.click(retryButton);
+      fireEvent.click(within(getProjectCard("Harbor Retrofit")).getByRole("button", { name: "vault-load-retry" }));
     });
 
     await waitFor(() => {

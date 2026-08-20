@@ -68,9 +68,22 @@ const cases = [
 ];
 vi.mock("@/lib/supabase", () => ({
   getSupabase: () => ({
+    rpc: async () => {
+      const [caseResult, protocolResult] = await Promise.all([caseLoadMock(), protocolLoadMock()]);
+      const error = caseResult.error ?? protocolResult.error;
+      return {
+        data: error ? null : { cases: caseResult.data, protocols: protocolResult.data },
+        error,
+      };
+    },
     from: (table: string) => table === "cases"
       ? {
-          select: () => ({ eq: () => ({ order: caseLoadMock }) }),
+          select: () => ({
+            eq: () => {
+              const query = { gt: () => query, order: () => query, limit: caseLoadMock };
+              return query;
+            },
+          }),
           update: (payload: { status: string }) => ({
             eq: () => ({
               eq: async () => {
@@ -80,7 +93,14 @@ vi.mock("@/lib/supabase", () => ({
             }),
           }),
         }
-      : { select: () => ({ eq: protocolLoadMock }) },
+      : {
+          select: () => ({
+            eq: () => {
+              const query = { gt: () => query, order: () => query, limit: protocolLoadMock };
+              return query;
+            },
+          }),
+        },
   }),
 }));
 

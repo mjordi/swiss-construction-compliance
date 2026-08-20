@@ -111,11 +111,50 @@ describe("locales", () => {
       "vault-archive-project",
       "vault-restore-project",
       "vault-update-status-error",
+      "vault-audit-export-action",
+      "vault-audit-export-preparing",
+      "vault-audit-export-success",
+      "vault-audit-export-error",
+      "vault-audit-export-guidance",
+      "vault-audit-export-generated-at",
+      "vault-audit-export-scope",
+      "vault-audit-export-scope-value",
+      "vault-audit-export-case-id",
+      "vault-audit-export-project",
+      "vault-audit-export-lifecycle",
+      "vault-audit-export-legal-status",
+      "vault-audit-export-legal-regime",
+      "vault-audit-export-deadline",
+      "vault-audit-export-checklist-completed",
+      "vault-audit-export-checklist-total",
+      "vault-audit-export-missing",
+      "vault-audit-export-linked-protocols",
+      "vault-audit-export-source-updated",
+      "vault-audit-export-none",
+      "vault-audit-export-unavailable",
+      "vault-audit-export-regime-old",
+      "vault-audit-export-regime-new",
     ] as const;
 
     for (const [lang, translations] of Object.entries(locales)) {
       for (const key of requiredVaultKeys) {
         expect(translations[key], `Locale '${lang}' missing vault key '${key}'`).toBeDefined();
+      }
+    }
+  });
+
+  it("keeps the vault audit export scope truthful in every locale", () => {
+    const expectedTerms = {
+      de: [/vollständig/i, /momentaufnahme/i, /kein nachweis rechtlicher vollständigkeit/i],
+      fr: [/complet/i, /instantané/i, /aucune preuve d.exhaustivité juridique/i],
+      it: [/completo/i, /istantanea/i, /nessuna prova di completezza giuridica/i],
+      en: [/complete/i, /point-in-time/i, /not proof of legal completeness/i],
+    } as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      const copy = `${translations["vault-audit-export-guidance"]} ${translations["vault-audit-export-scope-value"]}`;
+      for (const term of expectedTerms[lang as keyof typeof expectedTerms]) {
+        expect(copy, `Locale '${lang}' vault audit export copy is missing ${term}`).toMatch(term);
       }
     }
   });

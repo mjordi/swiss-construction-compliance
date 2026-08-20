@@ -44,17 +44,25 @@ vi.mock("@/lib/case-timeline", () => ({
 
 vi.mock("@/lib/supabase", () => ({
   getSupabase: () => ({
+    rpc: () => Promise.resolve({
+      data: { cases: [], protocols: [] },
+      error: null,
+    }),
     from: (table: string) => {
       if (table === "cases") {
         return {
           select: () => ({
-            eq: () => ({
-              order: () =>
-                Promise.resolve({
+            eq: () => {
+              const query = {
+                gt: () => query,
+                order: () => query,
+                limit: () => Promise.resolve({
                   data: [],
                   error: null,
                 }),
-            }),
+              };
+              return query;
+            },
           }),
         };
       }
@@ -62,11 +70,17 @@ vi.mock("@/lib/supabase", () => ({
       if (table === "protocols") {
         return {
           select: () => ({
-            eq: () =>
-              Promise.resolve({
+            eq: () => {
+              const query = {
+                gt: () => query,
+                order: () => query,
+                limit: () => Promise.resolve({
                 data: [],
                 error: null,
-              }),
+                }),
+              };
+              return query;
+            },
           }),
         };
       }

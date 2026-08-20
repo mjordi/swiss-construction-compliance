@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Folder, FileText, Plus, Search, ShieldCheck, Loader2, AlertCircle } from "lucide-react";
+import { Folder, FileText, Plus, Search, ShieldCheck, Loader2, AlertCircle, Download } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -15,6 +15,7 @@ import {
   buildComplianceCaseTimeline,
   deriveChecklistProgress,
   type CaseDeadlineStatus,
+  type ComplianceCaseInput,
   type ComplianceCaseViewModel,
 } from "@/lib/case-timeline";
 import {
@@ -25,6 +26,11 @@ import {
   type VaultEmptyStateAction,
   type VaultTab,
 } from "@/lib/vault";
+import {
+  buildVaultAuditCsv,
+  vaultAuditCsvFilename,
+  type VaultAuditCsvLabels,
+} from "@/lib/vault-audit-export";
 import type { TranslationKey } from "@/locales";
 
 interface VaultProjectCard {
@@ -41,7 +47,9 @@ interface VaultProjectCard {
   legalStatus: CaseDeadlineStatus | null;
   legalRegime: ComplianceCaseViewModel["regime"] | null;
   daysToDeadline: number | null;
+  timelineInput: ComplianceCaseInput;
   updatedAt: number;
+  sourceUpdatedAt: string | null;
   archived: boolean;
   prefillTriage: boolean;
 }
@@ -146,18 +154,58 @@ export default function TechVault() {
   } | null>(null);
   const [statusMutationProjectIds, setStatusMutationProjectIds] = useState<string[]>([]);
   const [projects, setProjects] = useState<VaultProjectCard[]>([]);
+  const [mutationRefreshPending, setMutationRefreshPending] = useState(false);
+  const [auditExportPending, setAuditExportPending] = useState(false);
+  const [auditExportFeedback, setAuditExportFeedback] = useState<TranslationKey | null>(null);
   const latestFetchIdRef = useRef(0);
   const pendingStatusMutationProjectIdsRef = useRef<Set<string>>(new Set());
+  const statusMutationRefreshProjectIdsRef = useRef<Set<string>>(new Set());
+  const ambiguousStatusExpectedRef = useRef<Map<string, VaultProjectCard["status"]>>(new Map());
+  const mutationRefreshPendingRef = useRef(false);
   const hasLoadedProjectsRef = useRef(false);
   const lastSuccessfulUserIdRef = useRef<string | null>(null);
   const currentUserIdRef = useRef<string | null>(user?.id ?? null);
   const activeTabRef = useRef(activeTab);
   const queryRef = useRef(query);
   const skipNextUrlWriteRef = useRef(false);
+  const auditExportInFlightRef = useRef(false);
+  const auditExportRequestIdRef = useRef(0);
+  const auditExportFeedbackTimerRef = useRef<number | null>(null);
+  const mountedRef = useRef(false);
 
   currentUserIdRef.current = user?.id ?? null;
 
-  const runRefresh = useCallback(async (fetchId: number) => {
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      auditExportRequestIdRef.current += 1;
+      auditExportInFlightRef.current = false;
+      if (auditExportFeedbackTimerRef.current) {
+        window.clearTimeout(auditExportFeedbackTimerRef.current);
+        auditExportFeedbackTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    auditExportRequestIdRef.current += 1;
+    auditExportInFlightRef.current = false;
+    pendingStatusMutationProjectIdsRef.current.clear();
+    statusMutationRefreshProjectIdsRef.current.clear();
+    ambiguousStatusExpectedRef.current.clear();
+    mutationRefreshPendingRef.current = false;
+    setStatusMutationProjectIds([]);
+    setMutationRefreshPending(false);
+    setAuditExportPending(false);
+    setAuditExportFeedback(null);
+    if (auditExportFeedbackTimerRef.current) {
+      window.clearTimeout(auditExportFeedbackTimerRef.current);
+      auditExportFeedbackTimerRef.current = null;
+    }
+  }, [user?.id]);
+
+  const runRefresh = useCallback(async function refreshVault(fetchId: number) {
     if (!user) {
       hasLoadedProjectsRef.current = false;
       lastSuccessfulUserIdRef.current = null;
@@ -169,33 +217,41 @@ export default function TechVault() {
     }
 
     setError(null);
-    try {
-      const [casesResult, protocolsResult] = await Promise.all([
-        supabase
-          .from("cases")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("updated_at", { ascending: false }),
-        supabase
-          .from("protocols")
-          .select("id, case_id, project_name")
-          .eq("user_id", user.id),
-      ]);
+    const handleRefreshFailure = () => {
+      const isInitialLoad = !hasLoadedProjectsRef.current || lastSuccessfulUserIdRef.current !== user.id;
+      const isPostMutationRefresh = mutationRefreshPendingRef.current;
 
+      if (isInitialLoad || isPostMutationRefresh) {
+        setError("vault-error-load");
+      }
+      if (isInitialLoad) {
+        setProjects([]);
+        setStatusMutationFeedback(null);
+      }
+      setLoading(false);
+    };
+    try {
+      // Read both collections in one PostgreSQL statement so every row belongs
+      // to the same MVCC snapshot even while another client creates records.
+      const { data: snapshotData, error: snapshotError } = await supabase.rpc("get_vault_audit_snapshot");
+      if (snapshotError) throw snapshotError;
       if (fetchId !== latestFetchIdRef.current) return;
 
-      if (casesResult.error || protocolsResult.error) {
-        if (!hasLoadedProjectsRef.current || lastSuccessfulUserIdRef.current !== user.id) {
-          setError("vault-error-load");
-          setProjects([]);
-          setStatusMutationFeedback(null);
-        }
-        setLoading(false);
-        return;
+      const snapshot = snapshotData as {
+        cases?: Array<Omit<Case, "updated_at"> & { updated_at: string | null }>;
+        protocols?: Array<Pick<Protocol, "id" | "case_id" | "project_name">>;
+      } | null;
+      if (!snapshot || !Array.isArray(snapshot.cases) || !Array.isArray(snapshot.protocols)) {
+        throw new Error("Invalid Vault audit snapshot");
       }
+      const loadedCases = snapshot.cases;
+      const loadedProtocols = snapshot.protocols;
 
-      const dbCases = (casesResult.data ?? []) as Case[];
-      const protocols = (protocolsResult.data ?? []) as Pick<Protocol, "id" | "case_id" | "project_name">[];
+      const dbCases = [...loadedCases].sort((left, right) =>
+        new Date(right.updated_at ?? right.created_at).getTime() - new Date(left.updated_at ?? left.created_at).getTime()
+        || left.id.localeCompare(right.id)
+      );
+      const protocols = loadedProtocols;
 
       const timeline = buildComplianceCaseTimeline(
         dbCases.map((c) => ({
@@ -234,6 +290,13 @@ export default function TechVault() {
         const restoredStatus = timelineState?.status ?? "active";
         const restoredPrefillTriage = Boolean(timelineState?.prefillTriage);
         const timelineItem = timelineByCaseId.get(c.id);
+        const timelineInput: ComplianceCaseInput = {
+          id: c.id,
+          projectName: c.project_name,
+          canton: c.canton,
+          contractDate: new Date(c.contract_date),
+          discoveryDate: new Date(c.discovery_date),
+        };
         const effectiveChecklist = normalizeFollowUpChecklistState({
           ...timelineItem?.checklistDefaults,
           ...(c.checklist ?? {}),
@@ -262,7 +325,9 @@ export default function TechVault() {
           legalStatus: timelineItem?.status ?? null,
           legalRegime: timelineItem?.regime ?? null,
           daysToDeadline: timelineItem?.daysToDeadline ?? null,
-          updatedAt: new Date(c.updated_at).getTime(),
+          timelineInput,
+          updatedAt: new Date(c.updated_at ?? c.created_at).getTime(),
+          sourceUpdatedAt: c.updated_at,
           archived,
           prefillTriage: !archived && restoredPrefillTriage,
         };
@@ -275,15 +340,47 @@ export default function TechVault() {
         setStatusMutationFeedback(null);
       }
       setProjects(nextProjects);
+      const refreshedProjectIds = new Set<string>(statusMutationRefreshProjectIdsRef.current);
+      const resolvedProjectIds = new Set<string>();
+      const confirmedAmbiguousProjectIds = new Set<string>();
+      refreshedProjectIds.forEach((projectId) => {
+        const expectedStatus = ambiguousStatusExpectedRef.current.get(projectId);
+        const refreshedProject = nextProjects.find((project) => project.id === projectId);
+        if (expectedStatus && refreshedProject?.status !== expectedStatus) {
+          // A transport failure cannot prove that the database write failed: it
+          // may still be blocked and commit later. Keep export/status actions
+          // guarded and expose the existing retry control until a snapshot
+          // actually observes the expected status.
+          return;
+        }
+        if (expectedStatus && refreshedProject?.status === expectedStatus) {
+          confirmedAmbiguousProjectIds.add(projectId);
+        }
+
+        ambiguousStatusExpectedRef.current.delete(projectId);
+        pendingStatusMutationProjectIdsRef.current.delete(projectId);
+        statusMutationRefreshProjectIdsRef.current.delete(projectId);
+        resolvedProjectIds.add(projectId);
+      });
+      if (resolvedProjectIds.size > 0) {
+        setStatusMutationProjectIds((current) =>
+          current.filter((projectId) => !resolvedProjectIds.has(projectId))
+        );
+      }
+      if (confirmedAmbiguousProjectIds.size > 0) {
+        setStatusMutationErrors((current: Record<string, TranslationKey>) => {
+          const next = { ...current };
+          confirmedAmbiguousProjectIds.forEach((projectId) => delete next[projectId]);
+          return next;
+        });
+      }
+      const hasPendingMutationRefresh = statusMutationRefreshProjectIdsRef.current.size > 0;
+      mutationRefreshPendingRef.current = hasPendingMutationRefresh;
+      setMutationRefreshPending(hasPendingMutationRefresh);
       setLoading(false);
     } catch {
       if (fetchId !== latestFetchIdRef.current) return;
-      if (!hasLoadedProjectsRef.current || lastSuccessfulUserIdRef.current !== user.id) {
-        setError("vault-error-load");
-        setProjects([]);
-        setStatusMutationFeedback(null);
-      }
-      setLoading(false);
+      handleRefreshFailure();
     }
   }, [user, supabase]);
 
@@ -293,8 +390,14 @@ export default function TechVault() {
       setLoading(true);
     }
     setError(null);
-    void runRefresh(fetchId);
+    return runRefresh(fetchId);
   }, [runRefresh, user?.id]);
+
+  const triggerMutationRefresh = useCallback(() => {
+    mutationRefreshPendingRef.current = true;
+    setMutationRefreshPending(true);
+    return triggerRefresh();
+  }, [triggerRefresh]);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -430,6 +533,7 @@ export default function TechVault() {
 
     const nextStatus = archived ? currentProject.restoredStatus : "archived";
     const previousProject = currentProject;
+    const invalidatedMutationRefresh = mutationRefreshPendingRef.current;
 
     // A refresh started before this mutation may contain the old status. Invalidate
     // it before applying the optimistic state, then refresh from the committed row.
@@ -471,7 +575,30 @@ export default function TechVault() {
         .eq("user_id", user.id);
 
       if (updateError) {
-        throw updateError;
+        setProjects((current) =>
+          current.map((project) =>
+            project.id === projectId
+              ? previousProject
+              : project
+          )
+        );
+        setStatusMutationErrors((current) => ({
+          ...current,
+          [projectId]: "vault-update-status-error",
+        }));
+        setStatusMutationFeedback((current) =>
+          current?.projectId === projectId ? null : current
+        );
+        pendingStatusMutationProjectIdsRef.current.delete(projectId);
+        ambiguousStatusExpectedRef.current.delete(projectId);
+        statusMutationRefreshProjectIdsRef.current.delete(projectId);
+        setStatusMutationProjectIds((current) =>
+          current.filter((currentProjectId) => currentProjectId !== projectId)
+        );
+        if (invalidatedMutationRefresh && currentUserIdRef.current === user.id) {
+          void triggerMutationRefresh();
+        }
+        return;
       }
 
       setStatusMutationErrors((current) => {
@@ -487,7 +614,8 @@ export default function TechVault() {
           projectName: currentProject.name,
           key: archived ? "vault-restore-success" : "vault-archive-success",
         });
-        triggerRefresh();
+        statusMutationRefreshProjectIdsRef.current.add(projectId);
+        void triggerMutationRefresh();
       }
     } catch {
       setProjects((current) =>
@@ -505,27 +633,182 @@ export default function TechVault() {
         current?.projectId === projectId ? null : current
       );
       if (currentUserIdRef.current === user.id) {
-        triggerRefresh();
+        // The write may have committed even when its response was lost. Keep the
+        // optimistic-export guard until a later snapshot observes the expected
+        // status. An old snapshot is not conclusive while the rejected write may
+        // still be waiting on a database lock.
+        ambiguousStatusExpectedRef.current.set(projectId, nextStatus);
+        statusMutationRefreshProjectIdsRef.current.add(projectId);
+        void triggerMutationRefresh();
+      } else {
+        pendingStatusMutationProjectIdsRef.current.delete(projectId);
+        setStatusMutationProjectIds((current) =>
+          current.filter((currentProjectId) => currentProjectId !== projectId)
+        );
       }
-    } finally {
-      pendingStatusMutationProjectIdsRef.current.delete(projectId);
-      setStatusMutationProjectIds((current) => current.filter((currentProjectId) => currentProjectId !== projectId));
     }
-  }, [projects, supabase, triggerRefresh, user]);
+  }, [projects, supabase, triggerMutationRefresh, user]);
+
+  const handleAuditExport = useCallback(async () => {
+    const ownerId = user?.id;
+    if (
+      !ownerId
+      || projects.length === 0
+      || lastSuccessfulUserIdRef.current !== ownerId
+      || pendingStatusMutationProjectIdsRef.current.size > 0
+      || mutationRefreshPendingRef.current
+      || auditExportInFlightRef.current
+    ) {
+      return;
+    }
+
+    auditExportInFlightRef.current = true;
+    const requestId = ++auditExportRequestIdRef.current;
+    setAuditExportPending(true);
+    setAuditExportFeedback(null);
+    if (auditExportFeedbackTimerRef.current) {
+      window.clearTimeout(auditExportFeedbackTimerRef.current);
+      auditExportFeedbackTimerRef.current = null;
+    }
+
+    const isCurrent = () =>
+      mountedRef.current
+      && auditExportRequestIdRef.current === requestId
+      && currentUserIdRef.current === ownerId
+      && lastSuccessfulUserIdRef.current === ownerId;
+
+    const showFeedback = (key: TranslationKey) => {
+      if (!isCurrent()) return;
+      setAuditExportFeedback(key);
+      auditExportFeedbackTimerRef.current = window.setTimeout(() => {
+        if (!isCurrent()) return;
+        setAuditExportFeedback(null);
+        auditExportFeedbackTimerRef.current = null;
+      }, 2000);
+    };
+
+    try {
+      // Yield once so the synchronous in-flight guard also covers rapid repeated activation.
+      await Promise.resolve();
+      if (!isCurrent()) return;
+
+      const generatedAt = new Date();
+      const labels: VaultAuditCsvLabels = {
+        generatedAt: t("vault-audit-export-generated-at"),
+        scope: t("vault-audit-export-scope"),
+        scopeValue: t("vault-audit-export-scope-value"),
+        caseId: t("vault-audit-export-case-id"),
+        project: t("vault-audit-export-project"),
+        lifecycleStatus: t("vault-audit-export-lifecycle"),
+        legalStatus: t("vault-audit-export-legal-status"),
+        legalRegime: t("vault-audit-export-legal-regime"),
+        deadlineContext: t("vault-audit-export-deadline"),
+        checklistCompleted: t("vault-audit-export-checklist-completed"),
+        checklistTotal: t("vault-audit-export-checklist-total"),
+        missingAuditItems: t("vault-audit-export-missing"),
+        linkedProtocols: t("vault-audit-export-linked-protocols"),
+        sourceUpdatedAt: t("vault-audit-export-source-updated"),
+        noMissingItems: t("vault-audit-export-none"),
+        unavailable: t("vault-audit-export-unavailable"),
+      };
+      const currentTimelineByCaseId = new Map(
+        buildComplianceCaseTimeline(projects.map((project) => project.timelineInput))
+          .map((item) => [item.id, item])
+      );
+      const rows = projects.map((project) => {
+        const currentTimeline = currentTimelineByCaseId.get(project.id);
+        const currentLifecycleStatus: VaultProjectCard["status"] = project.archived
+          ? "archived"
+          : currentTimeline?.status === "warning"
+            || currentTimeline?.status === "urgent"
+            || currentTimeline?.status === "expired"
+            || currentTimeline?.status === "immediate-notice"
+            ? "review"
+            : "active";
+        return {
+          caseId: project.id,
+          project: project.name,
+          lifecycleStatus: t(statusLabelKey[currentLifecycleStatus]),
+          legalStatus: currentTimeline ? t(legalStatusLabelKey[currentTimeline.status]) : null,
+          legalRegime: currentTimeline?.regime
+            ? t(currentTimeline.regime === "old" ? "vault-audit-export-regime-old" : "vault-audit-export-regime-new")
+            : null,
+          deadlineContext: currentTimeline
+            ? getLocalizedCountdownLabel(
+                { legalRegime: currentTimeline.regime, daysToDeadline: currentTimeline.daysToDeadline },
+                t
+              )
+            : null,
+          checklistCompleted: project.checklistCompleted,
+          checklistTotal: project.checklistTotal,
+          missingAuditItems: project.auditMissingLabelKeys.map((key) => t(key)),
+          linkedProtocols: project.docs,
+          sourceUpdatedAt: project.sourceUpdatedAt,
+        };
+      });
+      const csv = buildVaultAuditCsv(rows, labels, generatedAt);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      try {
+        if (!isCurrent()) return;
+        anchor.href = url;
+        anchor.download = vaultAuditCsvFilename(generatedAt);
+        anchor.click();
+      } finally {
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      }
+      showFeedback("vault-audit-export-success");
+    } catch {
+      showFeedback("vault-audit-export-error");
+    } finally {
+      if (auditExportRequestIdRef.current === requestId) {
+        auditExportInFlightRef.current = false;
+        if (mountedRef.current && currentUserIdRef.current === ownerId) {
+          setAuditExportPending(false);
+        }
+      }
+    }
+  }, [projects, t, user?.id]);
 
   return (
     <div className="max-w-6xl mx-auto h-[calc(100vh-100px)] flex flex-col">
-      <header className="mb-8 flex justify-between items-end">
+      <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold mb-2">{t("vault-title")}</h1>
           <p className="text-slate-400">{t("vault-subtitle")}</p>
         </div>
-        <Link
-          href={createProjectHref}
-          className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition text-sm font-bold border border-white/5"
-        >
-          <Plus className="w-4 h-4" /> {t("vault-new-project")}
-        </Link>
+        <div className="flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-start">
+          {!loading && !error && projects.length > 0 && user && lastSuccessfulUserIdRef.current === user.id ? (
+            <div className="max-w-sm text-left sm:text-right">
+              <button
+                type="button"
+                onClick={() => void handleAuditExport()}
+                disabled={auditExportPending || mutationRefreshPending || statusMutationProjectIds.length > 0}
+                className="inline-flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-bold text-accent transition hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-60 sm:ml-auto"
+              >
+                {auditExportPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                {t(auditExportPending ? "vault-audit-export-preparing" : "vault-audit-export-action")}
+              </button>
+              <p className="mt-1 text-xs text-slate-500">{t("vault-audit-export-guidance")}</p>
+              {auditExportFeedback ? (
+                <p
+                  role="status"
+                  className={`mt-1 text-xs ${auditExportFeedback === "vault-audit-export-success" ? "text-emerald-300" : "text-red-300"}`}
+                >
+                  {t(auditExportFeedback)}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <Link
+            href={createProjectHref}
+            className="flex items-center justify-center gap-2 self-start whitespace-nowrap rounded-lg border border-white/5 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/20"
+          >
+            <Plus className="w-4 h-4" /> {t("vault-new-project")}
+          </Link>
+        </div>
       </header>
 
       <div className="flex-1 glass-card rounded-3xl overflow-hidden flex flex-col border border-white/10">
@@ -756,9 +1039,19 @@ export default function TechVault() {
                           </button>
                         </div>
                         {statusMutationErrors[project.id] ? (
-                          <p role="alert" className="text-sm text-red-300">
-                            {t(statusMutationErrors[project.id])}
-                          </p>
+                          <div role="alert" className="pointer-events-auto space-y-2 text-sm text-red-300">
+                            <p>{t(statusMutationErrors[project.id])}</p>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void triggerMutationRefresh();
+                              }}
+                              className="rounded border border-red-300/30 px-3 py-1.5 text-xs text-red-100 transition hover:bg-red-500/10"
+                            >
+                              {t("vault-load-retry")}
+                            </button>
+                          </div>
                         ) : null}
                         {user ? (
                           <CaseEvidencePanel
@@ -766,7 +1059,7 @@ export default function TechVault() {
                             caseId={project.id}
                             caseName={project.name}
                             readOnly={project.archived}
-                            onChecklistUpdated={triggerRefresh}
+                            onChecklistUpdated={triggerMutationRefresh}
                           />
                         ) : null}
                       </div>
