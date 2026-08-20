@@ -657,6 +657,44 @@ describe("Cases notice dispatch recording", () => {
     expect(screen.queryByText("cases-notice-dispatch-evidence-error")).toBeNull();
   });
 
+  it("shows the authoritative evidence link when another client wins the dispatch race", async () => {
+    noticeDispatches = [savedDispatch({
+      user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",
+      dispatched_at: "2026-08-15T09:00:00.000Z", channel: "courier", reference: null,
+    })];
+    caseEvidence = [
+      {
+        id: "evidence-1", user_id: "user-1", case_id: "case-1", original_name: "selected-receipt.pdf",
+        storage_path: "user-1/case-1/selected-receipt.pdf", mime_type: "application/pdf", size_bytes: 123,
+        created_at: "2026-08-14T09:00:00.000Z",
+      },
+      {
+        id: "evidence-2", user_id: "user-1", case_id: "case-1", original_name: "winning-receipt.pdf",
+        storage_path: "user-1/case-1/winning-receipt.pdf", mime_type: "application/pdf", size_bytes: 456,
+        created_at: "2026-08-14T10:00:00.000Z",
+      },
+    ];
+    dispatchEvidenceInsertMock.mockImplementationOnce(async (payload: Record<string, unknown>) => {
+      dispatchEvidence = [{
+        id: "association-winning",
+        ...payload,
+        evidence_id: "evidence-2",
+        created_at: "2026-08-17T08:00:00.000Z",
+      } as DispatchEvidenceRecord];
+      return { data: null, error: { message: "dispatch already linked" } };
+    });
+    render(<CasesPage />);
+
+    fireEvent.submit(await screen.findByTestId("cases-notice-dispatch-evidence-form-case-1"));
+
+    const linked = await screen.findByTestId("cases-notice-dispatch-evidence-case-1");
+    expect(linked.textContent).toContain("winning-receipt.pdf");
+    expect(linked.textContent).toContain("evidence-2");
+    expect(linked.textContent).toContain("association-winning");
+    expect(screen.getByText("cases-notice-dispatch-evidence-existing")).toBeTruthy();
+    expect(screen.queryByText("cases-notice-dispatch-evidence-error")).toBeNull();
+  });
+
   it("does not show evidence-link feedback for a newer latest dispatch", async () => {
     noticeDispatches = [savedDispatch({
       user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",

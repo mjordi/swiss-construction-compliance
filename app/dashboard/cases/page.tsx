@@ -2243,14 +2243,19 @@ export default function CasesPage() {
     const acceptSavedAssociation = (candidate: unknown) => {
       const saved = normalizeCaseNoticeDispatchEvidence(candidate);
       if (!saved || !requestIsCurrent() || saved.user_id !== userId || saved.case_id !== caseId
-        || saved.dispatch_id !== dispatch.id || saved.evidence_id !== evidenceId) return false;
+        || saved.dispatch_id !== dispatch.id) return false;
       setNoticeDispatchEvidence((current) => {
         const next = [saved, ...current.filter((row) => row.dispatch_id !== dispatch.id)];
         lastSuccessfulDispatchEvidenceRef.current = next;
         lastSuccessfulDispatchEvidenceUserIdRef.current = userId;
         return next;
       });
-      setDispatchEvidenceFeedbackByDispatch((current) => ({ ...current, [dispatch.id]: "cases-notice-dispatch-evidence-linked" }));
+      setDispatchEvidenceFeedbackByDispatch((current) => ({
+        ...current,
+        [dispatch.id]: saved.evidence_id === evidenceId
+          ? "cases-notice-dispatch-evidence-linked"
+          : "cases-notice-dispatch-evidence-existing",
+      }));
       return true;
     };
     try {
