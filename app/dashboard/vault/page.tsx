@@ -550,6 +550,7 @@ export default function TechVault() {
       !ownerId
       || projects.length === 0
       || lastSuccessfulUserIdRef.current !== ownerId
+      || pendingStatusMutationProjectIdsRef.current.size > 0
       || auditExportInFlightRef.current
     ) {
       return;
@@ -658,7 +659,7 @@ export default function TechVault() {
               <button
                 type="button"
                 onClick={() => void handleAuditExport()}
-                disabled={auditExportPending}
+                disabled={auditExportPending || statusMutationProjectIds.length > 0}
                 className="ml-auto inline-flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-bold text-accent transition hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {auditExportPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}

@@ -20,6 +20,7 @@ const { buildCsvMock, filenameMock } = vi.hoisted(() => ({
 }));
 const createObjectUrlMock = vi.fn(() => "blob:vault-audit");
 const revokeObjectUrlMock = vi.fn();
+let statusUpdateResult: Promise<{ error: { message: string } | null }>;
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/vault",
@@ -90,7 +91,10 @@ const cases = [
 const supabaseMock = {
   from: (table: string) => {
     if (table === "cases") {
-      return { select: () => ({ eq: () => ({ order: () => Promise.resolve({ data: cases, error: null }) }) }) };
+      return {
+        select: () => ({ eq: () => ({ order: () => Promise.resolve({ data: cases, error: null }) }) }),
+        update: () => ({ eq: () => ({ eq: () => statusUpdateResult }) }),
+      };
     }
     if (table === "protocols") {
       return { select: () => ({ eq: () => Promise.resolve({ data: [{ id: "protocol-1", case_id: "case-archived", project_name: "Summit Depot" }], error: null }) }) };
@@ -111,6 +115,7 @@ describe("Vault portfolio audit export", () => {
     revokeObjectUrlMock.mockClear();
     replaceMock.mockClear();
     pushMock.mockClear();
+    statusUpdateResult = Promise.resolve({ error: null });
     Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectUrlMock });
     Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectUrlMock });
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
@@ -152,5 +157,20 @@ describe("Vault portfolio audit export", () => {
 
     expect(await screen.findByText("vault-audit-export-error")).toBeTruthy();
     expect(screen.getByRole("button", { name: "vault-audit-export-action" })).toBeTruthy();
+  });
+
+  it("blocks export while an optimistic lifecycle mutation is unresolved", async () => {
+    statusUpdateResult = new Promise(() => undefined);
+    render(<TechVault />);
+    await screen.findByText("Alpine Tower");
+
+    fireEvent.click(screen.getByRole("button", { name: "vault-archive-project" }));
+
+    const exportButton = screen.getByRole("button", { name: "vault-audit-export-action" });
+    await waitFor(() => expect(exportButton.getAttribute("disabled")).not.toBeNull());
+    fireEvent.click(exportButton);
+
+    expect(buildCsvMock).not.toHaveBeenCalled();
+    expect(createObjectUrlMock).not.toHaveBeenCalled();
   });
 });
