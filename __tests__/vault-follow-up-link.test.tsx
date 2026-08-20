@@ -757,8 +757,13 @@ describe("vault follow-up links", () => {
     expect((await screen.findByRole("alert")).textContent).toContain("vault-update-status-error");
 
     const retryButton = within(getProjectCard("Harbor Retrofit")).getByRole("button", { name: "vault-archive-project" });
+    expect((retryButton as HTMLButtonElement).disabled).toBe(true);
+    await waitFor(() => {
+      expect((within(getProjectCard("Harbor Retrofit")).getByRole("button", { name: "vault-archive-project" }) as HTMLButtonElement).disabled)
+        .toBe(false);
+    }, { timeout: 3000 });
     act(() => {
-      fireEvent.click(retryButton);
+      fireEvent.click(within(getProjectCard("Harbor Retrofit")).getByRole("button", { name: "vault-archive-project" }));
     });
 
     await waitFor(() => {

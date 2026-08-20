@@ -135,6 +135,9 @@ function getLocalizedCountdownLabel(
   return `${days} ${t("cases-countdown-days-left-suffix")}`;
 }
 
+const AMBIGUOUS_STATUS_RECONCILIATION_DELAY_MS = 1000;
+const AMBIGUOUS_STATUS_RECONCILIATION_ATTEMPTS = 3;
+
 export default function TechVault() {
   const { user } = useAuth();
   const { lang, t } = useLanguage();
@@ -160,6 +163,9 @@ export default function TechVault() {
   const latestFetchIdRef = useRef(0);
   const pendingStatusMutationProjectIdsRef = useRef<Set<string>>(new Set());
   const statusMutationRefreshProjectIdsRef = useRef<Set<string>>(new Set());
+  const ambiguousStatusExpectedRef = useRef<Map<string, VaultProjectCard["status"]>>(new Map());
+  const ambiguousStatusAttemptsRef = useRef<Map<string, number>>(new Map());
+  const ambiguousStatusTimersRef = useRef<Map<string, number>>(new Map());
   const mutationRefreshPendingRef = useRef(false);
   const hasLoadedProjectsRef = useRef(false);
   const lastSuccessfulUserIdRef = useRef<string | null>(null);
@@ -175,6 +181,7 @@ export default function TechVault() {
   currentUserIdRef.current = user?.id ?? null;
 
   useEffect(() => {
+    const ambiguousStatusTimers: Map<string, number> = ambiguousStatusTimersRef.current;
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
@@ -184,6 +191,8 @@ export default function TechVault() {
         window.clearTimeout(auditExportFeedbackTimerRef.current);
         auditExportFeedbackTimerRef.current = null;
       }
+      ambiguousStatusTimers.forEach((timer) => window.clearTimeout(timer));
+      ambiguousStatusTimers.clear();
     };
   }, []);
 
@@ -192,6 +201,10 @@ export default function TechVault() {
     auditExportInFlightRef.current = false;
     pendingStatusMutationProjectIdsRef.current.clear();
     statusMutationRefreshProjectIdsRef.current.clear();
+    ambiguousStatusExpectedRef.current.clear();
+    ambiguousStatusAttemptsRef.current.clear();
+    ambiguousStatusTimersRef.current.forEach((timer) => window.clearTimeout(timer));
+    ambiguousStatusTimersRef.current.clear();
     mutationRefreshPendingRef.current = false;
     setStatusMutationProjectIds([]);
     setMutationRefreshPending(false);
@@ -203,7 +216,7 @@ export default function TechVault() {
     }
   }, [user?.id]);
 
-  const runRefresh = useCallback(async (fetchId: number) => {
+  const runRefresh = useCallback(async function refreshVault(fetchId: number) {
     if (!user) {
       hasLoadedProjectsRef.current = false;
       lastSuccessfulUserIdRef.current = null;
@@ -338,18 +351,57 @@ export default function TechVault() {
         setStatusMutationFeedback(null);
       }
       setProjects(nextProjects);
-      mutationRefreshPendingRef.current = false;
-      setMutationRefreshPending(false);
-      const refreshedProjectIds = new Set(statusMutationRefreshProjectIdsRef.current);
+      const refreshedProjectIds = new Set<string>(statusMutationRefreshProjectIdsRef.current);
+      const resolvedProjectIds = new Set<string>();
+      const confirmedAmbiguousProjectIds = new Set<string>();
       refreshedProjectIds.forEach((projectId) => {
+        const expectedStatus = ambiguousStatusExpectedRef.current.get(projectId);
+        const refreshedProject = nextProjects.find((project) => project.id === projectId);
+        if (expectedStatus && refreshedProject?.status !== expectedStatus) {
+          const attempts = (ambiguousStatusAttemptsRef.current.get(projectId) ?? 0) + 1;
+          ambiguousStatusAttemptsRef.current.set(projectId, attempts);
+          if (attempts < AMBIGUOUS_STATUS_RECONCILIATION_ATTEMPTS) {
+            if (ambiguousStatusTimersRef.current.size === 0) {
+              const timer = window.setTimeout(() => {
+                ambiguousStatusTimersRef.current.delete(projectId);
+                if (!mountedRef.current || currentUserIdRef.current !== user.id) return;
+                mutationRefreshPendingRef.current = true;
+                setMutationRefreshPending(true);
+                void refreshVault(++latestFetchIdRef.current);
+              }, AMBIGUOUS_STATUS_RECONCILIATION_DELAY_MS);
+              ambiguousStatusTimersRef.current.set(projectId, timer);
+            }
+            return;
+          }
+        }
+        if (expectedStatus && refreshedProject?.status === expectedStatus) {
+          confirmedAmbiguousProjectIds.add(projectId);
+        }
+
+        const timer = ambiguousStatusTimersRef.current.get(projectId);
+        if (timer !== undefined) window.clearTimeout(timer);
+        ambiguousStatusTimersRef.current.delete(projectId);
+        ambiguousStatusExpectedRef.current.delete(projectId);
+        ambiguousStatusAttemptsRef.current.delete(projectId);
         pendingStatusMutationProjectIdsRef.current.delete(projectId);
         statusMutationRefreshProjectIdsRef.current.delete(projectId);
+        resolvedProjectIds.add(projectId);
       });
-      if (refreshedProjectIds.size > 0) {
+      if (resolvedProjectIds.size > 0) {
         setStatusMutationProjectIds((current) =>
-          current.filter((projectId) => !refreshedProjectIds.has(projectId))
+          current.filter((projectId) => !resolvedProjectIds.has(projectId))
         );
       }
+      if (confirmedAmbiguousProjectIds.size > 0) {
+        setStatusMutationErrors((current: Record<string, TranslationKey>) => {
+          const next = { ...current };
+          confirmedAmbiguousProjectIds.forEach((projectId) => delete next[projectId]);
+          return next;
+        });
+      }
+      const hasPendingMutationRefresh = statusMutationRefreshProjectIdsRef.current.size > 0;
+      mutationRefreshPendingRef.current = hasPendingMutationRefresh;
+      setMutationRefreshPending(hasPendingMutationRefresh);
       setLoading(false);
     } catch {
       if (fetchId !== latestFetchIdRef.current) return;
@@ -583,8 +635,10 @@ export default function TechVault() {
       );
       if (currentUserIdRef.current === user.id) {
         // The write may have committed even when its response was lost. Keep the
-        // optimistic-export guard until a mutation-aware refresh reconciles the
-        // row with the persisted database snapshot.
+        // optimistic-export guard until delayed snapshots either observe the
+        // expected status or repeatedly confirm that the write did not commit.
+        ambiguousStatusExpectedRef.current.set(projectId, nextStatus);
+        ambiguousStatusAttemptsRef.current.set(projectId, 0);
         statusMutationRefreshProjectIdsRef.current.add(projectId);
         void triggerMutationRefresh();
       } else {

@@ -384,4 +384,40 @@ describe("Vault portfolio audit export", () => {
       sourceUpdatedAt: "2026-08-20T09:30:00.000Z",
     });
   });
+
+  it("waits for a delayed snapshot when an ambiguous archive initially reads the old status", async () => {
+    statusUpdateResult = Promise.resolve({ error: { message: "response lost" } });
+    render(<TechVault />);
+    await screen.findByText("Alpine Tower");
+    rpcMock
+      .mockResolvedValueOnce({ data: { cases, protocols: [] }, error: null })
+      .mockResolvedValueOnce({
+        data: {
+          cases: cases.map((entry) => entry.id === "case-active"
+            ? { ...entry, status: "archived", updated_at: "2026-08-20T09:45:00.000Z" }
+            : entry),
+          protocols: [],
+        },
+        error: null,
+      });
+
+    fireEvent.click(screen.getByRole("button", { name: "vault-archive-project" }));
+
+    await waitFor(() => expect(rpcMock).toHaveBeenCalledTimes(2));
+    const exportWhileOldSnapshotIsVisible = screen.getByRole("button", { name: "vault-audit-export-action" });
+    expect(exportWhileOldSnapshotIsVisible.getAttribute("disabled")).not.toBeNull();
+    fireEvent.click(exportWhileOldSnapshotIsVisible);
+    expect(buildCsvMock).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(rpcMock).toHaveBeenCalledTimes(3), { timeout: 2000 });
+    const exportButton = screen.getByRole("button", { name: "vault-audit-export-action" });
+    expect(exportButton.getAttribute("disabled")).toBeNull();
+    expect(screen.queryByText("vault-update-status-error")).toBeNull();
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(buildCsvMock).toHaveBeenCalledTimes(1));
+    expect(buildCsvMock.mock.calls[0][0].find((row: Record<string, unknown>) => row.caseId === "case-active")).toMatchObject({
+      lifecycleStatus: "vault-status-archived",
+      sourceUpdatedAt: "2026-08-20T09:45:00.000Z",
+    });
+  });
 });
