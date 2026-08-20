@@ -65,16 +65,21 @@ const supabaseMock = {
     if (table === "cases") {
       return {
         select: () => ({
-          eq: () => ({
-            order: () => {
+          eq: () => {
+            const query = {
+              gt: () => query,
+              order: () => query,
+              limit: () => {
               caseFetchCount += 1;
               if (caseResponsesQueue.length > 0) {
                 return Promise.resolve(caseResponsesQueue.shift());
               }
 
               return Promise.resolve().then(() => caseResponseFactory());
-            },
-          }),
+              },
+            };
+            return query;
+          },
         }),
       };
     }
@@ -83,12 +88,19 @@ const supabaseMock = {
       return {
         select: () => ({
           eq: () => {
-            protocolFetchCount += 1;
-            if (protocolResponsesQueue.length > 0) {
-              return Promise.resolve(protocolResponsesQueue.shift());
-            }
+            const query = {
+              gt: () => query,
+              order: () => query,
+              limit: () => {
+                protocolFetchCount += 1;
+                if (protocolResponsesQueue.length > 0) {
+                  return Promise.resolve(protocolResponsesQueue.shift());
+                }
 
-            return Promise.resolve().then(() => protocolResponseFactory());
+                return Promise.resolve().then(() => protocolResponseFactory());
+              },
+            };
+            return query;
           },
         }),
       };

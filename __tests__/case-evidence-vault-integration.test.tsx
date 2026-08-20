@@ -70,7 +70,12 @@ vi.mock("@/lib/supabase", () => ({
   getSupabase: () => ({
     from: (table: string) => table === "cases"
       ? {
-          select: () => ({ eq: () => ({ order: caseLoadMock }) }),
+          select: () => ({
+            eq: () => {
+              const query = { gt: () => query, order: () => query, limit: caseLoadMock };
+              return query;
+            },
+          }),
           update: (payload: { status: string }) => ({
             eq: () => ({
               eq: async () => {
@@ -80,7 +85,14 @@ vi.mock("@/lib/supabase", () => ({
             }),
           }),
         }
-      : { select: () => ({ eq: protocolLoadMock }) },
+      : {
+          select: () => ({
+            eq: () => {
+              const query = { gt: () => query, order: () => query, limit: protocolLoadMock };
+              return query;
+            },
+          }),
+        },
   }),
 }));
 

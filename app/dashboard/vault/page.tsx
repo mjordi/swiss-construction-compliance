@@ -15,6 +15,7 @@ import {
   buildComplianceCaseTimeline,
   deriveChecklistProgress,
   type CaseDeadlineStatus,
+  type ComplianceCaseInput,
   type ComplianceCaseViewModel,
 } from "@/lib/case-timeline";
 import {
@@ -25,7 +26,12 @@ import {
   type VaultEmptyStateAction,
   type VaultTab,
 } from "@/lib/vault";
-import { buildVaultAuditCsv, vaultAuditCsvFilename, type VaultAuditCsvLabels } from "@/lib/vault-audit-export";
+import {
+  buildVaultAuditCsv,
+  loadAllVaultAuditPages,
+  vaultAuditCsvFilename,
+  type VaultAuditCsvLabels,
+} from "@/lib/vault-audit-export";
 import type { TranslationKey } from "@/locales";
 
 interface VaultProjectCard {
@@ -42,6 +48,7 @@ interface VaultProjectCard {
   legalStatus: CaseDeadlineStatus | null;
   legalRegime: ComplianceCaseViewModel["regime"] | null;
   daysToDeadline: number | null;
+  timelineInput: ComplianceCaseInput;
   updatedAt: number;
   archived: boolean;
   prefillTriage: boolean;
@@ -218,27 +225,30 @@ export default function TechVault() {
       setLoading(false);
     };
     try {
-      const [casesResult, protocolsResult] = await Promise.all([
-        supabase
-          .from("cases")
-          .select("*")
-          .eq("user_id", user.id)
-          .order("updated_at", { ascending: false }),
-        supabase
-          .from("protocols")
-          .select("id, case_id, project_name")
-          .eq("user_id", user.id),
+      const requestIsCurrent = () => fetchId === latestFetchIdRef.current;
+      const [loadedCases, loadedProtocols] = await Promise.all([
+        loadAllVaultAuditPages<Case>(async (afterId, pageSize) => {
+          let query = supabase.from("cases").select("*").eq("user_id", user.id);
+          if (afterId) query = query.gt("id", afterId);
+          return query.order("id", { ascending: true }).limit(pageSize);
+        }, requestIsCurrent),
+        loadAllVaultAuditPages<Pick<Protocol, "id" | "case_id" | "project_name">>(async (afterId, pageSize) => {
+          let query = supabase
+            .from("protocols")
+            .select("id, case_id, project_name")
+            .eq("user_id", user.id);
+          if (afterId) query = query.gt("id", afterId);
+          return query.order("id", { ascending: true }).limit(pageSize);
+        }, requestIsCurrent),
       ]);
 
-      if (fetchId !== latestFetchIdRef.current) return;
+      if (fetchId !== latestFetchIdRef.current || !loadedCases || !loadedProtocols) return;
 
-      if (casesResult.error || protocolsResult.error) {
-        handleRefreshFailure();
-        return;
-      }
-
-      const dbCases = (casesResult.data ?? []) as Case[];
-      const protocols = (protocolsResult.data ?? []) as Pick<Protocol, "id" | "case_id" | "project_name">[];
+      const dbCases = [...loadedCases].sort((left, right) =>
+        new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime()
+        || left.id.localeCompare(right.id)
+      );
+      const protocols = loadedProtocols;
 
       const timeline = buildComplianceCaseTimeline(
         dbCases.map((c) => ({
@@ -277,6 +287,13 @@ export default function TechVault() {
         const restoredStatus = timelineState?.status ?? "active";
         const restoredPrefillTriage = Boolean(timelineState?.prefillTriage);
         const timelineItem = timelineByCaseId.get(c.id);
+        const timelineInput: ComplianceCaseInput = {
+          id: c.id,
+          projectName: c.project_name,
+          canton: c.canton,
+          contractDate: new Date(c.contract_date),
+          discoveryDate: new Date(c.discovery_date),
+        };
         const effectiveChecklist = normalizeFollowUpChecklistState({
           ...timelineItem?.checklistDefaults,
           ...(c.checklist ?? {}),
@@ -305,6 +322,7 @@ export default function TechVault() {
           legalStatus: timelineItem?.status ?? null,
           legalRegime: timelineItem?.regime ?? null,
           daysToDeadline: timelineItem?.daysToDeadline ?? null,
+          timelineInput,
           updatedAt: new Date(c.updated_at).getTime(),
           archived,
           prefillTriage: !archived && restoredPrefillTriage,
@@ -622,21 +640,33 @@ export default function TechVault() {
         noMissingItems: t("vault-audit-export-none"),
         unavailable: t("vault-audit-export-unavailable"),
       };
-      const rows = projects.map((project) => ({
-        caseId: project.id,
-        project: project.name,
-        lifecycleStatus: t(statusLabelKey[project.status]),
-        legalStatus: project.legalStatus ? t(legalStatusLabelKey[project.legalStatus]) : null,
-        legalRegime: project.legalRegime
-          ? t(project.legalRegime === "old" ? "vault-audit-export-regime-old" : "vault-audit-export-regime-new")
-          : null,
-        deadlineContext: project.legalStatus ? getLocalizedCountdownLabel(project, t) : null,
-        checklistCompleted: project.checklistCompleted,
-        checklistTotal: project.checklistTotal,
-        missingAuditItems: project.auditMissingLabelKeys.map((key) => t(key)),
-        linkedProtocols: project.docs,
-        sourceUpdatedAt: new Date(project.updatedAt).toISOString(),
-      }));
+      const currentTimelineByCaseId = new Map(
+        buildComplianceCaseTimeline(projects.map((project) => project.timelineInput))
+          .map((item) => [item.id, item])
+      );
+      const rows = projects.map((project) => {
+        const currentTimeline = currentTimelineByCaseId.get(project.id);
+        return {
+          caseId: project.id,
+          project: project.name,
+          lifecycleStatus: t(statusLabelKey[project.status]),
+          legalStatus: currentTimeline ? t(legalStatusLabelKey[currentTimeline.status]) : null,
+          legalRegime: currentTimeline?.regime
+            ? t(currentTimeline.regime === "old" ? "vault-audit-export-regime-old" : "vault-audit-export-regime-new")
+            : null,
+          deadlineContext: currentTimeline
+            ? getLocalizedCountdownLabel(
+                { legalRegime: currentTimeline.regime, daysToDeadline: currentTimeline.daysToDeadline },
+                t
+              )
+            : null,
+          checklistCompleted: project.checklistCompleted,
+          checklistTotal: project.checklistTotal,
+          missingAuditItems: project.auditMissingLabelKeys.map((key) => t(key)),
+          linkedProtocols: project.docs,
+          sourceUpdatedAt: new Date(project.updatedAt).toISOString(),
+        };
+      });
       const csv = buildVaultAuditCsv(rows, labels, generatedAt);
       const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
       const url = URL.createObjectURL(blob);

@@ -18,10 +18,15 @@ const { buildCsvMock, filenameMock } = vi.hoisted(() => ({
     return "baucompliance-vault-audit-2026-08-20.csv";
   }),
 }));
+const { buildTimelineMock, timelineState } = vi.hoisted(() => ({
+  buildTimelineMock: vi.fn(),
+  timelineState: { activeStatus: "urgent" as "urgent" | "expired", activeDays: 2 },
+}));
 const createObjectUrlMock = vi.fn(() => "blob:vault-audit");
 const revokeObjectUrlMock = vi.fn();
 let statusUpdateResult: Promise<{ error: { message: string } | null }>;
-let casesSelectResult: Promise<{ data: typeof cases; error: { message: string } | null }>;
+let casesSelectResults: Array<Promise<{ data: typeof cases; error: { message: string } | null }>> = [];
+let protocolsSelectResults: Array<Promise<{ data: Array<{ id: string; case_id: string; project_name: string }>; error: { message: string } | null }>> = [];
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/vault",
@@ -37,24 +42,13 @@ vi.mock("framer-motion", () => ({
   motion: { div: ({ children, ...props }: HTMLAttributes<HTMLDivElement> & { children?: ReactNode }) => <div {...props}>{children}</div> },
 }));
 vi.mock("@/components/dashboard/CaseEvidencePanel", () => ({ default: () => null }));
-vi.mock("@/lib/vault-audit-export", () => ({
+vi.mock("@/lib/vault-audit-export", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/vault-audit-export")>()),
   buildVaultAuditCsv: buildCsvMock,
   vaultAuditCsvFilename: filenameMock,
 }));
 vi.mock("@/lib/case-timeline", () => ({
-  buildComplianceCaseTimeline: (inputs: Array<{ id: string }>) => inputs.map((input) => ({
-    id: input.id,
-    status: input.id === "case-archived" ? "warning" : "urgent",
-    regime: "new",
-    noticeApplies: true,
-    daysToDeadline: input.id === "case-archived" ? 20 : 2,
-    checklistDefaults: {
-      defectDocumented: true,
-      evidenceAttached: false,
-      noticeDrafted: false,
-      calendarReminderExported: false,
-    },
-  })),
+  buildComplianceCaseTimeline: buildTimelineMock,
   deriveChecklistProgress: (checklist: Record<string, boolean>) => ({
     completed: Object.values(checklist).filter(Boolean).length,
     total: Object.keys(checklist).length,
@@ -93,12 +87,40 @@ const supabaseMock = {
   from: (table: string) => {
     if (table === "cases") {
       return {
-        select: () => ({ eq: () => ({ order: () => casesSelectResult }) }),
+        select: () => ({
+          eq: () => {
+            let afterId: string | null = null;
+            const query = {
+              gt: (_column: string, value: string) => {
+                afterId = value;
+                return query;
+              },
+              order: () => query,
+              limit: () => casesSelectResults[afterId ? 1 : 0],
+            };
+            return query;
+          },
+        }),
         update: () => ({ eq: () => ({ eq: () => statusUpdateResult }) }),
       };
     }
     if (table === "protocols") {
-      return { select: () => ({ eq: () => Promise.resolve({ data: [{ id: "protocol-1", case_id: "case-archived", project_name: "Summit Depot" }], error: null }) }) };
+      return {
+        select: () => ({
+          eq: () => {
+            let afterId: string | null = null;
+            const query = {
+              gt: (_column: string, value: string) => {
+                afterId = value;
+                return query;
+              },
+              order: () => query,
+              limit: () => protocolsSelectResults[afterId ? 1 : 0],
+            };
+            return query;
+          },
+        }),
+      };
     }
     throw new Error(`Unexpected table ${table}`);
   },
@@ -116,8 +138,27 @@ describe("Vault portfolio audit export", () => {
     revokeObjectUrlMock.mockClear();
     replaceMock.mockClear();
     pushMock.mockClear();
+    timelineState.activeStatus = "urgent";
+    timelineState.activeDays = 2;
+    buildTimelineMock.mockImplementation((inputs: Array<{ id: string }>) => inputs.map((input) => ({
+      id: input.id,
+      status: input.id === "case-archived" ? "warning" : timelineState.activeStatus,
+      regime: "new",
+      noticeApplies: true,
+      daysToDeadline: input.id === "case-archived" ? 20 : timelineState.activeDays,
+      checklistDefaults: {
+        defectDocumented: true,
+        evidenceAttached: false,
+        noticeDrafted: false,
+        calendarReminderExported: false,
+      },
+    })));
     statusUpdateResult = Promise.resolve({ error: null });
-    casesSelectResult = Promise.resolve({ data: cases, error: null });
+    casesSelectResults = [Promise.resolve({ data: cases, error: null })];
+    protocolsSelectResults = [Promise.resolve({
+      data: [{ id: "protocol-1", case_id: "case-archived", project_name: "Summit Depot" }],
+      error: null,
+    })];
     Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectUrlMock });
     Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectUrlMock });
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
@@ -146,6 +187,23 @@ describe("Vault portfolio audit export", () => {
     expect(createObjectUrlMock).toHaveBeenCalledTimes(1);
     expect(revokeObjectUrlMock).toHaveBeenCalledWith("blob:vault-audit");
     expect(await screen.findByText("vault-audit-export-success")).toBeTruthy();
+  });
+
+  it("recomputes date-dependent legal context immediately before export", async () => {
+    render(<TechVault />);
+    await screen.findByText("Alpine Tower");
+    const timelineCallsBeforeExport = buildTimelineMock.mock.calls.length;
+    timelineState.activeStatus = "expired";
+    timelineState.activeDays = -1;
+
+    fireEvent.click(screen.getByRole("button", { name: "vault-audit-export-action" }));
+
+    await waitFor(() => expect(buildCsvMock).toHaveBeenCalledTimes(1));
+    expect(buildCsvMock.mock.calls[0][0].find((row) => row.caseId === "case-active")).toMatchObject({
+      legalStatus: "cases-status-expired",
+      deadlineContext: "cases-countdown-one-day-overdue",
+    });
+    expect(buildTimelineMock).toHaveBeenCalledTimes(timelineCallsBeforeExport + 1);
   });
 
   it("shows retryable feedback when browser download preparation fails", async () => {
@@ -180,9 +238,9 @@ describe("Vault portfolio audit export", () => {
     let resolveRefresh!: (result: { data: typeof cases; error: null }) => void;
     render(<TechVault />);
     await screen.findByText("Alpine Tower");
-    casesSelectResult = new Promise((resolve) => {
+    casesSelectResults = [new Promise((resolve) => {
       resolveRefresh = resolve;
-    });
+    })];
 
     fireEvent.click(screen.getByRole("button", { name: "vault-archive-project" }));
 
@@ -210,19 +268,19 @@ describe("Vault portfolio audit export", () => {
   it("offers a retry when the post-mutation refresh fails", async () => {
     render(<TechVault />);
     await screen.findByText("Alpine Tower");
-    casesSelectResult = Promise.resolve({ data: cases, error: { message: "offline" } });
+    casesSelectResults = [Promise.resolve({ data: cases, error: { message: "offline" } })];
 
     fireEvent.click(screen.getByRole("button", { name: "vault-archive-project" }));
 
     expect((await screen.findByRole("alert")).textContent).toContain("vault-error-load");
     expect(screen.queryByRole("button", { name: "vault-audit-export-action" })).toBeNull();
 
-    casesSelectResult = Promise.resolve({
+    casesSelectResults = [Promise.resolve({
       data: cases.map((entry) => entry.id === "case-active"
         ? { ...entry, status: "archived", updated_at: "2026-08-20T08:05:00.000Z" }
         : entry),
       error: null,
-    });
+    })];
     fireEvent.click(screen.getByRole("button", { name: "vault-load-retry" }));
 
     const exportButton = await screen.findByRole("button", { name: "vault-audit-export-action" });

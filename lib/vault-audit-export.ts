@@ -31,6 +31,31 @@ export interface VaultAuditCsvLabels {
   unavailable: string;
 }
 
+export interface VaultAuditPageResult<T> {
+  data: T[] | null;
+  error: unknown;
+}
+
+export async function loadAllVaultAuditPages<T extends { id: string }>(
+  loadPage: (afterId: string | null, pageSize: number) => PromiseLike<VaultAuditPageResult<T>>,
+  requestIsCurrent: () => boolean,
+  pageSize = 500,
+): Promise<T[] | null> {
+  const loaded: T[] = [];
+  let afterId: string | null = null;
+
+  for (;;) {
+    if (!requestIsCurrent()) return null;
+    const result = await loadPage(afterId, pageSize);
+    if (!requestIsCurrent()) return null;
+    if (result.error) throw result.error;
+    const page = result.data ?? [];
+    loaded.push(...page);
+    if (page.length < pageSize) return loaded;
+    afterId = page[page.length - 1].id;
+  }
+}
+
 const SPREADSHEET_FORMULA_PREFIX = /^[\t\r ]*[=+\-@]/;
 
 function csvCell(value: string | number): string {

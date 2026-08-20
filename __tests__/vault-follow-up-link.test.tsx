@@ -152,13 +152,17 @@ vi.mock("@/lib/supabase", () => ({
       if (table === "cases") {
         return {
           select: () => ({
-            eq: () => ({
-              order: () =>
-                Promise.resolve({
+            eq: () => {
+              const query = {
+                gt: () => query,
+                order: () => query,
+                limit: () => Promise.resolve({
                   data: casesSelectError ? null : mockCases,
                   error: casesSelectError,
                 }),
-            }),
+              };
+              return query;
+            },
           }),
           update: (payload: Record<string, unknown>) => {
             updateMock(payload);
@@ -212,11 +216,17 @@ vi.mock("@/lib/supabase", () => ({
       if (table === "protocols") {
         return {
           select: () => ({
-            eq: () =>
-              Promise.resolve({
+            eq: () => {
+              const query = {
+                gt: () => query,
+                order: () => query,
+                limit: () => Promise.resolve({
                 data: protocolsSelectError ? null : [{ id: "protocol-1", case_id: "case-review", project_name: "Riverside Bridge" }],
                 error: protocolsSelectError,
-              }),
+                }),
+              };
+              return query;
+            },
           }),
         };
       }

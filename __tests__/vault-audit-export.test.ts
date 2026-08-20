@@ -1,10 +1,44 @@
 import { describe, expect, it } from "vitest";
 import {
   buildVaultAuditCsv,
+  loadAllVaultAuditPages,
   vaultAuditCsvFilename,
   type VaultAuditCsvLabels,
   type VaultAuditExportRow,
 } from "../lib/vault-audit-export";
+
+describe("loadAllVaultAuditPages", () => {
+  it("follows the stable ID cursor until a short final page", async () => {
+    const cursors: Array<string | null> = [];
+    const rows = await loadAllVaultAuditPages(
+      async (afterId, pageSize) => {
+        cursors.push(afterId);
+        expect(pageSize).toBe(2);
+        if (afterId === null) return { data: [{ id: "case-a" }, { id: "case-b" }], error: null };
+        return { data: [{ id: "case-c" }], error: null };
+      },
+      () => true,
+      2,
+    );
+
+    expect(rows?.map(({ id }) => id)).toEqual(["case-a", "case-b", "case-c"]);
+    expect(cursors).toEqual([null, "case-b"]);
+  });
+
+  it("abandons stale pagination without publishing a partial portfolio", async () => {
+    let current = true;
+    const rows = await loadAllVaultAuditPages(
+      async () => {
+        current = false;
+        return { data: [{ id: "case-a" }], error: null };
+      },
+      () => current,
+      2,
+    );
+
+    expect(rows).toBeNull();
+  });
+});
 
 const labels: VaultAuditCsvLabels = {
   generatedAt: "Generated at",
