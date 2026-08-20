@@ -9,7 +9,7 @@ export interface VaultAuditExportRow {
   checklistTotal: number;
   missingAuditItems: string[];
   linkedProtocols: number;
-  sourceUpdatedAt: string;
+  sourceUpdatedAt: string | null;
 }
 
 export interface VaultAuditCsvLabels {
@@ -78,7 +78,7 @@ export function buildVaultAuditCsv(
         row.checklistTotal,
         row.missingAuditItems.length > 0 ? row.missingAuditItems.join("; ") : labels.noMissingItems,
         row.linkedProtocols,
-        row.sourceUpdatedAt,
+        row.sourceUpdatedAt ?? labels.unavailable,
       ]),
     ),
   ];

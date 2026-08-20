@@ -49,7 +49,7 @@ interface VaultProjectCard {
   daysToDeadline: number | null;
   timelineInput: ComplianceCaseInput;
   updatedAt: number;
-  sourceUpdatedAt: string;
+  sourceUpdatedAt: string | null;
   archived: boolean;
   prefillTriage: boolean;
 }
@@ -238,7 +238,7 @@ export default function TechVault() {
       if (fetchId !== latestFetchIdRef.current) return;
 
       const snapshot = snapshotData as {
-        cases?: Case[];
+        cases?: Array<Omit<Case, "updated_at"> & { updated_at: string | null }>;
         protocols?: Array<Pick<Protocol, "id" | "case_id" | "project_name">>;
       } | null;
       if (!snapshot || !Array.isArray(snapshot.cases) || !Array.isArray(snapshot.protocols)) {
@@ -248,7 +248,7 @@ export default function TechVault() {
       const loadedProtocols = snapshot.protocols;
 
       const dbCases = [...loadedCases].sort((left, right) =>
-        new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime()
+        new Date(right.updated_at ?? right.created_at).getTime() - new Date(left.updated_at ?? left.created_at).getTime()
         || left.id.localeCompare(right.id)
       );
       const protocols = loadedProtocols;
@@ -326,7 +326,7 @@ export default function TechVault() {
           legalRegime: timelineItem?.regime ?? null,
           daysToDeadline: timelineItem?.daysToDeadline ?? null,
           timelineInput,
-          updatedAt: new Date(c.updated_at).getTime(),
+          updatedAt: new Date(c.updated_at ?? c.created_at).getTime(),
           sourceUpdatedAt: c.updated_at,
           archived,
           prefillTriage: !archived && restoredPrefillTriage,

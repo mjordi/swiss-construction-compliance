@@ -185,6 +185,22 @@ describe("Vault portfolio audit export", () => {
     expect(await screen.findByText("vault-audit-export-success")).toBeTruthy();
   });
 
+  it("passes a nullable database update timestamp through as unavailable audit data", async () => {
+    casesSelectResults = [Promise.resolve({
+      data: cases.map((entry) => entry.id === "case-active" ? { ...entry, updated_at: null } : entry) as unknown as typeof cases,
+      error: null,
+    })];
+    render(<TechVault />);
+    await screen.findByText("Alpine Tower");
+
+    fireEvent.click(screen.getByRole("button", { name: "vault-audit-export-action" }));
+
+    await waitFor(() => expect(buildCsvMock).toHaveBeenCalledTimes(1));
+    expect(buildCsvMock.mock.calls[0][0].find((row) => row.caseId === "case-active")).toMatchObject({
+      sourceUpdatedAt: null,
+    });
+  });
+
   it("stacks the header actions on narrow viewports and restores the row layout responsively", async () => {
     render(<TechVault />);
     await screen.findByText("Alpine Tower");

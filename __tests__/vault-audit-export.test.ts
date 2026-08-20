@@ -86,14 +86,14 @@ describe("buildVaultAuditCsv", () => {
     expect(csv).toContain('"\'=CMD()"');
   });
 
-  it("uses unavailable labels for missing legal context", () => {
+  it("uses unavailable labels for missing legal context and source timestamps", () => {
     const csv = buildVaultAuditCsv(
-      [row({ legalStatus: null, legalRegime: null, deadlineContext: null })],
+      [row({ legalStatus: null, legalRegime: null, deadlineContext: null, sourceUpdatedAt: null })],
       labels,
       new Date("2026-08-20T00:00:00.000Z"),
     );
 
-    expect(csv).toContain('"Unavailable","Unavailable","Unavailable"');
+    expect(csv).toContain('"Unavailable","Unavailable","Unavailable","2","4","Evidence attached; Notice drafted","1","Unavailable"');
   });
 });
 
