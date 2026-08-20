@@ -385,7 +385,7 @@ describe("Vault portfolio audit export", () => {
     });
   });
 
-  it("waits for a delayed snapshot when an ambiguous archive initially reads the old status", async () => {
+  it("keeps an ambiguous archive retryable until a snapshot observes the expected status", async () => {
     statusUpdateResult = Promise.resolve({ error: { message: "response lost" } });
     render(<TechVault />);
     await screen.findByText("Alpine Tower");
@@ -409,7 +409,8 @@ describe("Vault portfolio audit export", () => {
     fireEvent.click(exportWhileOldSnapshotIsVisible);
     expect(buildCsvMock).not.toHaveBeenCalled();
 
-    await waitFor(() => expect(rpcMock).toHaveBeenCalledTimes(3), { timeout: 2000 });
+    fireEvent.click(screen.getByRole("button", { name: "vault-load-retry" }));
+    await waitFor(() => expect(rpcMock).toHaveBeenCalledTimes(3));
     const exportButton = screen.getByRole("button", { name: "vault-audit-export-action" });
     expect(exportButton.getAttribute("disabled")).toBeNull();
     expect(screen.queryByText("vault-update-status-error")).toBeNull();

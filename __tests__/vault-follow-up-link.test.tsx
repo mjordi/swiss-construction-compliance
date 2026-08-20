@@ -741,7 +741,7 @@ describe("vault follow-up links", () => {
     updateResponses.shift();
   });
 
-  it("clears archive error feedback when a retry succeeds", async () => {
+  it("clears archive error feedback when reconciliation observes the committed write", async () => {
     updateResponses.push({ error: { message: "boom" } });
 
     render(<TechVault />);
@@ -756,14 +756,11 @@ describe("vault follow-up links", () => {
 
     expect((await screen.findByRole("alert")).textContent).toContain("vault-update-status-error");
 
-    const retryButton = within(getProjectCard("Harbor Retrofit")).getByRole("button", { name: "vault-archive-project" });
-    expect((retryButton as HTMLButtonElement).disabled).toBe(true);
-    await waitFor(() => {
-      expect((within(getProjectCard("Harbor Retrofit")).getByRole("button", { name: "vault-archive-project" }) as HTMLButtonElement).disabled)
-        .toBe(false);
-    }, { timeout: 3000 });
+    mockCases = mockCases.map((item) => item.project_name === "Harbor Retrofit"
+      ? { ...item, status: "archived", updated_at: "2026-08-20T10:00:00.000Z" }
+      : item);
     act(() => {
-      fireEvent.click(within(getProjectCard("Harbor Retrofit")).getByRole("button", { name: "vault-archive-project" }));
+      fireEvent.click(within(getProjectCard("Harbor Retrofit")).getByRole("button", { name: "vault-load-retry" }));
     });
 
     await waitFor(() => {

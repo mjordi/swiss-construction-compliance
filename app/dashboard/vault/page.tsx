@@ -135,9 +135,6 @@ function getLocalizedCountdownLabel(
   return `${days} ${t("cases-countdown-days-left-suffix")}`;
 }
 
-const AMBIGUOUS_STATUS_RECONCILIATION_DELAY_MS = 1000;
-const AMBIGUOUS_STATUS_RECONCILIATION_ATTEMPTS = 3;
-
 export default function TechVault() {
   const { user } = useAuth();
   const { lang, t } = useLanguage();
@@ -164,8 +161,6 @@ export default function TechVault() {
   const pendingStatusMutationProjectIdsRef = useRef<Set<string>>(new Set());
   const statusMutationRefreshProjectIdsRef = useRef<Set<string>>(new Set());
   const ambiguousStatusExpectedRef = useRef<Map<string, VaultProjectCard["status"]>>(new Map());
-  const ambiguousStatusAttemptsRef = useRef<Map<string, number>>(new Map());
-  const ambiguousStatusTimersRef = useRef<Map<string, number>>(new Map());
   const mutationRefreshPendingRef = useRef(false);
   const hasLoadedProjectsRef = useRef(false);
   const lastSuccessfulUserIdRef = useRef<string | null>(null);
@@ -181,7 +176,6 @@ export default function TechVault() {
   currentUserIdRef.current = user?.id ?? null;
 
   useEffect(() => {
-    const ambiguousStatusTimers: Map<string, number> = ambiguousStatusTimersRef.current;
     mountedRef.current = true;
     return () => {
       mountedRef.current = false;
@@ -191,8 +185,6 @@ export default function TechVault() {
         window.clearTimeout(auditExportFeedbackTimerRef.current);
         auditExportFeedbackTimerRef.current = null;
       }
-      ambiguousStatusTimers.forEach((timer) => window.clearTimeout(timer));
-      ambiguousStatusTimers.clear();
     };
   }, []);
 
@@ -202,9 +194,6 @@ export default function TechVault() {
     pendingStatusMutationProjectIdsRef.current.clear();
     statusMutationRefreshProjectIdsRef.current.clear();
     ambiguousStatusExpectedRef.current.clear();
-    ambiguousStatusAttemptsRef.current.clear();
-    ambiguousStatusTimersRef.current.forEach((timer) => window.clearTimeout(timer));
-    ambiguousStatusTimersRef.current.clear();
     mutationRefreshPendingRef.current = false;
     setStatusMutationProjectIds([]);
     setMutationRefreshPending(false);
@@ -358,31 +347,17 @@ export default function TechVault() {
         const expectedStatus = ambiguousStatusExpectedRef.current.get(projectId);
         const refreshedProject = nextProjects.find((project) => project.id === projectId);
         if (expectedStatus && refreshedProject?.status !== expectedStatus) {
-          const attempts = (ambiguousStatusAttemptsRef.current.get(projectId) ?? 0) + 1;
-          ambiguousStatusAttemptsRef.current.set(projectId, attempts);
-          if (attempts < AMBIGUOUS_STATUS_RECONCILIATION_ATTEMPTS) {
-            if (ambiguousStatusTimersRef.current.size === 0) {
-              const timer = window.setTimeout(() => {
-                ambiguousStatusTimersRef.current.delete(projectId);
-                if (!mountedRef.current || currentUserIdRef.current !== user.id) return;
-                mutationRefreshPendingRef.current = true;
-                setMutationRefreshPending(true);
-                void refreshVault(++latestFetchIdRef.current);
-              }, AMBIGUOUS_STATUS_RECONCILIATION_DELAY_MS);
-              ambiguousStatusTimersRef.current.set(projectId, timer);
-            }
-            return;
-          }
+          // A transport failure cannot prove that the database write failed: it
+          // may still be blocked and commit later. Keep export/status actions
+          // guarded and expose the existing retry control until a snapshot
+          // actually observes the expected status.
+          return;
         }
         if (expectedStatus && refreshedProject?.status === expectedStatus) {
           confirmedAmbiguousProjectIds.add(projectId);
         }
 
-        const timer = ambiguousStatusTimersRef.current.get(projectId);
-        if (timer !== undefined) window.clearTimeout(timer);
-        ambiguousStatusTimersRef.current.delete(projectId);
         ambiguousStatusExpectedRef.current.delete(projectId);
-        ambiguousStatusAttemptsRef.current.delete(projectId);
         pendingStatusMutationProjectIdsRef.current.delete(projectId);
         statusMutationRefreshProjectIdsRef.current.delete(projectId);
         resolvedProjectIds.add(projectId);
@@ -635,10 +610,10 @@ export default function TechVault() {
       );
       if (currentUserIdRef.current === user.id) {
         // The write may have committed even when its response was lost. Keep the
-        // optimistic-export guard until delayed snapshots either observe the
-        // expected status or repeatedly confirm that the write did not commit.
+        // optimistic-export guard until a later snapshot observes the expected
+        // status. An old snapshot is not conclusive while the rejected write may
+        // still be waiting on a database lock.
         ambiguousStatusExpectedRef.current.set(projectId, nextStatus);
-        ambiguousStatusAttemptsRef.current.set(projectId, 0);
         statusMutationRefreshProjectIdsRef.current.add(projectId);
         void triggerMutationRefresh();
       } else {
@@ -1040,9 +1015,19 @@ export default function TechVault() {
                           </button>
                         </div>
                         {statusMutationErrors[project.id] ? (
-                          <p role="alert" className="text-sm text-red-300">
-                            {t(statusMutationErrors[project.id])}
-                          </p>
+                          <div role="alert" className="pointer-events-auto space-y-2 text-sm text-red-300">
+                            <p>{t(statusMutationErrors[project.id])}</p>
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                void triggerMutationRefresh();
+                              }}
+                              className="rounded border border-red-300/30 px-3 py-1.5 text-xs text-red-100 transition hover:bg-red-500/10"
+                            >
+                              {t("vault-load-retry")}
+                            </button>
+                          </div>
                         ) : null}
                         {user ? (
                           <CaseEvidencePanel
