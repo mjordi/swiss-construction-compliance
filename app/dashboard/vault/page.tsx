@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
-import { Folder, FileText, Plus, Search, ShieldCheck, Loader2, AlertCircle } from "lucide-react";
+import { Folder, FileText, Plus, Search, ShieldCheck, Loader2, AlertCircle, Download } from "lucide-react";
 import { motion } from "framer-motion";
 import { useAuth } from "@/context/AuthContext";
 import { useLanguage } from "@/context/LanguageContext";
@@ -25,6 +25,7 @@ import {
   type VaultEmptyStateAction,
   type VaultTab,
 } from "@/lib/vault";
+import { buildVaultAuditCsv, vaultAuditCsvFilename, type VaultAuditCsvLabels } from "@/lib/vault-audit-export";
 import type { TranslationKey } from "@/locales";
 
 interface VaultProjectCard {
@@ -146,6 +147,8 @@ export default function TechVault() {
   } | null>(null);
   const [statusMutationProjectIds, setStatusMutationProjectIds] = useState<string[]>([]);
   const [projects, setProjects] = useState<VaultProjectCard[]>([]);
+  const [auditExportPending, setAuditExportPending] = useState(false);
+  const [auditExportFeedback, setAuditExportFeedback] = useState<TranslationKey | null>(null);
   const latestFetchIdRef = useRef(0);
   const pendingStatusMutationProjectIdsRef = useRef<Set<string>>(new Set());
   const hasLoadedProjectsRef = useRef(false);
@@ -154,8 +157,36 @@ export default function TechVault() {
   const activeTabRef = useRef(activeTab);
   const queryRef = useRef(query);
   const skipNextUrlWriteRef = useRef(false);
+  const auditExportInFlightRef = useRef(false);
+  const auditExportRequestIdRef = useRef(0);
+  const auditExportFeedbackTimerRef = useRef<number | null>(null);
+  const mountedRef = useRef(false);
 
   currentUserIdRef.current = user?.id ?? null;
+
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      auditExportRequestIdRef.current += 1;
+      auditExportInFlightRef.current = false;
+      if (auditExportFeedbackTimerRef.current) {
+        window.clearTimeout(auditExportFeedbackTimerRef.current);
+        auditExportFeedbackTimerRef.current = null;
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    auditExportRequestIdRef.current += 1;
+    auditExportInFlightRef.current = false;
+    setAuditExportPending(false);
+    setAuditExportFeedback(null);
+    if (auditExportFeedbackTimerRef.current) {
+      window.clearTimeout(auditExportFeedbackTimerRef.current);
+      auditExportFeedbackTimerRef.current = null;
+    }
+  }, [user?.id]);
 
   const runRefresh = useCallback(async (fetchId: number) => {
     if (!user) {
@@ -513,6 +544,107 @@ export default function TechVault() {
     }
   }, [projects, supabase, triggerRefresh, user]);
 
+  const handleAuditExport = useCallback(async () => {
+    const ownerId = user?.id;
+    if (
+      !ownerId
+      || projects.length === 0
+      || lastSuccessfulUserIdRef.current !== ownerId
+      || auditExportInFlightRef.current
+    ) {
+      return;
+    }
+
+    auditExportInFlightRef.current = true;
+    const requestId = ++auditExportRequestIdRef.current;
+    setAuditExportPending(true);
+    setAuditExportFeedback(null);
+    if (auditExportFeedbackTimerRef.current) {
+      window.clearTimeout(auditExportFeedbackTimerRef.current);
+      auditExportFeedbackTimerRef.current = null;
+    }
+
+    const isCurrent = () =>
+      mountedRef.current
+      && auditExportRequestIdRef.current === requestId
+      && currentUserIdRef.current === ownerId
+      && lastSuccessfulUserIdRef.current === ownerId;
+
+    const showFeedback = (key: TranslationKey) => {
+      if (!isCurrent()) return;
+      setAuditExportFeedback(key);
+      auditExportFeedbackTimerRef.current = window.setTimeout(() => {
+        if (!isCurrent()) return;
+        setAuditExportFeedback(null);
+        auditExportFeedbackTimerRef.current = null;
+      }, 2000);
+    };
+
+    try {
+      // Yield once so the synchronous in-flight guard also covers rapid repeated activation.
+      await Promise.resolve();
+      if (!isCurrent()) return;
+
+      const generatedAt = new Date();
+      const labels: VaultAuditCsvLabels = {
+        generatedAt: t("vault-audit-export-generated-at"),
+        scope: t("vault-audit-export-scope"),
+        scopeValue: t("vault-audit-export-scope-value"),
+        caseId: t("vault-audit-export-case-id"),
+        project: t("vault-audit-export-project"),
+        lifecycleStatus: t("vault-audit-export-lifecycle"),
+        legalStatus: t("vault-audit-export-legal-status"),
+        legalRegime: t("vault-audit-export-legal-regime"),
+        deadlineContext: t("vault-audit-export-deadline"),
+        checklistCompleted: t("vault-audit-export-checklist-completed"),
+        checklistTotal: t("vault-audit-export-checklist-total"),
+        missingAuditItems: t("vault-audit-export-missing"),
+        linkedProtocols: t("vault-audit-export-linked-protocols"),
+        sourceUpdatedAt: t("vault-audit-export-source-updated"),
+        noMissingItems: t("vault-audit-export-none"),
+        unavailable: t("vault-audit-export-unavailable"),
+      };
+      const rows = projects.map((project) => ({
+        caseId: project.id,
+        project: project.name,
+        lifecycleStatus: t(statusLabelKey[project.status]),
+        legalStatus: project.legalStatus ? t(legalStatusLabelKey[project.legalStatus]) : null,
+        legalRegime: project.legalRegime
+          ? t(project.legalRegime === "old" ? "vault-audit-export-regime-old" : "vault-audit-export-regime-new")
+          : null,
+        deadlineContext: project.legalStatus ? getLocalizedCountdownLabel(project, t) : null,
+        checklistCompleted: project.checklistCompleted,
+        checklistTotal: project.checklistTotal,
+        missingAuditItems: project.auditMissingLabelKeys.map((key) => t(key)),
+        linkedProtocols: project.docs,
+        sourceUpdatedAt: new Date(project.updatedAt).toISOString(),
+      }));
+      const csv = buildVaultAuditCsv(rows, labels, generatedAt);
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      try {
+        if (!isCurrent()) return;
+        anchor.href = url;
+        anchor.download = vaultAuditCsvFilename(generatedAt);
+        anchor.click();
+      } finally {
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      }
+      showFeedback("vault-audit-export-success");
+    } catch {
+      showFeedback("vault-audit-export-error");
+    } finally {
+      if (auditExportRequestIdRef.current === requestId) {
+        auditExportInFlightRef.current = false;
+        if (mountedRef.current && currentUserIdRef.current === ownerId) {
+          setAuditExportPending(false);
+        }
+      }
+    }
+  }, [projects, t, user?.id]);
+
   return (
     <div className="max-w-6xl mx-auto h-[calc(100vh-100px)] flex flex-col">
       <header className="mb-8 flex justify-between items-end">
@@ -520,12 +652,36 @@ export default function TechVault() {
           <h1 className="text-3xl font-bold mb-2">{t("vault-title")}</h1>
           <p className="text-slate-400">{t("vault-subtitle")}</p>
         </div>
-        <Link
-          href={createProjectHref}
-          className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition text-sm font-bold border border-white/5"
-        >
-          <Plus className="w-4 h-4" /> {t("vault-new-project")}
-        </Link>
+        <div className="flex items-start gap-3">
+          {!loading && !error && projects.length > 0 && user && lastSuccessfulUserIdRef.current === user.id ? (
+            <div className="max-w-sm text-right">
+              <button
+                type="button"
+                onClick={() => void handleAuditExport()}
+                disabled={auditExportPending}
+                className="ml-auto inline-flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-bold text-accent transition hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {auditExportPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                {t(auditExportPending ? "vault-audit-export-preparing" : "vault-audit-export-action")}
+              </button>
+              <p className="mt-1 text-xs text-slate-500">{t("vault-audit-export-guidance")}</p>
+              {auditExportFeedback ? (
+                <p
+                  role="status"
+                  className={`mt-1 text-xs ${auditExportFeedback === "vault-audit-export-success" ? "text-emerald-300" : "text-red-300"}`}
+                >
+                  {t(auditExportFeedback)}
+                </p>
+              ) : null}
+            </div>
+          ) : null}
+          <Link
+            href={createProjectHref}
+            className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition text-sm font-bold border border-white/5"
+          >
+            <Plus className="w-4 h-4" /> {t("vault-new-project")}
+          </Link>
+        </div>
       </header>
 
       <div className="flex-1 glass-card rounded-3xl overflow-hidden flex flex-col border border-white/10">
