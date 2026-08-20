@@ -42,6 +42,8 @@ export interface CaseAuditDossierLabels {
   milestones: Record<CaseLegalMilestoneKind, string>;
   dispatchChannels?: Partial<Record<CaseNoticeDispatchChannel, string>>;
   supportingEvidence?: string;
+  supportingEvidenceId?: string;
+  supportingEvidenceAssociationId?: string;
 }
 
 export interface CaseAuditDossierMilestone {
@@ -77,6 +79,8 @@ export interface CaseAuditDossierReport {
     | "linkedProtocols"
     | "chronology"
     | "supportingEvidence"
+    | "supportingEvidenceId"
+    | "supportingEvidenceAssociationId"
   >;
   caseId: string;
   projectName: string;
@@ -181,6 +185,8 @@ export function buildCaseAuditDossier({
       linkedProtocols: labels.linkedProtocols,
       chronology: labels.chronology,
       supportingEvidence: labels.supportingEvidence,
+      supportingEvidenceId: labels.supportingEvidenceId,
+      supportingEvidenceAssociationId: labels.supportingEvidenceAssociationId,
     },
     caseId: item.id,
     projectName: item.projectName,

@@ -30,6 +30,8 @@ const report: CaseAuditDossierReport = {
     linkedProtocols: "Linked finalized protocols",
     chronology: "Legal chronology",
     supportingEvidence: "User-linked supporting evidence",
+    supportingEvidenceId: "Evidence ID",
+    supportingEvidenceAssociationId: "Association ID",
   },
   caseId: "case-1",
   projectName: "Alpine Tower",
@@ -89,8 +91,8 @@ describe("CaseAuditDossierPDF", () => {
     expect(text).toContain("Registered post · TRACK-9");
     expect(text).toContain("User-linked supporting evidence");
     expect(text).toContain("posting-receipt.pdf");
-    expect(text).toContain("evidence-9");
-    expect(text).toContain("association-9");
+    expect(text).toMatch(/Evidence ID\s*:\s*evidence-9/);
+    expect(text).toMatch(/Association ID\s*:\s*association-9/);
     expect(text).toContain("Legal chronology");
     expect(text).toContain("not legal advice");
     expect(text).not.toContain("COMPLIANT");

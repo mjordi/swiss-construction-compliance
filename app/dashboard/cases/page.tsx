@@ -409,7 +409,7 @@ export default function CasesPage() {
   const [caseEvidence, setCaseEvidence] = useState<CaseEvidence[]>([]);
   const [evidenceHistoryState, setEvidenceHistoryState] = useState<LoadReadiness>("loading");
   const [dispatchEvidenceLinkingByCase, setDispatchEvidenceLinkingByCase] = useState<Record<string, boolean>>({});
-  const [dispatchEvidenceFeedbackByCase, setDispatchEvidenceFeedbackByCase] = useState<Record<string, TranslationKey>>({});
+  const [dispatchEvidenceFeedbackByDispatch, setDispatchEvidenceFeedbackByDispatch] = useState<Record<string, TranslationKey>>({});
   const dispatchEvidenceInFlightRef = useRef<Set<string>>(new Set());
   const dispatchEvidenceRequestIdsRef = useRef<Record<string, number>>({});
   const [noticeDispatchHistoryState, setNoticeDispatchHistoryState] = useState<LoadReadiness>("loading");
@@ -850,7 +850,7 @@ export default function CasesPage() {
     lastSuccessfulCaseEvidenceRef.current = [];
     lastSuccessfulCaseEvidenceUserIdRef.current = null;
     setDispatchEvidenceLinkingByCase({});
-    setDispatchEvidenceFeedbackByCase({});
+    setDispatchEvidenceFeedbackByDispatch({});
     setNoticeDispatchRecordingByCase({});
     setNoticeDispatchFeedbackByCase({});
     for (const caseId of Object.keys(noticeDraftRequestIdsRef.current)) {
@@ -1893,6 +1893,8 @@ export default function CasesPage() {
           linkedProtocols: t("cases-dossier-finalized-protocols"),
           chronology: t("cases-legal-timeline-title"),
           supportingEvidence: t("cases-notice-dispatch-evidence-file"),
+          supportingEvidenceId: t("cases-notice-dispatch-evidence-id"),
+          supportingEvidenceAssociationId: t("cases-notice-dispatch-evidence-association-id"),
           noLinkedProtocols: t("cases-dossier-no-finalized-protocols"),
           legalDisclaimer: t("calc-disclaimer"),
           regimes: {
@@ -2232,8 +2234,8 @@ export default function CasesPage() {
     const requestId = (dispatchEvidenceRequestIdsRef.current[dispatch.id] ?? 0) + 1;
     dispatchEvidenceRequestIdsRef.current[dispatch.id] = requestId;
     setDispatchEvidenceLinkingByCase((current) => ({ ...current, [caseId]: true }));
-    setDispatchEvidenceFeedbackByCase((current) => {
-      const next = { ...current }; delete next[caseId]; return next;
+    setDispatchEvidenceFeedbackByDispatch((current) => {
+      const next = { ...current }; delete next[dispatch.id]; return next;
     });
     const requestIsCurrent = () => dossierMountedRef.current
       && currentUserIdRef.current === userId
@@ -2248,7 +2250,7 @@ export default function CasesPage() {
         lastSuccessfulDispatchEvidenceUserIdRef.current = userId;
         return next;
       });
-      setDispatchEvidenceFeedbackByCase((current) => ({ ...current, [caseId]: "cases-notice-dispatch-evidence-linked" }));
+      setDispatchEvidenceFeedbackByDispatch((current) => ({ ...current, [dispatch.id]: "cases-notice-dispatch-evidence-linked" }));
       return true;
     };
     try {
@@ -2270,7 +2272,7 @@ export default function CasesPage() {
         // The original insert and reconciliation are both ambiguous; report failure below.
       }
       if (!reconciled && requestIsCurrent()) {
-        setDispatchEvidenceFeedbackByCase((current) => ({ ...current, [caseId]: "cases-notice-dispatch-evidence-error" }));
+        setDispatchEvidenceFeedbackByDispatch((current) => ({ ...current, [dispatch.id]: "cases-notice-dispatch-evidence-error" }));
       }
     } finally {
       if (dispatchEvidenceRequestIdsRef.current[dispatch.id] === requestId) dispatchEvidenceInFlightRef.current.delete(caseId);
@@ -3394,7 +3396,7 @@ export default function CasesPage() {
                               )}
                             </p>
                           )}
-                          {dispatchEvidenceFeedbackByCase[item.id] && <p role="status" className="mt-2 text-blue-100">{t(dispatchEvidenceFeedbackByCase[item.id])}</p>}
+                          {dispatchEvidenceFeedbackByDispatch[latestNoticeDispatch.id] && <p role="status" className="mt-2 text-blue-100">{t(dispatchEvidenceFeedbackByDispatch[latestNoticeDispatch.id])}</p>}
                         </div>
                       )}
                     </section>

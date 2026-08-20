@@ -657,6 +657,35 @@ describe("Cases notice dispatch recording", () => {
     expect(screen.queryByText("cases-notice-dispatch-evidence-error")).toBeNull();
   });
 
+  it("does not show evidence-link feedback for a newer latest dispatch", async () => {
+    noticeDispatches = [savedDispatch({
+      user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",
+      dispatched_at: "2026-08-15T09:00:00.000Z", channel: "courier", reference: null,
+    })];
+    caseEvidence = [{
+      id: "evidence-1", user_id: "user-1", case_id: "case-1", original_name: "posting-receipt.pdf",
+      storage_path: "user-1/case-1/posting-receipt.pdf", mime_type: "application/pdf", size_bytes: 123,
+      created_at: "2026-08-14T09:00:00.000Z",
+    }];
+    render(<CasesPage />);
+
+    fireEvent.submit(await screen.findByTestId("cases-notice-dispatch-evidence-form-case-1"));
+    expect(await screen.findByText("cases-notice-dispatch-evidence-linked")).toBeTruthy();
+
+    dispatchInsertMock.mockImplementationOnce(async (payload: Record<string, unknown>) => ({
+      data: { ...savedDispatch(payload), id: "dispatch-2" },
+      error: null,
+    }));
+    const newerDispatchForm = await dispatchForm();
+    fireEvent.change(within(newerDispatchForm).getByLabelText(/cases-notice-dispatch-at/), {
+      target: { value: "2026-08-16T10:30" },
+    });
+    fireEvent.submit(newerDispatchForm);
+
+    await waitFor(() => expect(screen.queryByText("cases-notice-dispatch-evidence-linked")).toBeNull());
+    expect(await screen.findByTestId("cases-notice-dispatch-evidence-form-case-1")).toBeTruthy();
+  });
+
   it("blocks every rendered same-row navigation link in the submission tick and restores native links after failure", async () => {
     noticeDispatches = [savedDispatch({
       user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",

@@ -52,6 +52,8 @@ const labels: CaseAuditDossierLabels = {
     "hand-delivery": "Hand delivery",
   },
   supportingEvidence: "User-linked supporting evidence",
+  supportingEvidenceId: "Evidence ID",
+  supportingEvidenceAssociationId: "Association ID",
 };
 
 const item = toComplianceCaseViewModel({
@@ -147,6 +149,8 @@ describe("buildCaseAuditDossier", () => {
       supportingEvidenceAssociationId: "association-1",
     });
     expect(report.labels.supportingEvidence).toBe("User-linked supporting evidence");
+    expect(report.labels.supportingEvidenceId).toBe("Evidence ID");
+    expect(report.labels.supportingEvidenceAssociationId).toBe("Association ID");
   });
 
   it("omits an inapplicable calendar reminder and localizes the old-law deadline", () => {
