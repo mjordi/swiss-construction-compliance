@@ -204,6 +204,19 @@ export default function TechVault() {
     }
 
     setError(null);
+    const handleRefreshFailure = () => {
+      const isInitialLoad = !hasLoadedProjectsRef.current || lastSuccessfulUserIdRef.current !== user.id;
+      const isPostMutationRefresh = statusMutationRefreshProjectIdsRef.current.size > 0;
+
+      if (isInitialLoad || isPostMutationRefresh) {
+        setError("vault-error-load");
+      }
+      if (isInitialLoad) {
+        setProjects([]);
+        setStatusMutationFeedback(null);
+      }
+      setLoading(false);
+    };
     try {
       const [casesResult, protocolsResult] = await Promise.all([
         supabase
@@ -220,12 +233,7 @@ export default function TechVault() {
       if (fetchId !== latestFetchIdRef.current) return;
 
       if (casesResult.error || protocolsResult.error) {
-        if (!hasLoadedProjectsRef.current || lastSuccessfulUserIdRef.current !== user.id) {
-          setError("vault-error-load");
-          setProjects([]);
-          setStatusMutationFeedback(null);
-        }
-        setLoading(false);
+        handleRefreshFailure();
         return;
       }
 
@@ -323,12 +331,7 @@ export default function TechVault() {
       setLoading(false);
     } catch {
       if (fetchId !== latestFetchIdRef.current) return;
-      if (!hasLoadedProjectsRef.current || lastSuccessfulUserIdRef.current !== user.id) {
-        setError("vault-error-load");
-        setProjects([]);
-        setStatusMutationFeedback(null);
-      }
-      setLoading(false);
+      handleRefreshFailure();
     }
   }, [user, supabase]);
 

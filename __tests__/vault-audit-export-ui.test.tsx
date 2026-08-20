@@ -21,7 +21,7 @@ const { buildCsvMock, filenameMock } = vi.hoisted(() => ({
 const createObjectUrlMock = vi.fn(() => "blob:vault-audit");
 const revokeObjectUrlMock = vi.fn();
 let statusUpdateResult: Promise<{ error: { message: string } | null }>;
-let casesSelectResult: Promise<{ data: typeof cases; error: null }>;
+let casesSelectResult: Promise<{ data: typeof cases; error: { message: string } | null }>;
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/vault",
@@ -204,6 +204,34 @@ describe("Vault portfolio audit export", () => {
     expect(buildCsvMock.mock.calls[0][0].find((row) => row.caseId === "case-active")).toMatchObject({
       lifecycleStatus: "vault-status-archived",
       sourceUpdatedAt: "2026-08-20T08:00:00.000Z",
+    });
+  });
+
+  it("offers a retry when the post-mutation refresh fails", async () => {
+    render(<TechVault />);
+    await screen.findByText("Alpine Tower");
+    casesSelectResult = Promise.resolve({ data: cases, error: { message: "offline" } });
+
+    fireEvent.click(screen.getByRole("button", { name: "vault-archive-project" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("vault-error-load");
+    expect(screen.queryByRole("button", { name: "vault-audit-export-action" })).toBeNull();
+
+    casesSelectResult = Promise.resolve({
+      data: cases.map((entry) => entry.id === "case-active"
+        ? { ...entry, status: "archived", updated_at: "2026-08-20T08:05:00.000Z" }
+        : entry),
+      error: null,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "vault-load-retry" }));
+
+    const exportButton = await screen.findByRole("button", { name: "vault-audit-export-action" });
+    expect(exportButton.getAttribute("disabled")).toBeNull();
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(buildCsvMock).toHaveBeenCalledTimes(1));
+    expect(buildCsvMock.mock.calls[0][0].find((row) => row.caseId === "case-active")).toMatchObject({
+      lifecycleStatus: "vault-status-archived",
+      sourceUpdatedAt: "2026-08-20T08:05:00.000Z",
     });
   });
 });
