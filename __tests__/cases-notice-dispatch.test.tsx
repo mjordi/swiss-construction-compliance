@@ -5,7 +5,7 @@ const dispatchInsertMock = vi.fn();
 const dispatchEvidenceInsertMock = vi.fn();
 const { rpcMock, deriveCaseLegalMilestonesMock } = vi.hoisted(() => ({
   rpcMock: vi.fn(async () => ({ data: true, error: null })),
-  deriveCaseLegalMilestonesMock: vi.fn(() => []),
+  deriveCaseLegalMilestonesMock: vi.fn<(...args: unknown[]) => Array<Record<string, unknown>>>(() => []),
 }));
 const replaceMock = vi.fn();
 const routerMock = { replace: replaceMock };
@@ -267,11 +267,18 @@ vi.mock("@/lib/supabase", () => {
       }
       if (table === "case_evidence") {
         let pageSize = 1000;
+        const filters: Record<string, string> = {};
         const query = {
-          eq: () => query,
+          eq: (column: string, value: string) => { filters[column] = value; return query; },
           order: () => query,
           or: () => query,
           limit: (size: number) => { pageSize = size; return query; },
+          maybeSingle: async () => ({
+            data: caseEvidence.find((record) => Object.entries(filters).every(
+              ([column, value]) => record[column as keyof CaseEvidenceRecord] === value
+            )) ?? null,
+            error: null,
+          }),
           then: (resolve: (value: { data: CaseEvidenceRecord[] | null; error: { message: string } | null }) => unknown) => {
             const page = caseEvidencePageQueries++;
             const result = caseEvidenceLoadDeferred?.promise ?? Promise.resolve(
@@ -706,19 +713,17 @@ describe("Cases notice dispatch recording", () => {
       user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",
       dispatched_at: "2026-08-15T09:00:00.000Z", channel: "courier", reference: null,
     })];
-    caseEvidence = [
-      {
-        id: "evidence-1", user_id: "user-1", case_id: "case-1", original_name: "selected-receipt.pdf",
-        storage_path: "user-1/case-1/selected-receipt.pdf", mime_type: "application/pdf", size_bytes: 123,
-        created_at: "2026-08-14T09:00:00.000Z",
-      },
-      {
+    caseEvidence = [{
+      id: "evidence-1", user_id: "user-1", case_id: "case-1", original_name: "selected-receipt.pdf",
+      storage_path: "user-1/case-1/selected-receipt.pdf", mime_type: "application/pdf", size_bytes: 123,
+      created_at: "2026-08-14T09:00:00.000Z",
+    }];
+    dispatchEvidenceInsertMock.mockImplementationOnce(async (payload: Record<string, unknown>) => {
+      caseEvidence.push({
         id: "evidence-2", user_id: "user-1", case_id: "case-1", original_name: "winning-receipt.pdf",
         storage_path: "user-1/case-1/winning-receipt.pdf", mime_type: "application/pdf", size_bytes: 456,
         created_at: "2026-08-14T10:00:00.000Z",
-      },
-    ];
-    dispatchEvidenceInsertMock.mockImplementationOnce(async (payload: Record<string, unknown>) => {
+      });
       dispatchEvidence = [{
         id: "association-winning",
         ...payload,

@@ -2240,10 +2240,31 @@ export default function CasesPage() {
     const requestIsCurrent = () => dossierMountedRef.current
       && currentUserIdRef.current === userId
       && dispatchEvidenceRequestIdsRef.current[dispatch.id] === requestId;
-    const acceptSavedAssociation = (candidate: unknown) => {
+    const acceptSavedAssociation = async (candidate: unknown) => {
       const saved = normalizeCaseNoticeDispatchEvidence(candidate);
       if (!saved || !requestIsCurrent() || saved.user_id !== userId || saved.case_id !== caseId
         || saved.dispatch_id !== dispatch.id) return false;
+      if (!(caseEvidenceByCase[caseId] ?? []).some((record) => record.id === saved.evidence_id)) {
+        const { data: evidenceData, error: evidenceError } = await supabase.from("case_evidence")
+          .select("id, user_id, case_id, original_name, storage_path, mime_type, size_bytes, created_at")
+          .eq("user_id", userId)
+          .eq("case_id", caseId)
+          .eq("id", saved.evidence_id)
+          .maybeSingle();
+        const winningEvidence = evidenceData as CaseEvidence | null;
+        if (evidenceError || !requestIsCurrent() || !winningEvidence
+          || winningEvidence.id !== saved.evidence_id || winningEvidence.user_id !== userId
+          || winningEvidence.case_id !== caseId || typeof winningEvidence.original_name !== "string"
+          || typeof winningEvidence.storage_path !== "string" || typeof winningEvidence.size_bytes !== "number"
+          || typeof winningEvidence.created_at !== "string"
+          || !["application/pdf", "image/jpeg", "image/png"].includes(winningEvidence.mime_type)) return false;
+        setCaseEvidence((current) => {
+          const next = [winningEvidence, ...current.filter((row) => row.id !== winningEvidence.id)];
+          lastSuccessfulCaseEvidenceRef.current = next;
+          lastSuccessfulCaseEvidenceUserIdRef.current = userId;
+          return next;
+        });
+      }
       setNoticeDispatchEvidence((current) => {
         const next = [saved, ...current.filter((row) => row.dispatch_id !== dispatch.id)];
         lastSuccessfulDispatchEvidenceRef.current = next;
@@ -2263,7 +2284,7 @@ export default function CasesPage() {
         user_id: userId, case_id: caseId, dispatch_id: dispatch.id, evidence_id: evidenceId,
       }).select("*").single();
       if (error || !data) throw error ?? new Error("Evidence association was not confirmed");
-      acceptSavedAssociation(data);
+      await acceptSavedAssociation(data);
     } catch {
       let reconciled = false;
       try {
@@ -2272,7 +2293,7 @@ export default function CasesPage() {
           .eq("user_id", userId)
           .eq("dispatch_id", dispatch.id)
           .maybeSingle();
-        reconciled = !error && acceptSavedAssociation(data);
+        reconciled = !error && await acceptSavedAssociation(data);
       } catch {
         // The original insert and reconciliation are both ambiguous; report failure below.
       }
