@@ -3,8 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dispatchInsertMock = vi.fn();
 const dispatchEvidenceInsertMock = vi.fn();
-const { rpcMock } = vi.hoisted(() => ({
+const { rpcMock, deriveCaseLegalMilestonesMock } = vi.hoisted(() => ({
   rpcMock: vi.fn(async () => ({ data: true, error: null })),
+  deriveCaseLegalMilestonesMock: vi.fn(() => []),
 }));
 const replaceMock = vi.fn();
 const routerMock = { replace: replaceMock };
@@ -175,7 +176,7 @@ vi.mock("@/lib/case-timeline", () => ({
       },
     })),
   buildCaseDeadlineReminderICS: () => "BEGIN:VCALENDAR\nEND:VCALENDAR",
-  deriveCaseLegalMilestones: () => [],
+  deriveCaseLegalMilestones: deriveCaseLegalMilestonesMock,
   deriveChecklistProgress: () => ({ completed: 1, total: 4, label: "progress" }),
   isDeadlineReminderIcsExportEligible: () => false,
 }));
@@ -339,6 +340,7 @@ describe("Cases notice dispatch recording", () => {
     caseEvidenceLoadDeferred = null;
     authUserMock = { id: "user-1" };
     rpcMock.mockClear();
+    deriveCaseLegalMilestonesMock.mockReset().mockReturnValue([]);
   });
 
   it("inserts a dispatch bound to the exact latest saved draft", async () => {
@@ -631,6 +633,48 @@ describe("Cases notice dispatch recording", () => {
     expect(linked.textContent).toContain("association-1");
     fireEvent.submit(form);
     expect(dispatchEvidenceInsertMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("shows the immutable association ID for an older linked dispatch in the legal timeline", async () => {
+    deriveCaseLegalMilestonesMock.mockReturnValue([{
+      id: "notice-dispatched-dispatch-1",
+      kind: "notice-dispatched",
+      date: new Date("2026-08-15T09:00:00.000Z"),
+      dateLabel: "15.08.2026",
+      supportingEvidenceName: "older-receipt.pdf",
+      supportingEvidenceId: "evidence-older",
+      supportingEvidenceAssociationId: "association-older",
+    }]);
+    noticeDispatches = [
+      savedDispatch({
+        user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",
+        dispatched_at: "2026-08-15T09:00:00.000Z", channel: "courier", reference: null,
+      }),
+      {
+        ...savedDispatch({
+          user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",
+          dispatched_at: "2026-08-16T09:00:00.000Z", channel: "courier", reference: null,
+        }),
+        id: "dispatch-latest",
+      },
+    ];
+    dispatchEvidence = [{
+      id: "association-older", user_id: "user-1", case_id: "case-1", dispatch_id: "dispatch-1",
+      evidence_id: "evidence-older", created_at: "2026-08-15T10:00:00.000Z",
+    }];
+    caseEvidence = [{
+      id: "evidence-older", user_id: "user-1", case_id: "case-1", original_name: "older-receipt.pdf",
+      storage_path: "user-1/case-1/older-receipt.pdf", mime_type: "application/pdf", size_bytes: 123,
+      created_at: "2026-08-15T08:00:00.000Z",
+    }];
+    render(<CasesPage />);
+
+    const timeline = await screen.findByTestId("cases-legal-timeline-case-1");
+    await waitFor(() => {
+      expect(timeline.textContent)
+        .toContain("cases-notice-dispatch-evidence-association-id: association-older");
+    });
+    expect(screen.getByTestId("cases-notice-dispatch-evidence-form-case-1")).toBeTruthy();
   });
 
   it("reconciles a committed evidence link when the insert response is lost", async () => {

@@ -3459,7 +3459,13 @@ export default function CasesPage() {
                             )}
                             {milestone.supportingEvidenceName && (
                               <span className="ml-2 font-mono text-xs text-blue-100">
-                                {t("cases-notice-dispatch-evidence-file")}: {milestone.supportingEvidenceName} · {milestone.supportingEvidenceId}
+                                {t("cases-notice-dispatch-evidence-file")}: {milestone.supportingEvidenceName}
+                                {milestone.supportingEvidenceId && (
+                                  <> · {t("cases-notice-dispatch-evidence-id")}: {milestone.supportingEvidenceId}</>
+                                )}
+                                {milestone.supportingEvidenceAssociationId && (
+                                  <> · {t("cases-notice-dispatch-evidence-association-id")}: {milestone.supportingEvidenceAssociationId}</>
+                                )}
                               </span>
                             )}
                           </span>
