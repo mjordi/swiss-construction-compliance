@@ -2933,7 +2933,7 @@ export default function CasesPage() {
             const isNoticeDraftPdfGenerating = Boolean(noticeDraftPdfGeneratingByCase[item.id]);
             const isCaseBusy = isChecklistSaving || isDossierGenerating || isProtocolPdfGenerating || isNoticeDraftCreating || isNoticeDraftPdfGenerating || isNoticeDispatchRecording || isDispatchEvidenceLinking;
             const isNoticeDispatchHistoryLoading = noticeDispatchHistoryState === "loading";
-            const isAuditHistoryReady = noticeDispatchHistoryState !== "loading" && evidenceHistoryState === "ready";
+            const isAuditHistoryReady = noticeDispatchHistoryState !== "loading" && evidenceHistoryState !== "loading";
             const isNoticePreviewOpen = Boolean(noticePreviewOpenByCase[item.id] && completeNoticeSource);
             const noticePreviewUnavailableId = `cases-notice-preview-unavailable-${item.id}`;
 
@@ -3525,7 +3525,15 @@ export default function CasesPage() {
                           {t(evidenceHistoryState === "loading" ? "cases-evidence-history-loading" : "cases-evidence-history-unavailable")}
                         </p>
                         {evidenceHistoryState === "error" && (
-                          <button type="button" onClick={triggerCasesRefresh} className="mt-2 rounded border border-rose-300/30 px-3 py-1.5 text-xs">
+                          <button
+                            type="button"
+                            disabled={isCaseBusy}
+                            onClick={() => {
+                              if (noticeDispatchInFlightIdsRef.current.has(item.id)) return;
+                              triggerCasesRefresh();
+                            }}
+                            className="mt-2 rounded border border-rose-300/30 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                          >
                             {t("cases-evidence-history-retry")}
                           </button>
                         )}

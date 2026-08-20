@@ -454,6 +454,29 @@ describe("Cases notice dispatch recording", () => {
     await waitFor(() => expect((retry as HTMLButtonElement).disabled).toBe(false));
   });
 
+  it("blocks the timeline evidence retry while the first notice dispatch is pending", async () => {
+    dispatchEvidenceLoadError = true;
+    const pending = deferred<{ data: NoticeDispatchRecord; error: null }>();
+    dispatchInsertMock.mockImplementationOnce(() => pending.promise);
+    render(<CasesPage />);
+    const form = await dispatchForm();
+    const retry = await screen.findByRole("button", { name: "cases-evidence-history-retry" });
+
+    fireEvent.submit(form);
+
+    await waitFor(() => expect((retry as HTMLButtonElement).disabled).toBe(true));
+    fireEvent.click(retry);
+    expect(noticeDispatchPageQueries).toBe(1);
+    pending.resolve({
+      data: savedDispatch({
+        user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",
+        dispatched_at: "2026-08-16T09:00:00.000Z", channel: "courier", reference: null,
+      }),
+      error: null,
+    });
+    expect((await screen.findByRole("status")).textContent).toContain("cases-notice-dispatch-recorded");
+  });
+
   it("blocks dispatch submission synchronously after an evidence-history retry starts", async () => {
     noticeDispatches = [savedDispatch({
       user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",
@@ -530,6 +553,9 @@ describe("Cases notice dispatch recording", () => {
     render(<CasesPage />);
 
     expect(await screen.findByText("cases-evidence-history-unavailable")).toBeTruthy();
+    const timelineHeading = screen.getByText("cases-legal-timeline-title");
+    expect(timelineHeading.parentElement?.querySelector("ol")).toBeTruthy();
+    expect(deriveCaseLegalMilestonesMock).toHaveBeenCalled();
     expect(screen.queryByTestId("cases-notice-dispatch-evidence-form-case-1")).toBeNull();
     expect(screen.queryByText("cases-notice-dispatch-evidence-empty")).toBeNull();
     expect((screen.getByRole("button", { name: "cases-export-chronology-csv" }) as HTMLButtonElement).disabled).toBe(true);
