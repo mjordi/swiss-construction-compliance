@@ -22,6 +22,7 @@ let noticeDispatchPageQueries = 0;
 let dispatchEvidenceLoadError = false;
 let caseEvidenceLoadError = false;
 let dispatchEvidencePageQueries = 0;
+let dispatchEvidenceOrFilters: string[] = [];
 let caseEvidencePageQueries = 0;
 let dispatchEvidenceLoadDeferred: { promise: Promise<{ data: DispatchEvidenceRecord[] | null; error: { message: string } | null }>; resolve: (value: { data: DispatchEvidenceRecord[] | null; error: { message: string } | null }) => void; reject: (reason?: unknown) => void } | null = null;
 let caseEvidenceLoadDeferred: { promise: Promise<{ data: CaseEvidenceRecord[] | null; error: { message: string } | null }>; resolve: (value: { data: CaseEvidenceRecord[] | null; error: { message: string } | null }) => void; reject: (reason?: unknown) => void } | null = null;
@@ -240,7 +241,7 @@ vi.mock("@/lib/supabase", () => {
         const query = {
           eq: (column: string, value: string) => { filters[column] = value; return query; },
           order: () => query,
-          or: () => query,
+          or: (filter: string) => { dispatchEvidenceOrFilters.push(filter); return query; },
           limit: (size: number) => { pageSize = size; return query; },
           maybeSingle: async () => ({
             data: dispatchEvidence.find((record) => Object.entries(filters).every(
@@ -342,6 +343,7 @@ describe("Cases notice dispatch recording", () => {
     dispatchEvidenceLoadError = false;
     caseEvidenceLoadError = false;
     dispatchEvidencePageQueries = 0;
+    dispatchEvidenceOrFilters = [];
     caseEvidencePageQueries = 0;
     dispatchEvidenceLoadDeferred = null;
     caseEvidenceLoadDeferred = null;
@@ -484,7 +486,9 @@ describe("Cases notice dispatch recording", () => {
       id: `association-${index}`, user_id: "user-1", case_id: "case-1",
       dispatch_id: index === 1000 ? "dispatch-1" : `other-dispatch-${index}`,
       evidence_id: index === 1000 ? "evidence-target" : `other-evidence-${index}`,
-      created_at: new Date(Date.UTC(2026, 7, 17, 8, 0, 0) - index * 1000).toISOString(),
+      created_at: index === 999
+        ? "2026-08-17T07:43:21.123456+00:00"
+        : new Date(Date.UTC(2026, 7, 17, 8, 0, 0) - index * 1000).toISOString(),
     }));
     caseEvidence = Array.from({ length: 1001 }, (_, index) => ({
       id: index === 1000 ? "evidence-target" : `other-evidence-${index}`,
@@ -497,6 +501,9 @@ describe("Cases notice dispatch recording", () => {
 
     const linked = await screen.findByTestId("cases-notice-dispatch-evidence-case-1");
     expect(dispatchEvidencePageQueries).toBe(2);
+    expect(dispatchEvidenceOrFilters).toContain(
+      "created_at.lt.2026-08-17T07:43:21.123456+00:00,and(created_at.eq.2026-08-17T07:43:21.123456+00:00,id.gt.association-999)"
+    );
     expect(caseEvidencePageQueries).toBe(2);
     expect(linked.textContent).toContain("target-receipt.pdf");
     expect(linked.textContent).toContain("association-1000");

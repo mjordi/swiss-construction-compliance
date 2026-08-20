@@ -595,13 +595,16 @@ export default function CasesPage() {
             }
             const result = await query;
             if (result.error) throw result.error;
-            const page = ((result.data ?? []) as unknown[]).map(normalizeCaseNoticeDispatchEvidence)
+            const rawPage = (result.data ?? []) as Array<{ id?: unknown; created_at?: unknown }>;
+            const page = rawPage.map(normalizeCaseNoticeDispatchEvidence)
               .filter((row): row is CaseNoticeDispatchEvidence => row !== null);
             loaded.push(...page);
             if ((result.data?.length ?? 0) < EVIDENCE_HISTORY_PAGE_SIZE) break;
-            const lastRecord = page.at(-1);
-            if (!lastRecord) throw new Error("Dispatch evidence page could not be normalized");
-            cursor = { created_at: lastRecord.created_at, id: lastRecord.id };
+            const rawLastRecord = rawPage.at(-1);
+            if (typeof rawLastRecord?.created_at !== "string" || typeof rawLastRecord.id !== "string") {
+              throw new Error("Dispatch evidence page cursor was invalid");
+            }
+            cursor = { created_at: rawLastRecord.created_at, id: rawLastRecord.id };
           }
           return { data: loaded, failed: false };
         } catch { return { data: [] as CaseNoticeDispatchEvidence[], failed: true }; }
