@@ -719,19 +719,19 @@ export default function TechVault() {
 
   return (
     <div className="max-w-6xl mx-auto h-[calc(100vh-100px)] flex flex-col">
-      <header className="mb-8 flex justify-between items-end">
+      <header className="mb-8 flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold mb-2">{t("vault-title")}</h1>
           <p className="text-slate-400">{t("vault-subtitle")}</p>
         </div>
-        <div className="flex items-start gap-3">
+        <div className="flex w-full flex-col items-stretch gap-3 sm:w-auto sm:flex-row sm:items-start">
           {!loading && !error && projects.length > 0 && user && lastSuccessfulUserIdRef.current === user.id ? (
-            <div className="max-w-sm text-right">
+            <div className="max-w-sm text-left sm:text-right">
               <button
                 type="button"
                 onClick={() => void handleAuditExport()}
                 disabled={auditExportPending || mutationRefreshPending || statusMutationProjectIds.length > 0}
-                className="ml-auto inline-flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-bold text-accent transition hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
+                className="inline-flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-bold text-accent transition hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-60 sm:ml-auto"
               >
                 {auditExportPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
                 {t(auditExportPending ? "vault-audit-export-preparing" : "vault-audit-export-action")}
@@ -749,7 +749,7 @@ export default function TechVault() {
           ) : null}
           <Link
             href={createProjectHref}
-            className="bg-white/10 hover:bg-white/20 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition text-sm font-bold border border-white/5"
+            className="flex items-center justify-center gap-2 self-start whitespace-nowrap rounded-lg border border-white/5 bg-white/10 px-4 py-2 text-sm font-bold text-white transition hover:bg-white/20"
           >
             <Plus className="w-4 h-4" /> {t("vault-new-project")}
           </Link>

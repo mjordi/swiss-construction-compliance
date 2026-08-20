@@ -67,7 +67,7 @@ describe("buildVaultAuditCsv", () => {
     const csv = buildVaultAuditCsv(
       [row({
         caseId: "@case",
-        project: '=HYPERLINK("https://example.invalid","click")',
+        project: '\n=HYPERLINK("https://example.invalid","click")',
         lifecycleStatus: "+active",
         legalStatus: "-1",
         legalRegime: " @hidden",
@@ -80,7 +80,7 @@ describe("buildVaultAuditCsv", () => {
 
     expect(csv).toContain('"\'=Project"');
     expect(csv).toContain('"\'@case"');
-    expect(csv).toContain('"\'=HYPERLINK(""https://example.invalid"",""click"")"');
+    expect(csv).toContain('"\'\n=HYPERLINK(""https://example.invalid"",""click"")"');
     expect(csv).toContain('"\'+active","\'-1","\' @hidden"');
     expect(csv).toContain('"line one\nline two, quoted ""value"""');
     expect(csv).toContain('"\'=CMD()"');

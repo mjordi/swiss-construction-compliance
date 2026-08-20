@@ -31,7 +31,7 @@ export interface VaultAuditCsvLabels {
   unavailable: string;
 }
 
-const SPREADSHEET_FORMULA_PREFIX = /^[\t\r ]*[=+\-@]/;
+const SPREADSHEET_FORMULA_PREFIX = /^[\t\n\r ]*[=+\-@]/;
 
 function csvCell(value: string | number): string {
   const text = String(value);

@@ -182,6 +182,19 @@ describe("Vault portfolio audit export", () => {
     expect(await screen.findByText("vault-audit-export-success")).toBeTruthy();
   });
 
+  it("stacks the header actions on narrow viewports and restores the row layout responsively", async () => {
+    render(<TechVault />);
+    await screen.findByText("Alpine Tower");
+
+    const exportButton = screen.getByRole("button", { name: "vault-audit-export-action" });
+    const actions = exportButton.parentElement?.parentElement;
+    const header = actions?.parentElement;
+
+    expect(["flex-col", "sm:flex-row", "sm:justify-between"].every((name) => header?.classList.contains(name))).toBe(true);
+    expect(["w-full", "flex-col", "sm:w-auto", "sm:flex-row"].every((name) => actions?.classList.contains(name))).toBe(true);
+    expect(screen.getByRole("link", { name: "vault-new-project" }).classList.contains("whitespace-nowrap")).toBe(true);
+  });
+
   it("recomputes date-dependent legal context immediately before export", async () => {
     render(<TechVault />);
     await screen.findByText("Alpine Tower");
