@@ -1,4 +1,7 @@
-import type { CaseNoticeDispatch as CaseNoticeDispatchRow } from "@/lib/database.types";
+import type {
+  CaseNoticeDispatch as CaseNoticeDispatchRow,
+  CaseNoticeDispatchEvidence as CaseNoticeDispatchEvidenceRow,
+} from "@/lib/database.types";
 
 export const CASE_NOTICE_DISPATCH_CHANNELS = [
   "registered-mail",
@@ -9,6 +12,7 @@ export const CASE_NOTICE_DISPATCH_CHANNELS = [
 
 export type CaseNoticeDispatchChannel = typeof CASE_NOTICE_DISPATCH_CHANNELS[number];
 export type CaseNoticeDispatch = CaseNoticeDispatchRow;
+export type CaseNoticeDispatchEvidence = CaseNoticeDispatchEvidenceRow;
 
 export const CASE_NOTICE_DISPATCH_CHANNEL_KEYS: Record<CaseNoticeDispatchChannel, string> = {
   "registered-mail": "cases-notice-dispatch-channel-registered-mail",
@@ -113,6 +117,43 @@ export function normalizeCaseNoticeDispatch(value: unknown): CaseNoticeDispatch 
     reference,
     created_at: new Date(row.created_at).toISOString(),
   };
+}
+
+export function normalizeCaseNoticeDispatchEvidence(value: unknown): CaseNoticeDispatchEvidence | null {
+  if (!value || typeof value !== "object") return null;
+  const row = value as Record<string, unknown>;
+  if (
+    typeof row.id !== "string" || !row.id.trim() ||
+    typeof row.user_id !== "string" || !row.user_id.trim() ||
+    typeof row.case_id !== "string" || !row.case_id.trim() ||
+    typeof row.dispatch_id !== "string" || !row.dispatch_id.trim() ||
+    typeof row.evidence_id !== "string" || !row.evidence_id.trim() ||
+    !validDate(row.created_at)
+  ) return null;
+  return {
+    id: row.id,
+    user_id: row.user_id,
+    case_id: row.case_id,
+    dispatch_id: row.dispatch_id,
+    evidence_id: row.evidence_id,
+    created_at: new Date(row.created_at).toISOString(),
+  };
+}
+
+export function selectNoticeDispatchEvidenceByDispatch(
+  values: unknown[]
+): Record<string, CaseNoticeDispatchEvidence> {
+  const result: Record<string, CaseNoticeDispatchEvidence> = {};
+  for (const value of values) {
+    const row = normalizeCaseNoticeDispatchEvidence(value);
+    if (!row) continue;
+    const current = result[row.dispatch_id];
+    if (!current || row.created_at < current.created_at
+      || (row.created_at === current.created_at && row.id.localeCompare(current.id) < 0)) {
+      result[row.dispatch_id] = row;
+    }
+  }
+  return result;
 }
 
 export function selectLatestNoticeDispatchByCase(values: unknown[]): Record<string, CaseNoticeDispatch> {

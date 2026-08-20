@@ -259,6 +259,17 @@ vi.mock("@/lib/supabase", () => ({
         return query;
       }
 
+      if (table === "case_notice_dispatch_evidence" || table === "case_evidence") {
+        const query = {
+          select: () => query,
+          eq: () => query,
+          order: () => query,
+          or: () => query,
+          limit: () => Promise.resolve({ data: [], error: null }),
+        };
+        return query;
+      }
+
       if (table === "case_activity_events") {
         return {
           select: () => ({
@@ -687,6 +698,9 @@ describe("cases checklist persistence", () => {
           milestone: "cases-chronology-milestone",
           sourceId: "cases-chronology-source-id",
           sourceName: "cases-chronology-source-name",
+          supportingEvidenceName: "cases-notice-dispatch-evidence-file",
+          supportingEvidenceId: "cases-notice-dispatch-evidence-id",
+          supportingEvidenceAssociationId: "cases-notice-dispatch-evidence-association-id",
           milestones: {
             contract: "cases-legal-milestone-contract",
             discovery: "cases-legal-milestone-discovery",
@@ -703,6 +717,8 @@ describe("cases checklist persistence", () => {
           },
         },
         expect.any(Date),
+        [],
+        [],
         []
       );
       expect(createObjectURLMock).toHaveBeenCalledTimes(1);

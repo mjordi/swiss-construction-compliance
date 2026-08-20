@@ -12,7 +12,9 @@ import type { LegalRegime } from "@/lib/legal-utils";
 import type {
   CaseNoticeDispatch,
   CaseNoticeDispatchChannel,
+  CaseNoticeDispatchEvidence,
 } from "@/lib/case-notice-dispatch";
+import type { CaseEvidence } from "@/lib/database.types";
 
 export interface CaseAuditDossierLabels {
   title: string;
@@ -39,6 +41,9 @@ export interface CaseAuditDossierLabels {
   checklistItems: Record<FollowUpChecklistKey, string>;
   milestones: Record<CaseLegalMilestoneKind, string>;
   dispatchChannels?: Partial<Record<CaseNoticeDispatchChannel, string>>;
+  supportingEvidence?: string;
+  supportingEvidenceId?: string;
+  supportingEvidenceAssociationId?: string;
 }
 
 export interface CaseAuditDossierMilestone {
@@ -48,6 +53,9 @@ export interface CaseAuditDossierMilestone {
   dateLabel: string;
   sourceId: string | null;
   sourceName: string | null;
+  supportingEvidenceId?: string | null;
+  supportingEvidenceAssociationId?: string | null;
+  supportingEvidenceName?: string | null;
 }
 
 export interface CaseAuditDossierReport {
@@ -70,6 +78,9 @@ export interface CaseAuditDossierReport {
     | "checklistMissing"
     | "linkedProtocols"
     | "chronology"
+    | "supportingEvidence"
+    | "supportingEvidenceId"
+    | "supportingEvidenceAssociationId"
   >;
   caseId: string;
   projectName: string;
@@ -103,6 +114,8 @@ export function buildCaseAuditDossier({
   checklist,
   linkedProtocols,
   noticeDispatches = [],
+  dispatchEvidence = [],
+  evidence = [],
   labels,
   generatedAt,
 }: {
@@ -110,6 +123,8 @@ export function buildCaseAuditDossier({
   checklist: FollowUpChecklistState;
   linkedProtocols: LinkedCaseProtocolEvent[];
   noticeDispatches?: CaseNoticeDispatch[];
+  dispatchEvidence?: CaseNoticeDispatchEvidence[];
+  evidence?: CaseEvidence[];
   labels: CaseAuditDossierLabels;
   generatedAt: Date;
 }): CaseAuditDossierReport {
@@ -128,7 +143,9 @@ export function buildCaseAuditDossier({
     linkedProtocols,
     [],
     noticeDispatches,
-    labels.dispatchChannels
+    labels.dispatchChannels,
+    dispatchEvidence,
+    evidence
   ).map((milestone) => ({
     kind: milestone.kind,
     label: labels.milestones[milestone.kind],
@@ -140,6 +157,9 @@ export function buildCaseAuditDossier({
         : null
     ),
     sourceName: milestone.sourceName ?? null,
+    supportingEvidenceId: milestone.supportingEvidenceId ?? null,
+    supportingEvidenceAssociationId: milestone.supportingEvidenceAssociationId ?? null,
+    supportingEvidenceName: milestone.supportingEvidenceName ?? null,
   }));
   const finalizedProtocolCount = milestones.filter(
     (milestone) => milestone.kind === "protocol-finalized"
@@ -164,6 +184,9 @@ export function buildCaseAuditDossier({
       checklistMissing: labels.checklistMissing,
       linkedProtocols: labels.linkedProtocols,
       chronology: labels.chronology,
+      supportingEvidence: labels.supportingEvidence,
+      supportingEvidenceId: labels.supportingEvidenceId,
+      supportingEvidenceAssociationId: labels.supportingEvidenceAssociationId,
     },
     caseId: item.id,
     projectName: item.projectName,

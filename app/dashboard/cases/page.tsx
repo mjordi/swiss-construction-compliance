@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type MouseEvent as ReactMouseEvent } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { pdf } from "@react-pdf/renderer";
@@ -19,15 +19,18 @@ import {
 import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { buildCaseAuditDossier } from "@/lib/case-audit-dossier";
 import { buildFinalizedProtocolReportFromRecord } from "@/lib/protocol-report";
-import type { Case, CaseActivityEvent, CaseNoticeDraft, Protocol } from "@/lib/database.types";
+import type { Case, CaseActivityEvent, CaseEvidence, CaseNoticeDraft, Protocol } from "@/lib/database.types";
 import {
   CASE_NOTICE_DISPATCH_CHANNELS,
   CASE_NOTICE_DISPATCH_CHANNEL_KEYS,
   buildCaseNoticeDispatchPayload,
   normalizeCaseNoticeDispatch,
+  normalizeCaseNoticeDispatchEvidence,
   selectLatestNoticeDispatchByCase,
+  selectNoticeDispatchEvidenceByDispatch,
   type CaseNoticeDispatch,
   type CaseNoticeDispatchChannel,
+  type CaseNoticeDispatchEvidence,
 } from "@/lib/case-notice-dispatch";
 import { buildCaseNoticeDraftPayload } from "@/lib/case-notice-draft";
 import {
@@ -92,6 +95,8 @@ type FinalizedLinkedProtocolRow = Omit<LinkedProtocolRow, "status" | "finalized_
 };
 
 const NOTICE_DISPATCH_PAGE_SIZE = 1000;
+const EVIDENCE_HISTORY_PAGE_SIZE = 1000;
+type LoadReadiness = "loading" | "ready" | "error";
 
 function isFinalizedLinkedProtocol(
   protocol: LinkedProtocolRow
@@ -400,12 +405,20 @@ export default function CasesPage() {
   const [caseActivityEvents, setCaseActivityEvents] = useState<CaseActivityEvent[]>([]);
   const [noticeDrafts, setNoticeDrafts] = useState<CaseNoticeDraft[]>([]);
   const [noticeDispatches, setNoticeDispatches] = useState<CaseNoticeDispatch[]>([]);
-  const [noticeDispatchHistoryState, setNoticeDispatchHistoryState] = useState<"loading" | "ready" | "error">("loading");
+  const [noticeDispatchEvidence, setNoticeDispatchEvidence] = useState<CaseNoticeDispatchEvidence[]>([]);
+  const [caseEvidence, setCaseEvidence] = useState<CaseEvidence[]>([]);
+  const [evidenceHistoryState, setEvidenceHistoryState] = useState<LoadReadiness>("loading");
+  const [dispatchEvidenceLinkingByCase, setDispatchEvidenceLinkingByCase] = useState<Record<string, boolean>>({});
+  const [dispatchEvidenceFeedbackByDispatch, setDispatchEvidenceFeedbackByDispatch] = useState<Record<string, TranslationKey>>({});
+  const dispatchEvidenceInFlightRef = useRef<Set<string>>(new Set());
+  const dispatchEvidenceRequestIdsRef = useRef<Record<string, number>>({});
+  const [noticeDispatchHistoryState, setNoticeDispatchHistoryState] = useState<LoadReadiness>("loading");
   const [noticeDispatchRecordingByCase, setNoticeDispatchRecordingByCase] = useState<Record<string, boolean>>({});
   const [noticeDispatchFeedbackByCase, setNoticeDispatchFeedbackByCase] = useState<Record<string, TranslationKey>>({});
   const noticeDispatchInFlightIdsRef = useRef<Set<string>>(new Set());
   const noticeDispatchRequestIdsRef = useRef<Record<string, number>>({});
   const latestNoticeDispatchLoadIdRef = useRef(0);
+  const noticeDispatchHistoryLoadingRef = useRef(true);
   const [noticeDraftCreatingByCase, setNoticeDraftCreatingByCase] = useState<Record<string, boolean>>({});
   const [noticeDraftFeedbackByCase, setNoticeDraftFeedbackByCase] = useState<Record<string, TranslationKey>>({});
   const noticeDraftInFlightIdsRef = useRef<Set<string>>(new Set());
@@ -430,6 +443,10 @@ export default function CasesPage() {
   const lastSuccessfulCaseActivityUserIdRef = useRef<string | null>(null);
   const lastSuccessfulNoticeDraftsRef = useRef<CaseNoticeDraft[]>([]);
   const lastSuccessfulNoticeDraftsUserIdRef = useRef<string | null>(null);
+  const lastSuccessfulDispatchEvidenceRef = useRef<CaseNoticeDispatchEvidence[]>([]);
+  const lastSuccessfulDispatchEvidenceUserIdRef = useRef<string | null>(null);
+  const lastSuccessfulCaseEvidenceRef = useRef<CaseEvidence[]>([]);
+  const lastSuccessfulCaseEvidenceUserIdRef = useRef<string | null>(null);
   const filterStateRef = useRef({
     regimeFilter,
     statusFilter,
@@ -469,6 +486,10 @@ export default function CasesPage() {
       lastSuccessfulCaseActivityUserIdRef.current = null;
       lastSuccessfulNoticeDraftsRef.current = [];
       lastSuccessfulNoticeDraftsUserIdRef.current = null;
+      lastSuccessfulDispatchEvidenceRef.current = [];
+      lastSuccessfulDispatchEvidenceUserIdRef.current = null;
+      lastSuccessfulCaseEvidenceRef.current = [];
+      lastSuccessfulCaseEvidenceUserIdRef.current = null;
       latestNoticeDraftLoadIdRef.current += 1;
       latestNoticeDispatchLoadIdRef.current += 1;
       setDbCases([]);
@@ -477,7 +498,11 @@ export default function CasesPage() {
       setCaseActivityEvents([]);
       setNoticeDrafts([]);
       setNoticeDispatches([]);
+      setNoticeDispatchEvidence([]);
+      setCaseEvidence([]);
+      noticeDispatchHistoryLoadingRef.current = true;
       setNoticeDispatchHistoryState("loading");
+      setEvidenceHistoryState("loading");
       setInitialLoadError(null);
       setLoading(false);
       return;
@@ -495,7 +520,9 @@ export default function CasesPage() {
     try {
       const noticeDraftLoadId = ++latestNoticeDraftLoadIdRef.current;
       const noticeDispatchLoadId = ++latestNoticeDispatchLoadIdRef.current;
+      noticeDispatchHistoryLoadingRef.current = true;
       setNoticeDispatchHistoryState("loading");
+      setEvidenceHistoryState("loading");
       const loadNoticeDrafts = async () => {
         try {
           const result = await supabase
@@ -555,9 +582,70 @@ export default function CasesPage() {
           return { data: [] as CaseActivityEvent[], failed: true };
         }
       };
+      const loadDispatchEvidence = async () => {
+        try {
+          const loaded: CaseNoticeDispatchEvidence[] = [];
+          let cursor: Pick<CaseNoticeDispatchEvidence, "created_at" | "id"> | null = null;
+          for (;;) {
+            let query = supabase.from("case_notice_dispatch_evidence")
+              .select("*")
+              .eq("user_id", user.id)
+              .order("created_at", { ascending: false })
+              .order("id", { ascending: true })
+              .limit(EVIDENCE_HISTORY_PAGE_SIZE);
+            if (cursor) {
+              query = query.or(`created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.gt.${cursor.id})`);
+            }
+            const result = await query;
+            if (result.error) throw result.error;
+            const rawPage = (result.data ?? []) as Array<{ id?: unknown; created_at?: unknown }>;
+            const page = rawPage.map(normalizeCaseNoticeDispatchEvidence)
+              .filter((row): row is CaseNoticeDispatchEvidence => row !== null);
+            loaded.push(...page);
+            if ((result.data?.length ?? 0) < EVIDENCE_HISTORY_PAGE_SIZE) break;
+            const rawLastRecord = rawPage.at(-1);
+            if (typeof rawLastRecord?.created_at !== "string" || typeof rawLastRecord.id !== "string") {
+              throw new Error("Dispatch evidence page cursor was invalid");
+            }
+            cursor = { created_at: rawLastRecord.created_at, id: rawLastRecord.id };
+          }
+          return { data: loaded, failed: false };
+        } catch { return { data: [] as CaseNoticeDispatchEvidence[], failed: true }; }
+      };
+      const loadCaseEvidence = async () => {
+        try {
+          const loaded: CaseEvidence[] = [];
+          let cursor: Pick<CaseEvidence, "created_at" | "id"> | null = null;
+          for (;;) {
+            let query = supabase.from("case_evidence")
+              .select("id, user_id, case_id, original_name, storage_path, mime_type, size_bytes, created_at")
+              .eq("user_id", user.id)
+              .order("created_at", { ascending: false })
+              .order("id", { ascending: true })
+              .limit(EVIDENCE_HISTORY_PAGE_SIZE);
+            if (cursor) {
+              query = query.or(`created_at.lt.${cursor.created_at},and(created_at.eq.${cursor.created_at},id.gt.${cursor.id})`);
+            }
+            const result = await query;
+            if (result.error) throw result.error;
+            const page = (result.data ?? []) as CaseEvidence[];
+            loaded.push(...page);
+            if ((result.data?.length ?? 0) < EVIDENCE_HISTORY_PAGE_SIZE) break;
+            const lastRecord = page.at(-1);
+            if (!lastRecord) throw new Error("Case evidence page was empty");
+            cursor = { created_at: lastRecord.created_at, id: lastRecord.id };
+          }
+          return { data: loaded, failed: false };
+        } catch { return { data: [] as CaseEvidence[], failed: true }; }
+      };
       const activityResultPromise = loadActivityEvents();
       const noticeDraftResultPromise = loadNoticeDrafts();
       const noticeDispatchResultPromise = loadNoticeDispatches();
+      const dispatchEvidenceResultPromise = loadDispatchEvidence();
+      const caseEvidenceResultPromise = loadCaseEvidence();
+      // Attach before the core queries settle so an early return cannot strand
+      // the additive readiness gates in their loading state.
+      consumeAdditiveResultPromises(user);
       const [casesResult, protocolsResult] = await Promise.all([
         supabase
           .from("cases")
@@ -610,9 +698,10 @@ export default function CasesPage() {
       lastSuccessfulCasesRef.current = (casesResult.data as Case[]) ?? [];
       setLoading(false);
 
-      // Consume additive records independently: either source may be unavailable
-      // forever without delaying core Cases or the other additive source.
-      void activityResultPromise.then((activityResult) => {
+      function consumeAdditiveResultPromises(user: { id: string }) {
+        // Consume additive records independently: either source may be unavailable
+        // forever without delaying core Cases or the other additive source.
+        void activityResultPromise.then((activityResult) => {
         if (fetchId !== latestFetchIdRef.current || currentUserIdRef.current !== user.id) return;
         if (!activityResult.failed) {
           lastSuccessfulCaseActivityEventsRef.current = activityResult.data;
@@ -632,11 +721,39 @@ export default function CasesPage() {
         ) return;
         if (!dispatchResult.failed) {
           setNoticeDispatches(dispatchResult.data);
+          noticeDispatchHistoryLoadingRef.current = false;
           setNoticeDispatchHistoryState("ready");
         } else {
           setNoticeDispatches([]);
+          noticeDispatchHistoryLoadingRef.current = false;
           setNoticeDispatchHistoryState("error");
         }
+      });
+      void Promise.all([dispatchEvidenceResultPromise, caseEvidenceResultPromise]).then(([dispatchEvidenceResult, caseEvidenceResult]) => {
+        if (fetchId !== latestFetchIdRef.current || currentUserIdRef.current !== user.id) return;
+
+        if (!dispatchEvidenceResult.failed && !caseEvidenceResult.failed) {
+          lastSuccessfulDispatchEvidenceRef.current = dispatchEvidenceResult.data;
+          lastSuccessfulDispatchEvidenceUserIdRef.current = user.id;
+          lastSuccessfulCaseEvidenceRef.current = caseEvidenceResult.data;
+          lastSuccessfulCaseEvidenceUserIdRef.current = user.id;
+          setNoticeDispatchEvidence(dispatchEvidenceResult.data);
+          setCaseEvidence(caseEvidenceResult.data);
+          setEvidenceHistoryState("ready");
+          return;
+        }
+
+        setNoticeDispatchEvidence(
+          lastSuccessfulDispatchEvidenceUserIdRef.current === user.id
+            ? lastSuccessfulDispatchEvidenceRef.current
+            : []
+        );
+        setCaseEvidence(
+          lastSuccessfulCaseEvidenceUserIdRef.current === user.id
+            ? lastSuccessfulCaseEvidenceRef.current
+            : []
+        );
+        setEvidenceHistoryState("error");
       });
       void noticeDraftResultPromise.then((noticeDraftResult) => {
         if (
@@ -654,6 +771,7 @@ export default function CasesPage() {
           setNoticeDrafts([]);
         }
       });
+      }
     } catch {
       if (fetchId !== latestFetchIdRef.current) return;
       if (!hasLoadedInitialCasesRef.current) {
@@ -725,8 +843,22 @@ export default function CasesPage() {
     for (const caseId of Object.keys(noticeDispatchRequestIdsRef.current)) {
       noticeDispatchRequestIdsRef.current[caseId] += 1;
     }
+    for (const dispatchId of Object.keys(dispatchEvidenceRequestIdsRef.current)) {
+      dispatchEvidenceRequestIdsRef.current[dispatchId] += 1;
+    }
     noticeDispatchInFlightIdsRef.current.clear();
+    dispatchEvidenceInFlightRef.current.clear();
     setNoticeDispatches([]);
+    setNoticeDispatchEvidence([]);
+    setCaseEvidence([]);
+    setNoticeDispatchHistoryState("loading");
+    setEvidenceHistoryState("loading");
+    lastSuccessfulDispatchEvidenceRef.current = [];
+    lastSuccessfulDispatchEvidenceUserIdRef.current = null;
+    lastSuccessfulCaseEvidenceRef.current = [];
+    lastSuccessfulCaseEvidenceUserIdRef.current = null;
+    setDispatchEvidenceLinkingByCase({});
+    setDispatchEvidenceFeedbackByDispatch({});
     setNoticeDispatchRecordingByCase({});
     setNoticeDispatchFeedbackByCase({});
     for (const caseId of Object.keys(noticeDraftRequestIdsRef.current)) {
@@ -1120,6 +1252,15 @@ export default function CasesPage() {
     }
     return result;
   }, [noticeDispatches]);
+  const noticeDispatchEvidenceByDispatch = useMemo(
+    () => selectNoticeDispatchEvidenceByDispatch(noticeDispatchEvidence),
+    [noticeDispatchEvidence]
+  );
+  const caseEvidenceByCase = useMemo(() => {
+    const result: Record<string, CaseEvidence[]> = {};
+    for (const record of caseEvidence) (result[record.case_id] ??= []).push(record);
+    return result;
+  }, [caseEvidence]);
 
   // Derive effective checklists by layering persisted checklist state over timeline defaults.
   const effectiveChecklists = useMemo(() => {
@@ -1196,11 +1337,29 @@ export default function CasesPage() {
     setEditFormData(EMPTY_CASE_FORM);
   }
 
+  function guardCaseNavigation(event: ReactMouseEvent<HTMLAnchorElement>, caseId: string) {
+    if (
+      dispatchEvidenceInFlightRef.current.has(caseId)
+      || noticeDispatchInFlightIdsRef.current.has(caseId)
+      || checklistInFlightIdsRef.current.has(caseId)
+      || deletingCaseIdsRef.current.has(caseId)
+      || updatingCaseIdRef.current === caseId
+      || editingCaseIdRef.current === caseId
+      || noticeDraftInFlightIdsRef.current.has(caseId)
+      || noticeDraftPdfInFlightCaseIdsRef.current.has(caseId)
+      || dossierInFlightIdsRef.current.has(caseId)
+      || protocolPdfInFlightCaseIdsRef.current.has(caseId)
+    ) {
+      event.preventDefault();
+    }
+  }
+
   function openEditForm(item: Case) {
     if (
       updatingCaseIdRef.current
       || deletingCaseIdsRef.current.size > 0
       || noticeDispatchInFlightIdsRef.current.has(item.id)
+      || dispatchEvidenceInFlightRef.current.has(item.id)
       || noticeDraftCreatingByCase[item.id]
     ) return;
     setCaseUpdateFeedback(null);
@@ -1307,6 +1466,7 @@ export default function CasesPage() {
   const hasProtocolPdfGeneration = Object.values(protocolPdfGeneratingByCase).some(Boolean);
   const hasNoticeDraftCreation = Object.values(noticeDraftCreatingByCase).some(Boolean);
   const hasNoticeDispatchRecording = Object.values(noticeDispatchRecordingByCase).some(Boolean);
+  const hasDispatchEvidenceLinking = Object.values(dispatchEvidenceLinkingByCase).some(Boolean);
   const hasAnyRowLevelMutation = Boolean(
     editingCaseId
     || updatingCaseId
@@ -1316,6 +1476,7 @@ export default function CasesPage() {
     || hasProtocolPdfGeneration
     || hasNoticeDraftCreation
     || hasNoticeDispatchRecording
+    || hasDispatchEvidenceLinking
   );
   const hasVisibleChecklistSave = visibleCases.some((item) =>
     Boolean(checklistSavingByCase[item.id])
@@ -1331,6 +1492,7 @@ export default function CasesPage() {
   async function setChecklistItem(caseId: string, key: FollowUpChecklistKey, value: boolean) {
     if (
       noticeDispatchInFlightIdsRef.current.has(caseId)
+      || dispatchEvidenceInFlightRef.current.has(caseId)
       || checklistInFlightIdsRef.current.has(caseId)
       || noticeDraftCreatingByCase[caseId]
       || editingCaseId === caseId
@@ -1410,6 +1572,7 @@ export default function CasesPage() {
   function downloadCaseReminder(item: ComplianceCaseViewModel) {
     if (
       noticeDispatchInFlightIdsRef.current.has(item.id)
+      || dispatchEvidenceInFlightRef.current.has(item.id)
       || noticeDraftCreatingByCase[item.id]
       || editingCaseId === item.id
       || updatingCaseId === item.id
@@ -1509,7 +1672,9 @@ export default function CasesPage() {
   function downloadCaseChronology(item: ComplianceCaseViewModel) {
     if (
       noticeDispatchHistoryState !== "ready"
+      || evidenceHistoryState !== "ready"
       || noticeDispatchInFlightIdsRef.current.has(item.id)
+      || dispatchEvidenceInFlightRef.current.has(item.id)
       || noticeDraftCreatingByCase[item.id]
       || editingCaseId === item.id
       || updatingCaseId === item.id
@@ -1534,6 +1699,9 @@ export default function CasesPage() {
         milestone: t("cases-chronology-milestone"),
         sourceId: t("cases-chronology-source-id"),
         sourceName: t("cases-chronology-source-name"),
+        supportingEvidenceName: t("cases-notice-dispatch-evidence-file"),
+        supportingEvidenceId: t("cases-notice-dispatch-evidence-id"),
+        supportingEvidenceAssociationId: t("cases-notice-dispatch-evidence-association-id"),
         milestones: {
           contract: t("cases-legal-milestone-contract"),
           discovery: t("cases-legal-milestone-discovery"),
@@ -1550,7 +1718,9 @@ export default function CasesPage() {
         },
       },
       new Date(),
-      noticeDispatchesByCase[item.id] ?? []
+      noticeDispatchesByCase[item.id] ?? [],
+      noticeDispatchEvidence,
+      caseEvidenceByCase[item.id] ?? []
     );
     const blob = new Blob([content], { type: "text/csv;charset=utf-8" });
     const url = URL.createObjectURL(blob);
@@ -1572,6 +1742,7 @@ export default function CasesPage() {
       !caseId
       || protocolPdfInFlightCaseIdsRef.current.has(caseId)
       || noticeDispatchInFlightIdsRef.current.has(caseId)
+      || dispatchEvidenceInFlightRef.current.has(caseId)
       || noticeDraftCreatingByCase[caseId]
       || editingCaseId === caseId
       || updatingCaseId === caseId
@@ -1669,8 +1840,10 @@ export default function CasesPage() {
   ) {
     if (
       noticeDispatchHistoryState !== "ready"
+      || evidenceHistoryState !== "ready"
       || dossierInFlightIdsRef.current.has(item.id)
       || noticeDispatchInFlightIdsRef.current.has(item.id)
+      || dispatchEvidenceInFlightRef.current.has(item.id)
       || noticeDraftCreatingByCase[item.id]
       || editingCaseId === item.id
       || updatingCaseId === item.id
@@ -1707,6 +1880,8 @@ export default function CasesPage() {
         checklist,
         linkedProtocols: linkedProtocolEventsByCase[item.id] ?? [],
         noticeDispatches: noticeDispatchesByCase[item.id] ?? [],
+        dispatchEvidence: noticeDispatchEvidence,
+        evidence: caseEvidenceByCase[item.id] ?? [],
         labels: {
           title: t("cases-dossier-title"),
           generatedAt: t("cases-chronology-generated-at"),
@@ -1725,6 +1900,9 @@ export default function CasesPage() {
           checklistMissing: t("cases-audit-missing"),
           linkedProtocols: t("cases-dossier-finalized-protocols"),
           chronology: t("cases-legal-timeline-title"),
+          supportingEvidence: t("cases-notice-dispatch-evidence-file"),
+          supportingEvidenceId: t("cases-notice-dispatch-evidence-id"),
+          supportingEvidenceAssociationId: t("cases-notice-dispatch-evidence-association-id"),
           noLinkedProtocols: t("cases-dossier-no-finalized-protocols"),
           legalDisclaimer: t("calc-disclaimer"),
           regimes: {
@@ -1826,6 +2004,7 @@ export default function CasesPage() {
       || draft.user_id !== userId
       || noticeDraftPdfInFlightCaseIdsRef.current.has(caseId)
       || noticeDispatchInFlightIdsRef.current.has(caseId)
+      || dispatchEvidenceInFlightRef.current.has(caseId)
       || noticeDraftCreatingByCase[caseId]
       || editingCaseId === caseId
       || updatingCaseId === caseId
@@ -1931,7 +2110,7 @@ export default function CasesPage() {
   }
 
   async function handleRecordNoticeDispatch(
-    event: React.FormEvent<HTMLFormElement>,
+    event: FormEvent<HTMLFormElement>,
     item: ComplianceCaseViewModel,
     selectedDraft: CaseNoticeDraft
   ) {
@@ -1943,7 +2122,9 @@ export default function CasesPage() {
       || selectedDraft.user_id !== userId
       || selectedDraft.case_id !== caseId
       || latestNoticeDraftByCaseRef.current[caseId]?.id !== selectedDraft.id
+      || noticeDispatchHistoryLoadingRef.current
       || noticeDispatchInFlightIdsRef.current.has(caseId)
+      || dispatchEvidenceInFlightRef.current.has(caseId)
       || checklistInFlightIdsRef.current.has(caseId)
       || deletingCaseIdsRef.current.has(caseId)
       || updatingCaseIdRef.current !== null
@@ -2026,12 +2207,123 @@ export default function CasesPage() {
     }
   }
 
+  async function handleLinkDispatchEvidence(
+    event: FormEvent<HTMLFormElement>,
+    item: ComplianceCaseViewModel,
+    dispatch: CaseNoticeDispatch
+  ) {
+    event.preventDefault();
+    const userId = user?.id;
+    const caseId = item.id;
+    const evidenceId = String(new FormData(event.currentTarget).get("evidence_id") ?? "");
+    const selectedEvidence = (caseEvidenceByCase[caseId] ?? []).find((record) => record.id === evidenceId);
+    if (!userId || evidenceHistoryState !== "ready" || dispatch.user_id !== userId || dispatch.case_id !== caseId
+      || latestNoticeDispatchByCase[caseId]?.id !== dispatch.id
+      || noticeDispatchEvidenceByDispatch[dispatch.id]
+      || !selectedEvidence || selectedEvidence.user_id !== userId
+      || dispatchEvidenceInFlightRef.current.has(caseId)
+      || noticeDispatchInFlightIdsRef.current.has(caseId)
+      || checklistInFlightIdsRef.current.has(caseId)
+      || deletingCaseIdsRef.current.has(caseId)
+      || updatingCaseIdRef.current !== null
+      || editingCaseIdRef.current !== null
+      || noticeDraftInFlightIdsRef.current.has(caseId)
+      || noticeDraftPdfInFlightCaseIdsRef.current.has(caseId)
+      || dossierInFlightIdsRef.current.has(caseId)
+      || protocolPdfInFlightCaseIdsRef.current.has(caseId)
+      || noticeDraftCreatingByCase[caseId]
+      || noticeDraftPdfGeneratingByCase[caseId]
+      || checklistSavingByCase[caseId]
+      || deletingCaseIds[caseId]
+      || dossierGeneratingByCase[caseId]
+      || protocolPdfGeneratingByCase[caseId]
+      || noticeDispatchRecordingByCase[caseId]) return;
+
+    dispatchEvidenceInFlightRef.current.add(caseId);
+    const requestId = (dispatchEvidenceRequestIdsRef.current[dispatch.id] ?? 0) + 1;
+    dispatchEvidenceRequestIdsRef.current[dispatch.id] = requestId;
+    setDispatchEvidenceLinkingByCase((current) => ({ ...current, [caseId]: true }));
+    setDispatchEvidenceFeedbackByDispatch((current) => {
+      const next = { ...current }; delete next[dispatch.id]; return next;
+    });
+    const requestIsCurrent = () => dossierMountedRef.current
+      && currentUserIdRef.current === userId
+      && dispatchEvidenceRequestIdsRef.current[dispatch.id] === requestId;
+    const acceptSavedAssociation = async (candidate: unknown) => {
+      const saved = normalizeCaseNoticeDispatchEvidence(candidate);
+      if (!saved || !requestIsCurrent() || saved.user_id !== userId || saved.case_id !== caseId
+        || saved.dispatch_id !== dispatch.id) return false;
+      if (!(caseEvidenceByCase[caseId] ?? []).some((record) => record.id === saved.evidence_id)) {
+        const { data: evidenceData, error: evidenceError } = await supabase.from("case_evidence")
+          .select("id, user_id, case_id, original_name, storage_path, mime_type, size_bytes, created_at")
+          .eq("user_id", userId)
+          .eq("case_id", caseId)
+          .eq("id", saved.evidence_id)
+          .maybeSingle();
+        const winningEvidence = evidenceData as CaseEvidence | null;
+        if (evidenceError || !requestIsCurrent() || !winningEvidence
+          || winningEvidence.id !== saved.evidence_id || winningEvidence.user_id !== userId
+          || winningEvidence.case_id !== caseId || typeof winningEvidence.original_name !== "string"
+          || typeof winningEvidence.storage_path !== "string" || typeof winningEvidence.size_bytes !== "number"
+          || typeof winningEvidence.created_at !== "string"
+          || !["application/pdf", "image/jpeg", "image/png"].includes(winningEvidence.mime_type)) return false;
+        setCaseEvidence((current) => {
+          const next = [winningEvidence, ...current.filter((row) => row.id !== winningEvidence.id)];
+          lastSuccessfulCaseEvidenceRef.current = next;
+          lastSuccessfulCaseEvidenceUserIdRef.current = userId;
+          return next;
+        });
+      }
+      setNoticeDispatchEvidence((current) => {
+        const next = [saved, ...current.filter((row) => row.dispatch_id !== dispatch.id)];
+        lastSuccessfulDispatchEvidenceRef.current = next;
+        lastSuccessfulDispatchEvidenceUserIdRef.current = userId;
+        return next;
+      });
+      setDispatchEvidenceFeedbackByDispatch((current) => ({
+        ...current,
+        [dispatch.id]: saved.evidence_id === evidenceId
+          ? "cases-notice-dispatch-evidence-linked"
+          : "cases-notice-dispatch-evidence-existing",
+      }));
+      return true;
+    };
+    try {
+      const { data, error } = await supabase.from("case_notice_dispatch_evidence").insert({
+        user_id: userId, case_id: caseId, dispatch_id: dispatch.id, evidence_id: evidenceId,
+      }).select("*").single();
+      if (error || !data) throw error ?? new Error("Evidence association was not confirmed");
+      await acceptSavedAssociation(data);
+    } catch {
+      let reconciled = false;
+      try {
+        const { data, error } = await supabase.from("case_notice_dispatch_evidence")
+          .select("*")
+          .eq("user_id", userId)
+          .eq("dispatch_id", dispatch.id)
+          .maybeSingle();
+        reconciled = !error && await acceptSavedAssociation(data);
+      } catch {
+        // The original insert and reconciliation are both ambiguous; report failure below.
+      }
+      if (!reconciled && requestIsCurrent()) {
+        setDispatchEvidenceFeedbackByDispatch((current) => ({ ...current, [dispatch.id]: "cases-notice-dispatch-evidence-error" }));
+      }
+    } finally {
+      if (dispatchEvidenceRequestIdsRef.current[dispatch.id] === requestId) dispatchEvidenceInFlightRef.current.delete(caseId);
+      if (requestIsCurrent()) setDispatchEvidenceLinkingByCase((current) => {
+        const next = { ...current }; delete next[caseId]; return next;
+      });
+    }
+  }
+
   async function handleCreateNoticeDraft(item: ComplianceCaseViewModel, persistedCase: Case) {
     const userId = user?.id;
     if (
       !userId
       || noticeDraftInFlightIdsRef.current.has(item.id)
       || noticeDispatchInFlightIdsRef.current.has(item.id)
+      || dispatchEvidenceInFlightRef.current.has(item.id)
       || editingCaseId !== null
       || updatingCaseId !== null
       || hasDeletingCases
@@ -2157,6 +2449,7 @@ export default function CasesPage() {
       !user
       || updatingCaseIdRef.current
       || noticeDispatchInFlightIdsRef.current.has(caseId)
+      || dispatchEvidenceInFlightRef.current.has(caseId)
       || deletingCaseIdsRef.current.has(caseId)
       || noticeDraftCreatingByCase[caseId]
       || checklistSavingByCase[caseId]
@@ -2275,6 +2568,7 @@ export default function CasesPage() {
       editCaseDateValidationError ||
       updatingCaseIdRef.current ||
       noticeDispatchInFlightIdsRef.current.has(caseId) ||
+      dispatchEvidenceInFlightRef.current.has(caseId) ||
       hasDeletingCases ||
       noticeDraftCreatingByCase[caseId] ||
       checklistSavingByCase[caseId] ||
@@ -2627,10 +2921,19 @@ export default function CasesPage() {
             const noticeDraftPayload = persistedCase ? buildCaseNoticeDraftPayload(persistedCase, item) : null;
             const latestNoticeDraft = latestNoticeDraftByCase[item.id];
             const latestNoticeDispatch = latestNoticeDispatchByCase[item.id];
+            const latestDispatchEvidenceLink = latestNoticeDispatch
+              ? noticeDispatchEvidenceByDispatch[latestNoticeDispatch.id]
+              : undefined;
+            const latestDispatchEvidence = latestDispatchEvidenceLink
+              ? (caseEvidenceByCase[item.id] ?? []).find((record) => record.id === latestDispatchEvidenceLink.evidence_id)
+              : undefined;
+            const isDispatchEvidenceLinking = Boolean(dispatchEvidenceLinkingByCase[item.id]);
             const isNoticeDispatchRecording = Boolean(noticeDispatchRecordingByCase[item.id]);
             const isNoticeDraftCreating = Boolean(noticeDraftCreatingByCase[item.id]);
             const isNoticeDraftPdfGenerating = Boolean(noticeDraftPdfGeneratingByCase[item.id]);
-            const isCaseBusy = isChecklistSaving || isDossierGenerating || isProtocolPdfGenerating || isNoticeDraftCreating || isNoticeDraftPdfGenerating || isNoticeDispatchRecording;
+            const isCaseBusy = isChecklistSaving || isDossierGenerating || isProtocolPdfGenerating || isNoticeDraftCreating || isNoticeDraftPdfGenerating || isNoticeDispatchRecording || isDispatchEvidenceLinking;
+            const isNoticeDispatchHistoryLoading = noticeDispatchHistoryState === "loading";
+            const isAuditHistoryReady = noticeDispatchHistoryState !== "loading" && evidenceHistoryState !== "loading";
             const isNoticePreviewOpen = Boolean(noticePreviewOpenByCase[item.id] && completeNoticeSource);
             const noticePreviewUnavailableId = `cases-notice-preview-unavailable-${item.id}`;
 
@@ -2663,6 +2966,7 @@ export default function CasesPage() {
                     ) : (
                       <Link
                         href={buildCaseVaultHref(item.projectName)}
+                        onClick={(event) => guardCaseNavigation(event, item.id)}
                         className="px-2.5 py-1 rounded-md border border-cyan-500/30 text-cyan-200 bg-cyan-500/[0.08] hover:bg-cyan-500/[0.14] transition-colors"
                       >
                         {t("cases-open-in-vault")}
@@ -2678,6 +2982,7 @@ export default function CasesPage() {
                     ) : (
                       <Link
                         href={buildDashboardProtocolHref(item.id)}
+                        onClick={(event) => guardCaseNavigation(event, item.id)}
                         className="px-2.5 py-1 rounded-md border border-blue-500/30 text-blue-200 bg-blue-500/[0.08] hover:bg-blue-500/[0.14] transition-colors"
                       >
                         {t("cases-create-protocol")}
@@ -3052,11 +3357,11 @@ export default function CasesPage() {
                         <div className="mt-3 grid gap-3 md:grid-cols-3">
                           <label className="text-xs text-muted">
                             {t("cases-notice-dispatch-at")} (Europe/Zurich)
-                            <input name="dispatched_at" type="datetime-local" step="1" required disabled={isCaseBusy} className="mt-1 w-full rounded border border-white/10 bg-black/20 p-2 text-cream [color-scheme:dark]" />
+                            <input name="dispatched_at" type="datetime-local" step="1" required disabled={isCaseBusy || isNoticeDispatchHistoryLoading} className="mt-1 w-full rounded border border-white/10 bg-black/20 p-2 text-cream [color-scheme:dark]" />
                           </label>
                           <label className="text-xs text-muted">
                             {t("cases-notice-dispatch-channel")}
-                            <select name="channel" disabled={isCaseBusy} className="mt-1 w-full rounded border border-white/10 bg-black p-2 text-cream">
+                            <select name="channel" disabled={isCaseBusy || isNoticeDispatchHistoryLoading} className="mt-1 w-full rounded border border-white/10 bg-black p-2 text-cream">
                               {CASE_NOTICE_DISPATCH_CHANNELS.map((channel) => (
                                 <option key={channel} value={channel}>{t(CASE_NOTICE_DISPATCH_CHANNEL_KEYS[channel] as TranslationKey)}</option>
                               ))}
@@ -3064,10 +3369,10 @@ export default function CasesPage() {
                           </label>
                           <label className="text-xs text-muted">
                             {t("cases-notice-dispatch-reference")}
-                            <input name="reference" maxLength={200} disabled={isCaseBusy} className="mt-1 w-full rounded border border-white/10 bg-black/20 p-2 text-cream" />
+                            <input name="reference" maxLength={200} disabled={isCaseBusy || isNoticeDispatchHistoryLoading} className="mt-1 w-full rounded border border-white/10 bg-black/20 p-2 text-cream" />
                           </label>
                         </div>
-                        <button type="submit" disabled={isCaseBusy} className="mt-3 rounded-lg border border-emerald-400/30 px-3 py-2 text-sm text-emerald-100 disabled:opacity-50">
+                        <button type="submit" disabled={isCaseBusy || isNoticeDispatchHistoryLoading} className="mt-3 rounded-lg border border-emerald-400/30 px-3 py-2 text-sm text-emerald-100 disabled:opacity-50">
                           {t(isNoticeDispatchRecording ? "cases-notice-dispatch-recording" : "cases-notice-dispatch-submit")}
                         </button>
                         {noticeDispatchFeedbackByCase[item.id] && (
@@ -3084,6 +3389,60 @@ export default function CasesPage() {
                           </div>
                         )}
                       </form>
+                      {latestNoticeDispatch && (
+                        <div className="mt-3 rounded-lg border border-blue-400/25 bg-blue-500/[0.05] p-3 text-xs">
+                          <h4 className="text-sm font-semibold text-blue-100">{t("cases-notice-dispatch-evidence-title")}</h4>
+                          <p className="mt-1 text-muted">{t("cases-notice-dispatch-evidence-semantics")}</p>
+                          {evidenceHistoryState === "loading" ? (
+                            <p className="mt-2 text-blue-100">{t("cases-evidence-history-loading")}</p>
+                          ) : evidenceHistoryState === "error" ? (
+                            <div id={`cases-evidence-history-error-${item.id}`} className="mt-2 text-rose-200">
+                              <p role="alert">{t("cases-evidence-history-unavailable")}</p>
+                              <button
+                                type="button"
+                                disabled={isCaseBusy}
+                                onClick={() => {
+                                  if (noticeDispatchInFlightIdsRef.current.has(item.id)) return;
+                                  triggerCasesRefresh();
+                                }}
+                                className="mt-2 rounded border border-rose-300/30 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                              >
+                                {t("cases-evidence-history-retry")}
+                              </button>
+                            </div>
+                          ) : latestDispatchEvidenceLink && latestDispatchEvidence ? (
+                            <div data-testid={`cases-notice-dispatch-evidence-${item.id}`} className="mt-2 text-blue-100">
+                              <div>{t("cases-notice-dispatch-evidence-file")}: {latestDispatchEvidence.original_name}</div>
+                              <div>{t("cases-notice-dispatch-evidence-id")}: {latestDispatchEvidence.id}</div>
+                              <div>{t("cases-notice-dispatch-evidence-association-id")}: {latestDispatchEvidenceLink.id}</div>
+                            </div>
+                          ) : (caseEvidenceByCase[item.id] ?? []).length > 0 ? (
+                            <form data-testid={`cases-notice-dispatch-evidence-form-${item.id}`} onSubmit={(event) => void handleLinkDispatchEvidence(event, item, latestNoticeDispatch)} className="mt-2 flex flex-wrap items-end gap-2">
+                              <label className="text-muted">
+                                {t("cases-notice-dispatch-evidence-select")}
+                                <select name="evidence_id" required disabled={isCaseBusy} className="mt-1 block rounded border border-white/10 bg-black p-2 text-cream">
+                                  {(caseEvidenceByCase[item.id] ?? []).map((record) => <option key={record.id} value={record.id}>{record.original_name} · {record.id}</option>)}
+                                </select>
+                              </label>
+                              <button type="submit" disabled={isCaseBusy} className="rounded border border-blue-400/30 px-3 py-2 text-blue-100 disabled:opacity-50">
+                                {t(isDispatchEvidenceLinking ? "cases-notice-dispatch-evidence-linking" : "cases-notice-dispatch-evidence-submit")}
+                              </button>
+                            </form>
+                          ) : (
+                            <p className="mt-2 text-blue-100">
+                              {t("cases-notice-dispatch-evidence-empty")}{" "}
+                              {isCaseBusy ? (
+                                <span aria-disabled="true" className="cursor-not-allowed opacity-60">{t("cases-notice-dispatch-evidence-open-vault")}</span>
+                              ) : (
+                                <Link href={buildCaseVaultHref(item.projectName)} onClick={(event) => guardCaseNavigation(event, item.id)}>
+                                  {t("cases-notice-dispatch-evidence-open-vault")}
+                                </Link>
+                              )}
+                            </p>
+                          )}
+                          {dispatchEvidenceFeedbackByDispatch[latestNoticeDispatch.id] && <p role="status" className="mt-2 text-blue-100">{t(dispatchEvidenceFeedbackByDispatch[latestNoticeDispatch.id])}</p>}
+                        </div>
+                      )}
                     </section>
                   )}
                 </section>
@@ -3113,7 +3472,7 @@ export default function CasesPage() {
                     <p className="mt-1 text-xs text-muted">
                       {t("cases-legal-timeline-desc")}
                     </p>
-                    <ol className="mt-3 space-y-2 border-l border-blue-400/30 pl-4">
+                    {isAuditHistoryReady && <ol className="mt-3 space-y-2 border-l border-blue-400/30 pl-4">
                       {deriveCaseLegalMilestones(
                         item,
                         linkedProtocolEventsByCase[item.id] ?? [],
@@ -3124,7 +3483,9 @@ export default function CasesPage() {
                           "a-mail-plus": t("cases-notice-dispatch-channel-a-mail-plus"),
                           courier: t("cases-notice-dispatch-channel-courier"),
                           "hand-delivery": t("cases-notice-dispatch-channel-hand-delivery"),
-                        }
+                        },
+                        noticeDispatchEvidence,
+                        caseEvidence
                       ).map((milestone) => (
                         <li
                           key={milestone.id ?? milestone.kind}
@@ -3135,24 +3496,61 @@ export default function CasesPage() {
                             {milestone.sourceName && (
                               <span className="ml-2 font-mono text-xs text-blue-100">{milestone.sourceName}</span>
                             )}
+                            {milestone.supportingEvidenceName && (
+                              <span className="ml-2 font-mono text-xs text-blue-100">
+                                {t("cases-notice-dispatch-evidence-file")}: {milestone.supportingEvidenceName}
+                                {milestone.supportingEvidenceId && (
+                                  <> · {t("cases-notice-dispatch-evidence-id")}: {milestone.supportingEvidenceId}</>
+                                )}
+                                {milestone.supportingEvidenceAssociationId && (
+                                  <> · {t("cases-notice-dispatch-evidence-association-id")}: {milestone.supportingEvidenceAssociationId}</>
+                                )}
+                              </span>
+                            )}
                           </span>
                           <time dateTime={formatMilestoneDateTime(milestone.date)} className="text-blue-100">
                             {milestone.dateLabel}
                           </time>
                         </li>
                       ))}
-                    </ol>
+                    </ol>}
                     {noticeDispatchHistoryState === "error" && (
                       <p id={`cases-notice-dispatch-history-error-${item.id}`} role="alert" className="mt-4 text-sm text-rose-200">
                         {t("cases-notice-dispatch-history-unavailable")}
                       </p>
                     )}
+                    {!latestNoticeDispatch && evidenceHistoryState !== "ready" && (
+                      <div id={`cases-evidence-history-status-${item.id}`} className="mt-4 text-sm text-rose-200">
+                        <p role={evidenceHistoryState === "error" ? "alert" : undefined}>
+                          {t(evidenceHistoryState === "loading" ? "cases-evidence-history-loading" : "cases-evidence-history-unavailable")}
+                        </p>
+                        {evidenceHistoryState === "error" && (
+                          <button
+                            type="button"
+                            disabled={isCaseBusy}
+                            onClick={() => {
+                              if (noticeDispatchInFlightIdsRef.current.has(item.id)) return;
+                              triggerCasesRefresh();
+                            }}
+                            className="mt-2 rounded border border-rose-300/30 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            {t("cases-evidence-history-retry")}
+                          </button>
+                        )}
+                      </div>
+                    )}
                     <div className="mt-4 flex flex-wrap justify-end gap-2">
                       <button
                         type="button"
                         onClick={() => downloadCaseChronology(item)}
-                        aria-describedby={noticeDispatchHistoryState === "error" ? `cases-notice-dispatch-history-error-${item.id}` : undefined}
-                        disabled={isCaseBusy || noticeDispatchHistoryState !== "ready"}
+                        aria-describedby={
+                          noticeDispatchHistoryState === "error"
+                            ? `cases-notice-dispatch-history-error-${item.id}`
+                            : evidenceHistoryState === "error"
+                              ? `cases-evidence-history-status-${item.id}`
+                              : undefined
+                        }
+                        disabled={isCaseBusy || noticeDispatchHistoryState !== "ready" || evidenceHistoryState !== "ready"}
                         className="rounded-lg border border-blue-400/30 px-3 py-2 text-sm text-blue-100 hover:bg-blue-500/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {t("cases-export-chronology-csv")}
@@ -3160,8 +3558,14 @@ export default function CasesPage() {
                       <button
                         type="button"
                         onClick={() => void downloadCaseAuditDossier(item, checklist)}
-                        aria-describedby={noticeDispatchHistoryState === "error" ? `cases-notice-dispatch-history-error-${item.id}` : undefined}
-                        disabled={isCaseBusy || noticeDispatchHistoryState !== "ready"}
+                        aria-describedby={
+                          noticeDispatchHistoryState === "error"
+                            ? `cases-notice-dispatch-history-error-${item.id}`
+                            : evidenceHistoryState === "error"
+                              ? `cases-evidence-history-status-${item.id}`
+                              : undefined
+                        }
+                        disabled={isCaseBusy || noticeDispatchHistoryState !== "ready" || evidenceHistoryState !== "ready"}
                         className="rounded-lg border border-accent/40 px-3 py-2 text-sm text-accent hover:bg-accent/[0.1] disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {isDossierGenerating ? t("cases-dossier-title") : t("cases-export-dossier-pdf")}
