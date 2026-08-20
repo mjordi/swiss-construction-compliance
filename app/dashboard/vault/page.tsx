@@ -584,12 +584,19 @@ export default function TechVault() {
         current?.projectId === projectId ? null : current
       );
       if (currentUserIdRef.current === user.id) {
-        void triggerRefresh();
+        // The write may have committed even when its response was lost. Keep the
+        // optimistic-export guard until a mutation-aware refresh reconciles the
+        // row with the persisted database snapshot.
+        statusMutationRefreshProjectIdsRef.current.add(projectId);
+        void triggerMutationRefresh();
+      } else {
+        pendingStatusMutationProjectIdsRef.current.delete(projectId);
+        setStatusMutationProjectIds((current) =>
+          current.filter((currentProjectId) => currentProjectId !== projectId)
+        );
       }
-      pendingStatusMutationProjectIdsRef.current.delete(projectId);
-      setStatusMutationProjectIds((current) => current.filter((currentProjectId) => currentProjectId !== projectId));
     }
-  }, [projects, supabase, triggerMutationRefresh, triggerRefresh, user]);
+  }, [projects, supabase, triggerMutationRefresh, user]);
 
   const handleAuditExport = useCallback(async () => {
     const ownerId = user?.id;

@@ -351,4 +351,34 @@ describe("Vault portfolio audit export", () => {
       sourceUpdatedAt: "2026-08-20T08:05:00.000Z",
     });
   });
+
+  it("keeps export blocked while reconciling a failed mutation response", async () => {
+    statusUpdateResult = Promise.resolve({ error: { message: "response lost" } });
+    render(<TechVault />);
+    await screen.findByText("Alpine Tower");
+    casesSelectResults = [Promise.resolve({ data: cases, error: { message: "offline" } })];
+
+    fireEvent.click(screen.getByRole("button", { name: "vault-archive-project" }));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("vault-error-load");
+    expect(screen.queryByRole("button", { name: "vault-audit-export-action" })).toBeNull();
+    expect(buildCsvMock).not.toHaveBeenCalled();
+
+    casesSelectResults = [Promise.resolve({
+      data: cases.map((entry) => entry.id === "case-active"
+        ? { ...entry, status: "archived", updated_at: "2026-08-20T09:30:00.000Z" }
+        : entry),
+      error: null,
+    })];
+    fireEvent.click(screen.getByRole("button", { name: "vault-load-retry" }));
+
+    const exportButton = await screen.findByRole("button", { name: "vault-audit-export-action" });
+    expect(exportButton.getAttribute("disabled")).toBeNull();
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(buildCsvMock).toHaveBeenCalledTimes(1));
+    expect(buildCsvMock.mock.calls[0][0].find((row) => row.caseId === "case-active")).toMatchObject({
+      lifecycleStatus: "vault-status-archived",
+      sourceUpdatedAt: "2026-08-20T09:30:00.000Z",
+    });
+  });
 });
