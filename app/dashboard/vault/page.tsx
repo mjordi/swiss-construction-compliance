@@ -533,6 +533,7 @@ export default function TechVault() {
 
     const nextStatus = archived ? currentProject.restoredStatus : "archived";
     const previousProject = currentProject;
+    const invalidatedMutationRefresh = mutationRefreshPendingRef.current;
 
     // A refresh started before this mutation may contain the old status. Invalidate
     // it before applying the optimistic state, then refresh from the committed row.
@@ -594,6 +595,9 @@ export default function TechVault() {
         setStatusMutationProjectIds((current) =>
           current.filter((currentProjectId) => currentProjectId !== projectId)
         );
+        if (invalidatedMutationRefresh && currentUserIdRef.current === user.id) {
+          void triggerMutationRefresh();
+        }
         return;
       }
 

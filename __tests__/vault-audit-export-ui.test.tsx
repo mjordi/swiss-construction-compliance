@@ -419,6 +419,25 @@ describe("Vault portfolio audit export", () => {
     expect(screen.getByRole("button", { name: "vault-load-retry" })).toBeTruthy();
   });
 
+  it("restarts an invalidated mutation refresh after a definitive status update error", async () => {
+    let resolveStatusUpdate!: (value: { error: { message: string } }) => void;
+    statusUpdateResult = new Promise((resolve) => { resolveStatusUpdate = resolve; });
+    render(<TechVault />);
+    await screen.findByText("Alpine Tower");
+    casesSelectResults = [new Promise(() => undefined)];
+
+    fireEvent.click(screen.getByTestId("evidence-case-active"));
+    await waitFor(() => expect(rpcMock).toHaveBeenCalledTimes(2));
+    fireEvent.click(screen.getByRole("button", { name: "vault-archive-project" }));
+    casesSelectResults = [Promise.resolve({ data: cases, error: null })];
+    resolveStatusUpdate({ error: { message: "permission denied" } });
+
+    await waitFor(() => expect(rpcMock).toHaveBeenCalledTimes(3));
+    const exportButton = screen.getByRole("button", { name: "vault-audit-export-action" });
+    await waitFor(() => expect(exportButton.getAttribute("disabled")).toBeNull());
+    expect(screen.getByText("vault-update-status-error")).toBeTruthy();
+  });
+
   it("keeps an ambiguous archive retryable until a snapshot observes the expected status", async () => {
     let rejectUpdate!: (reason: Error) => void;
     statusUpdateResult = new Promise((_, reject) => { rejectUpdate = reject; });
