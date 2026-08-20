@@ -148,6 +148,16 @@ vi.mock("@/lib/case-timeline", () => ({
 
 vi.mock("@/lib/supabase", () => ({
   getSupabase: () => ({
+    rpc: async () => {
+      const error = casesSelectError ?? protocolsSelectError;
+      return {
+        data: error ? null : {
+          cases: mockCases,
+          protocols: [{ id: "protocol-1", case_id: "case-review", project_name: "Riverside Bridge" }],
+        },
+        error,
+      };
+    },
     from: (table: string) => {
       if (table === "cases") {
         return {

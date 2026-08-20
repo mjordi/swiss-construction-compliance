@@ -61,6 +61,19 @@ vi.mock("@/lib/case-timeline", () => ({
 }));
 
 const supabaseMock = {
+  rpc: async () => {
+    caseFetchCount += 1;
+    protocolFetchCount += 1;
+    const [caseResult, protocolResult] = await Promise.all([
+      caseResponsesQueue.length > 0 ? caseResponsesQueue.shift()! : caseResponseFactory(),
+      protocolResponsesQueue.length > 0 ? protocolResponsesQueue.shift()! : protocolResponseFactory(),
+    ]);
+    const error = caseResult.error ?? protocolResult.error;
+    return {
+      data: error ? null : { cases: caseResult.data, protocols: protocolResult.data },
+      error,
+    };
+  },
   from: (table: string) => {
     if (table === "cases") {
       return {

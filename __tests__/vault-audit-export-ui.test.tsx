@@ -28,6 +28,21 @@ let statusUpdateResult: Promise<{ error: { message: string } | null }>;
 let casesSelectResults: Array<Promise<{ data: typeof cases; error: { message: string } | null }>> = [];
 let protocolsSelectResults: Array<Promise<{ data: Array<{ id: string; case_id: string; project_name: string }>; error: { message: string } | null }>> = [];
 
+const rpcMock = vi.fn(async (functionName: string) => {
+  if (functionName !== "get_vault_audit_snapshot") {
+    throw new Error(`Unexpected RPC ${functionName}`);
+  }
+  const [casesResult, protocolsResult] = await Promise.all([
+    casesSelectResults[0],
+    protocolsSelectResults[0],
+  ]);
+  const error = casesResult.error ?? protocolsResult.error;
+  return {
+    data: error ? null : { cases: casesResult.data, protocols: protocolsResult.data },
+    error,
+  };
+});
+
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/vault",
   useRouter: () => routerMock,
@@ -90,42 +105,11 @@ const cases = [
 ];
 
 const supabaseMock = {
+  rpc: rpcMock,
   from: (table: string) => {
     if (table === "cases") {
       return {
-        select: () => ({
-          eq: () => {
-            let afterId: string | null = null;
-            const query = {
-              gt: (_column: string, value: string) => {
-                afterId = value;
-                return query;
-              },
-              order: () => query,
-              limit: () => casesSelectResults[afterId ? 1 : 0],
-            };
-            return query;
-          },
-        }),
         update: () => ({ eq: () => ({ eq: () => statusUpdateResult }) }),
-      };
-    }
-    if (table === "protocols") {
-      return {
-        select: () => ({
-          eq: () => {
-            let afterId: string | null = null;
-            const query = {
-              gt: (_column: string, value: string) => {
-                afterId = value;
-                return query;
-              },
-              order: () => query,
-              limit: () => protocolsSelectResults[afterId ? 1 : 0],
-            };
-            return query;
-          },
-        }),
       };
     }
     throw new Error(`Unexpected table ${table}`);
@@ -142,6 +126,7 @@ describe("Vault portfolio audit export", () => {
     filenameMock.mockClear();
     createObjectUrlMock.mockClear();
     revokeObjectUrlMock.mockClear();
+    rpcMock.mockClear();
     replaceMock.mockClear();
     pushMock.mockClear();
     timelineState.activeStatus = "ok";
@@ -170,7 +155,7 @@ describe("Vault portfolio audit export", () => {
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
   });
 
-  it("exports the complete owner-visible portfolio rather than only the active tab", async () => {
+  it("loads one snapshot-consistent owner portfolio and exports it rather than only the active tab", async () => {
     render(<TechVault />);
 
     expect(screen.queryByRole("button", { name: "vault-audit-export-action" })).toBeNull();
@@ -189,6 +174,8 @@ describe("Vault portfolio audit export", () => {
       linkedProtocols: 1,
       lifecycleStatus: "vault-status-archived",
     });
+    expect(rpcMock).toHaveBeenCalledTimes(1);
+    expect(rpcMock).toHaveBeenCalledWith("get_vault_audit_snapshot");
     expect(filenameMock).toHaveBeenCalledTimes(1);
     expect(createObjectUrlMock).toHaveBeenCalledTimes(1);
     expect(revokeObjectUrlMock).toHaveBeenCalledWith("blob:vault-audit");

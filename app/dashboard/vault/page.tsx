@@ -28,7 +28,6 @@ import {
 } from "@/lib/vault";
 import {
   buildVaultAuditCsv,
-  loadAllVaultAuditPages,
   vaultAuditCsvFilename,
   type VaultAuditCsvLabels,
 } from "@/lib/vault-audit-export";
@@ -229,24 +228,21 @@ export default function TechVault() {
       setLoading(false);
     };
     try {
-      const requestIsCurrent = () => fetchId === latestFetchIdRef.current;
-      const [loadedCases, loadedProtocols] = await Promise.all([
-        loadAllVaultAuditPages<Case>(async (afterId, pageSize) => {
-          let query = supabase.from("cases").select("*").eq("user_id", user.id);
-          if (afterId) query = query.gt("id", afterId);
-          return query.order("id", { ascending: true }).limit(pageSize);
-        }, requestIsCurrent),
-        loadAllVaultAuditPages<Pick<Protocol, "id" | "case_id" | "project_name">>(async (afterId, pageSize) => {
-          let query = supabase
-            .from("protocols")
-            .select("id, case_id, project_name")
-            .eq("user_id", user.id);
-          if (afterId) query = query.gt("id", afterId);
-          return query.order("id", { ascending: true }).limit(pageSize);
-        }, requestIsCurrent),
-      ]);
+      // Read both collections in one PostgreSQL statement so every row belongs
+      // to the same MVCC snapshot even while another client creates records.
+      const { data: snapshotData, error: snapshotError } = await supabase.rpc("get_vault_audit_snapshot");
+      if (snapshotError) throw snapshotError;
+      if (fetchId !== latestFetchIdRef.current) return;
 
-      if (fetchId !== latestFetchIdRef.current || !loadedCases || !loadedProtocols) return;
+      const snapshot = snapshotData as {
+        cases?: Case[];
+        protocols?: Array<Pick<Protocol, "id" | "case_id" | "project_name">>;
+      } | null;
+      if (!snapshot || !Array.isArray(snapshot.cases) || !Array.isArray(snapshot.protocols)) {
+        throw new Error("Invalid Vault audit snapshot");
+      }
+      const loadedCases = snapshot.cases;
+      const loadedProtocols = snapshot.protocols;
 
       const dbCases = [...loadedCases].sort((left, right) =>
         new Date(right.updated_at).getTime() - new Date(left.updated_at).getTime()

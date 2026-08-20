@@ -44,6 +44,10 @@ vi.mock("@/lib/case-timeline", () => ({
 
 vi.mock("@/lib/supabase", () => ({
   getSupabase: () => ({
+    rpc: () => Promise.resolve({
+      data: { cases: [], protocols: [] },
+      error: null,
+    }),
     from: (table: string) => {
       if (table === "cases") {
         return {

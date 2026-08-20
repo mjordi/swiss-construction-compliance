@@ -43,6 +43,22 @@ vi.mock("@/lib/case-timeline", () => ({
 
 vi.mock("@/lib/supabase", () => ({
   getSupabase: () => ({
+    rpc: () => Promise.resolve({
+      data: {
+        cases: [{
+          id: "case-1",
+          project_name: "Alpine Tower",
+          canton: "ZH",
+          contract_date: "2026-01-10",
+          discovery_date: "2026-04-01",
+          updated_at: "2026-05-12T10:00:00.000Z",
+          status: "open",
+          checklist: {},
+        }],
+        protocols: [],
+      },
+      error: null,
+    }),
     from: (table: string) => {
       if (table === "cases") {
         return {
