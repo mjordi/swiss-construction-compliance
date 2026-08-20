@@ -154,11 +154,13 @@ export default function TechVault() {
   } | null>(null);
   const [statusMutationProjectIds, setStatusMutationProjectIds] = useState<string[]>([]);
   const [projects, setProjects] = useState<VaultProjectCard[]>([]);
+  const [mutationRefreshPending, setMutationRefreshPending] = useState(false);
   const [auditExportPending, setAuditExportPending] = useState(false);
   const [auditExportFeedback, setAuditExportFeedback] = useState<TranslationKey | null>(null);
   const latestFetchIdRef = useRef(0);
   const pendingStatusMutationProjectIdsRef = useRef<Set<string>>(new Set());
   const statusMutationRefreshProjectIdsRef = useRef<Set<string>>(new Set());
+  const mutationRefreshPendingRef = useRef(false);
   const hasLoadedProjectsRef = useRef(false);
   const lastSuccessfulUserIdRef = useRef<string | null>(null);
   const currentUserIdRef = useRef<string | null>(user?.id ?? null);
@@ -190,7 +192,9 @@ export default function TechVault() {
     auditExportInFlightRef.current = false;
     pendingStatusMutationProjectIdsRef.current.clear();
     statusMutationRefreshProjectIdsRef.current.clear();
+    mutationRefreshPendingRef.current = false;
     setStatusMutationProjectIds([]);
+    setMutationRefreshPending(false);
     setAuditExportPending(false);
     setAuditExportFeedback(null);
     if (auditExportFeedbackTimerRef.current) {
@@ -213,7 +217,7 @@ export default function TechVault() {
     setError(null);
     const handleRefreshFailure = () => {
       const isInitialLoad = !hasLoadedProjectsRef.current || lastSuccessfulUserIdRef.current !== user.id;
-      const isPostMutationRefresh = statusMutationRefreshProjectIdsRef.current.size > 0;
+      const isPostMutationRefresh = mutationRefreshPendingRef.current;
 
       if (isInitialLoad || isPostMutationRefresh) {
         setError("vault-error-load");
@@ -336,6 +340,8 @@ export default function TechVault() {
         setStatusMutationFeedback(null);
       }
       setProjects(nextProjects);
+      mutationRefreshPendingRef.current = false;
+      setMutationRefreshPending(false);
       const refreshedProjectIds = new Set(statusMutationRefreshProjectIdsRef.current);
       refreshedProjectIds.forEach((projectId) => {
         pendingStatusMutationProjectIdsRef.current.delete(projectId);
@@ -361,6 +367,12 @@ export default function TechVault() {
     setError(null);
     return runRefresh(fetchId);
   }, [runRefresh, user?.id]);
+
+  const triggerMutationRefresh = useCallback(() => {
+    mutationRefreshPendingRef.current = true;
+    setMutationRefreshPending(true);
+    return triggerRefresh();
+  }, [triggerRefresh]);
 
   useEffect(() => {
     queueMicrotask(() => {
@@ -554,7 +566,7 @@ export default function TechVault() {
           key: archived ? "vault-restore-success" : "vault-archive-success",
         });
         statusMutationRefreshProjectIdsRef.current.add(projectId);
-        void triggerRefresh();
+        void triggerMutationRefresh();
       }
     } catch {
       setProjects((current) =>
@@ -577,7 +589,7 @@ export default function TechVault() {
       pendingStatusMutationProjectIdsRef.current.delete(projectId);
       setStatusMutationProjectIds((current) => current.filter((currentProjectId) => currentProjectId !== projectId));
     }
-  }, [projects, supabase, triggerRefresh, user]);
+  }, [projects, supabase, triggerMutationRefresh, triggerRefresh, user]);
 
   const handleAuditExport = useCallback(async () => {
     const ownerId = user?.id;
@@ -586,6 +598,7 @@ export default function TechVault() {
       || projects.length === 0
       || lastSuccessfulUserIdRef.current !== ownerId
       || pendingStatusMutationProjectIdsRef.current.size > 0
+      || mutationRefreshPendingRef.current
       || auditExportInFlightRef.current
     ) {
       return;
@@ -714,7 +727,7 @@ export default function TechVault() {
               <button
                 type="button"
                 onClick={() => void handleAuditExport()}
-                disabled={auditExportPending || statusMutationProjectIds.length > 0}
+                disabled={auditExportPending || mutationRefreshPending || statusMutationProjectIds.length > 0}
                 className="ml-auto inline-flex items-center gap-2 rounded-lg border border-accent/30 bg-accent/10 px-4 py-2 text-sm font-bold text-accent transition hover:bg-accent/20 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 {auditExportPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
@@ -978,7 +991,7 @@ export default function TechVault() {
                             caseId={project.id}
                             caseName={project.name}
                             readOnly={project.archived}
-                            onChecklistUpdated={triggerRefresh}
+                            onChecklistUpdated={triggerMutationRefresh}
                           />
                         ) : null}
                       </div>

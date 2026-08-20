@@ -41,7 +41,13 @@ vi.mock("@/context/LanguageContext", () => ({
 vi.mock("framer-motion", () => ({
   motion: { div: ({ children, ...props }: HTMLAttributes<HTMLDivElement> & { children?: ReactNode }) => <div {...props}>{children}</div> },
 }));
-vi.mock("@/components/dashboard/CaseEvidencePanel", () => ({ default: () => null }));
+vi.mock("@/components/dashboard/CaseEvidencePanel", () => ({
+  default: ({ caseId, onChecklistUpdated }: { caseId: string; onChecklistUpdated?: () => void }) => (
+    <button type="button" data-testid={`evidence-${caseId}`} onClick={() => onChecklistUpdated?.()}>
+      update evidence
+    </button>
+  ),
+}));
 vi.mock("@/lib/vault-audit-export", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/vault-audit-export")>()),
   buildVaultAuditCsv: buildCsvMock,
@@ -264,6 +270,58 @@ describe("Vault portfolio audit export", () => {
       lifecycleStatus: "vault-status-archived",
       sourceUpdatedAt: "2026-08-20T08:00:00.000Z",
     });
+  });
+
+  it("keeps export blocked until an evidence-triggered refresh succeeds", async () => {
+    let resolveRefresh!: (result: { data: typeof cases; error: null }) => void;
+    render(<TechVault />);
+    await screen.findByText("Alpine Tower");
+    casesSelectResults = [new Promise((resolve) => {
+      resolveRefresh = resolve;
+    })];
+
+    fireEvent.click(screen.getByTestId("evidence-case-active"));
+
+    const exportButton = screen.getByRole("button", { name: "vault-audit-export-action" });
+    expect(exportButton.getAttribute("disabled")).not.toBeNull();
+    fireEvent.click(exportButton);
+    expect(buildCsvMock).not.toHaveBeenCalled();
+
+    resolveRefresh({
+      data: cases.map((entry) => entry.id === "case-active"
+        ? {
+            ...entry,
+            checklist: { evidenceAttached: true },
+            updated_at: "2026-08-20T08:10:00.000Z",
+          }
+        : entry),
+      error: null,
+    });
+
+    await waitFor(() => expect(exportButton.getAttribute("disabled")).toBeNull());
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(buildCsvMock).toHaveBeenCalledTimes(1));
+    expect(buildCsvMock.mock.calls[0][0].find((row) => row.caseId === "case-active")).toMatchObject({
+      checklistCompleted: 2,
+      sourceUpdatedAt: "2026-08-20T08:10:00.000Z",
+    });
+  });
+
+  it("offers a retry when an evidence-triggered refresh fails", async () => {
+    render(<TechVault />);
+    await screen.findByText("Alpine Tower");
+    casesSelectResults = [Promise.resolve({ data: cases, error: { message: "offline" } })];
+
+    fireEvent.click(screen.getByTestId("evidence-case-active"));
+
+    expect((await screen.findByRole("alert")).textContent).toContain("vault-error-load");
+    expect(screen.queryByRole("button", { name: "vault-audit-export-action" })).toBeNull();
+
+    casesSelectResults = [Promise.resolve({ data: cases, error: null })];
+    fireEvent.click(screen.getByRole("button", { name: "vault-load-retry" }));
+
+    const exportButton = await screen.findByRole("button", { name: "vault-audit-export-action" });
+    expect(exportButton.getAttribute("disabled")).toBeNull();
   });
 
   it("offers a retry when the post-mutation refresh fails", async () => {
