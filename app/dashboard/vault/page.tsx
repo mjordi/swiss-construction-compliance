@@ -49,6 +49,7 @@ interface VaultProjectCard {
   daysToDeadline: number | null;
   timelineInput: ComplianceCaseInput;
   updatedAt: number;
+  sourceUpdatedAt: string;
   archived: boolean;
   prefillTriage: boolean;
 }
@@ -324,6 +325,7 @@ export default function TechVault() {
           daysToDeadline: timelineItem?.daysToDeadline ?? null,
           timelineInput,
           updatedAt: new Date(c.updated_at).getTime(),
+          sourceUpdatedAt: c.updated_at,
           archived,
           prefillTriage: !archived && restoredPrefillTriage,
         };
@@ -688,7 +690,7 @@ export default function TechVault() {
           checklistTotal: project.checklistTotal,
           missingAuditItems: project.auditMissingLabelKeys.map((key) => t(key)),
           linkedProtocols: project.docs,
-          sourceUpdatedAt: new Date(project.updatedAt).toISOString(),
+          sourceUpdatedAt: project.sourceUpdatedAt,
         };
       });
       const csv = buildVaultAuditCsv(rows, labels, generatedAt);

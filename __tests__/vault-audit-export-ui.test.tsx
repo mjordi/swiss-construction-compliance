@@ -87,7 +87,7 @@ const cases = [
     discovery_date: "2026-03-21",
     checklist: null,
     created_at: "2026-03-21T00:00:00.000Z",
-    updated_at: "2026-08-19T09:00:00.000Z",
+    updated_at: "2026-08-19T09:00:00.123456+00:00",
     status: "active",
   },
   {
@@ -173,6 +173,9 @@ describe("Vault portfolio audit export", () => {
       project: "Summit Depot",
       linkedProtocols: 1,
       lifecycleStatus: "vault-status-archived",
+    });
+    expect(exportedRows.find((row) => row.caseId === "case-active")).toMatchObject({
+      sourceUpdatedAt: "2026-08-19T09:00:00.123456+00:00",
     });
     expect(rpcMock).toHaveBeenCalledTimes(1);
     expect(rpcMock).toHaveBeenCalledWith("get_vault_audit_snapshot");
