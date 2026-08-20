@@ -646,10 +646,18 @@ export default function TechVault() {
       );
       const rows = projects.map((project) => {
         const currentTimeline = currentTimelineByCaseId.get(project.id);
+        const currentLifecycleStatus: VaultProjectCard["status"] = project.archived
+          ? "archived"
+          : currentTimeline?.status === "warning"
+            || currentTimeline?.status === "urgent"
+            || currentTimeline?.status === "expired"
+            || currentTimeline?.status === "immediate-notice"
+            ? "review"
+            : "active";
         return {
           caseId: project.id,
           project: project.name,
-          lifecycleStatus: t(statusLabelKey[project.status]),
+          lifecycleStatus: t(statusLabelKey[currentLifecycleStatus]),
           legalStatus: currentTimeline ? t(legalStatusLabelKey[currentTimeline.status]) : null,
           legalRegime: currentTimeline?.regime
             ? t(currentTimeline.regime === "old" ? "vault-audit-export-regime-old" : "vault-audit-export-regime-new")

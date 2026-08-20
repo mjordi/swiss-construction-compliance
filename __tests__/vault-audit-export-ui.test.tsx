@@ -20,7 +20,7 @@ const { buildCsvMock, filenameMock } = vi.hoisted(() => ({
 }));
 const { buildTimelineMock, timelineState } = vi.hoisted(() => ({
   buildTimelineMock: vi.fn(),
-  timelineState: { activeStatus: "urgent" as "urgent" | "expired", activeDays: 2 },
+  timelineState: { activeStatus: "ok" as "ok" | "expired", activeDays: 45 },
 }));
 const createObjectUrlMock = vi.fn(() => "blob:vault-audit");
 const revokeObjectUrlMock = vi.fn();
@@ -138,8 +138,8 @@ describe("Vault portfolio audit export", () => {
     revokeObjectUrlMock.mockClear();
     replaceMock.mockClear();
     pushMock.mockClear();
-    timelineState.activeStatus = "urgent";
-    timelineState.activeDays = 2;
+    timelineState.activeStatus = "ok";
+    timelineState.activeDays = 45;
     buildTimelineMock.mockImplementation((inputs: Array<{ id: string }>) => inputs.map((input) => ({
       id: input.id,
       status: input.id === "case-archived" ? "warning" : timelineState.activeStatus,
@@ -200,6 +200,7 @@ describe("Vault portfolio audit export", () => {
 
     await waitFor(() => expect(buildCsvMock).toHaveBeenCalledTimes(1));
     expect(buildCsvMock.mock.calls[0][0].find((row) => row.caseId === "case-active")).toMatchObject({
+      lifecycleStatus: "vault-status-review",
       legalStatus: "cases-status-expired",
       deadlineContext: "cases-countdown-one-day-overdue",
     });
