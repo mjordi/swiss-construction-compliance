@@ -2926,7 +2926,7 @@ export default function CasesPage() {
             const isNoticeDraftCreating = Boolean(noticeDraftCreatingByCase[item.id]);
             const isNoticeDraftPdfGenerating = Boolean(noticeDraftPdfGeneratingByCase[item.id]);
             const isCaseBusy = isChecklistSaving || isDossierGenerating || isProtocolPdfGenerating || isNoticeDraftCreating || isNoticeDraftPdfGenerating || isNoticeDispatchRecording || isDispatchEvidenceLinking;
-            const isAuditHistoryReady = noticeDispatchHistoryState === "ready" && evidenceHistoryState === "ready";
+            const isAuditHistoryReady = noticeDispatchHistoryState !== "loading" && evidenceHistoryState === "ready";
             const isNoticePreviewOpen = Boolean(noticePreviewOpenByCase[item.id] && completeNoticeSource);
             const noticePreviewUnavailableId = `cases-notice-preview-unavailable-${item.id}`;
 

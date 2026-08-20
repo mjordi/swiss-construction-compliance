@@ -406,11 +406,22 @@ describe("Cases notice dispatch recording", () => {
     expect((screen.getByRole("button", { name: "cases-export-chronology-csv" }) as HTMLButtonElement).disabled).toBe(false);
   });
 
-  it("marks dispatch history unavailable and blocks legal exports when loading fails", async () => {
+  it("keeps independent milestones visible but blocks legal exports when dispatch history fails", async () => {
     noticeDispatchLoadError = true;
     render(<CasesPage />);
 
     expect(await screen.findByText("cases-notice-dispatch-history-unavailable")).toBeTruthy();
+    const timelineHeading = screen.getByText("cases-legal-timeline-title");
+    expect(timelineHeading.parentElement?.querySelector("ol")).toBeTruthy();
+    expect(deriveCaseLegalMilestonesMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      [],
+      expect.anything(),
+      expect.anything(),
+      expect.anything()
+    );
     expect((screen.getByRole("button", { name: "cases-export-chronology-csv" }) as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByRole("button", { name: "cases-export-dossier-pdf" }) as HTMLButtonElement).disabled).toBe(true);
   });
