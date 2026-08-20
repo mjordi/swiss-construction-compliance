@@ -151,6 +151,7 @@ export default function TechVault() {
   const [auditExportFeedback, setAuditExportFeedback] = useState<TranslationKey | null>(null);
   const latestFetchIdRef = useRef(0);
   const pendingStatusMutationProjectIdsRef = useRef<Set<string>>(new Set());
+  const statusMutationRefreshProjectIdsRef = useRef<Set<string>>(new Set());
   const hasLoadedProjectsRef = useRef(false);
   const lastSuccessfulUserIdRef = useRef<string | null>(null);
   const currentUserIdRef = useRef<string | null>(user?.id ?? null);
@@ -180,6 +181,9 @@ export default function TechVault() {
   useEffect(() => {
     auditExportRequestIdRef.current += 1;
     auditExportInFlightRef.current = false;
+    pendingStatusMutationProjectIdsRef.current.clear();
+    statusMutationRefreshProjectIdsRef.current.clear();
+    setStatusMutationProjectIds([]);
     setAuditExportPending(false);
     setAuditExportFeedback(null);
     if (auditExportFeedbackTimerRef.current) {
@@ -306,6 +310,16 @@ export default function TechVault() {
         setStatusMutationFeedback(null);
       }
       setProjects(nextProjects);
+      const refreshedProjectIds = new Set(statusMutationRefreshProjectIdsRef.current);
+      refreshedProjectIds.forEach((projectId) => {
+        pendingStatusMutationProjectIdsRef.current.delete(projectId);
+        statusMutationRefreshProjectIdsRef.current.delete(projectId);
+      });
+      if (refreshedProjectIds.size > 0) {
+        setStatusMutationProjectIds((current) =>
+          current.filter((projectId) => !refreshedProjectIds.has(projectId))
+        );
+      }
       setLoading(false);
     } catch {
       if (fetchId !== latestFetchIdRef.current) return;
@@ -324,7 +338,7 @@ export default function TechVault() {
       setLoading(true);
     }
     setError(null);
-    void runRefresh(fetchId);
+    return runRefresh(fetchId);
   }, [runRefresh, user?.id]);
 
   useEffect(() => {
@@ -518,7 +532,8 @@ export default function TechVault() {
           projectName: currentProject.name,
           key: archived ? "vault-restore-success" : "vault-archive-success",
         });
-        triggerRefresh();
+        statusMutationRefreshProjectIdsRef.current.add(projectId);
+        void triggerRefresh();
       }
     } catch {
       setProjects((current) =>
@@ -536,9 +551,8 @@ export default function TechVault() {
         current?.projectId === projectId ? null : current
       );
       if (currentUserIdRef.current === user.id) {
-        triggerRefresh();
+        void triggerRefresh();
       }
-    } finally {
       pendingStatusMutationProjectIdsRef.current.delete(projectId);
       setStatusMutationProjectIds((current) => current.filter((currentProjectId) => currentProjectId !== projectId));
     }

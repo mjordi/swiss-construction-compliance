@@ -21,6 +21,7 @@ const { buildCsvMock, filenameMock } = vi.hoisted(() => ({
 const createObjectUrlMock = vi.fn(() => "blob:vault-audit");
 const revokeObjectUrlMock = vi.fn();
 let statusUpdateResult: Promise<{ error: { message: string } | null }>;
+let casesSelectResult: Promise<{ data: typeof cases; error: null }>;
 
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/vault",
@@ -92,7 +93,7 @@ const supabaseMock = {
   from: (table: string) => {
     if (table === "cases") {
       return {
-        select: () => ({ eq: () => ({ order: () => Promise.resolve({ data: cases, error: null }) }) }),
+        select: () => ({ eq: () => ({ order: () => casesSelectResult }) }),
         update: () => ({ eq: () => ({ eq: () => statusUpdateResult }) }),
       };
     }
@@ -116,6 +117,7 @@ describe("Vault portfolio audit export", () => {
     replaceMock.mockClear();
     pushMock.mockClear();
     statusUpdateResult = Promise.resolve({ error: null });
+    casesSelectResult = Promise.resolve({ data: cases, error: null });
     Object.defineProperty(URL, "createObjectURL", { configurable: true, value: createObjectUrlMock });
     Object.defineProperty(URL, "revokeObjectURL", { configurable: true, value: revokeObjectUrlMock });
     vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(() => undefined);
@@ -172,5 +174,36 @@ describe("Vault portfolio audit export", () => {
 
     expect(buildCsvMock).not.toHaveBeenCalled();
     expect(createObjectUrlMock).not.toHaveBeenCalled();
+  });
+
+  it("keeps export blocked until the post-mutation refresh replaces the optimistic row", async () => {
+    let resolveRefresh!: (result: { data: typeof cases; error: null }) => void;
+    render(<TechVault />);
+    await screen.findByText("Alpine Tower");
+    casesSelectResult = new Promise((resolve) => {
+      resolveRefresh = resolve;
+    });
+
+    fireEvent.click(screen.getByRole("button", { name: "vault-archive-project" }));
+
+    const exportButton = screen.getByRole("button", { name: "vault-audit-export-action" });
+    await waitFor(() => expect(exportButton.getAttribute("disabled")).not.toBeNull());
+    fireEvent.click(exportButton);
+    expect(buildCsvMock).not.toHaveBeenCalled();
+
+    resolveRefresh({
+      data: cases.map((entry) => entry.id === "case-active"
+        ? { ...entry, status: "archived", updated_at: "2026-08-20T08:00:00.000Z" }
+        : entry),
+      error: null,
+    });
+
+    await waitFor(() => expect(exportButton.getAttribute("disabled")).toBeNull());
+    fireEvent.click(exportButton);
+    await waitFor(() => expect(buildCsvMock).toHaveBeenCalledTimes(1));
+    expect(buildCsvMock.mock.calls[0][0].find((row) => row.caseId === "case-active")).toMatchObject({
+      lifecycleStatus: "vault-status-archived",
+      sourceUpdatedAt: "2026-08-20T08:00:00.000Z",
+    });
   });
 });
