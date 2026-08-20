@@ -418,6 +418,7 @@ export default function CasesPage() {
   const noticeDispatchInFlightIdsRef = useRef<Set<string>>(new Set());
   const noticeDispatchRequestIdsRef = useRef<Record<string, number>>({});
   const latestNoticeDispatchLoadIdRef = useRef(0);
+  const noticeDispatchHistoryLoadingRef = useRef(true);
   const [noticeDraftCreatingByCase, setNoticeDraftCreatingByCase] = useState<Record<string, boolean>>({});
   const [noticeDraftFeedbackByCase, setNoticeDraftFeedbackByCase] = useState<Record<string, TranslationKey>>({});
   const noticeDraftInFlightIdsRef = useRef<Set<string>>(new Set());
@@ -499,6 +500,7 @@ export default function CasesPage() {
       setNoticeDispatches([]);
       setNoticeDispatchEvidence([]);
       setCaseEvidence([]);
+      noticeDispatchHistoryLoadingRef.current = true;
       setNoticeDispatchHistoryState("loading");
       setEvidenceHistoryState("loading");
       setInitialLoadError(null);
@@ -518,6 +520,7 @@ export default function CasesPage() {
     try {
       const noticeDraftLoadId = ++latestNoticeDraftLoadIdRef.current;
       const noticeDispatchLoadId = ++latestNoticeDispatchLoadIdRef.current;
+      noticeDispatchHistoryLoadingRef.current = true;
       setNoticeDispatchHistoryState("loading");
       setEvidenceHistoryState("loading");
       const loadNoticeDrafts = async () => {
@@ -718,9 +721,11 @@ export default function CasesPage() {
         ) return;
         if (!dispatchResult.failed) {
           setNoticeDispatches(dispatchResult.data);
+          noticeDispatchHistoryLoadingRef.current = false;
           setNoticeDispatchHistoryState("ready");
         } else {
           setNoticeDispatches([]);
+          noticeDispatchHistoryLoadingRef.current = false;
           setNoticeDispatchHistoryState("error");
         }
       });
@@ -2117,6 +2122,7 @@ export default function CasesPage() {
       || selectedDraft.user_id !== userId
       || selectedDraft.case_id !== caseId
       || latestNoticeDraftByCaseRef.current[caseId]?.id !== selectedDraft.id
+      || noticeDispatchHistoryLoadingRef.current
       || noticeDispatchInFlightIdsRef.current.has(caseId)
       || dispatchEvidenceInFlightRef.current.has(caseId)
       || checklistInFlightIdsRef.current.has(caseId)
@@ -2926,6 +2932,7 @@ export default function CasesPage() {
             const isNoticeDraftCreating = Boolean(noticeDraftCreatingByCase[item.id]);
             const isNoticeDraftPdfGenerating = Boolean(noticeDraftPdfGeneratingByCase[item.id]);
             const isCaseBusy = isChecklistSaving || isDossierGenerating || isProtocolPdfGenerating || isNoticeDraftCreating || isNoticeDraftPdfGenerating || isNoticeDispatchRecording || isDispatchEvidenceLinking;
+            const isNoticeDispatchHistoryLoading = noticeDispatchHistoryState === "loading";
             const isAuditHistoryReady = noticeDispatchHistoryState !== "loading" && evidenceHistoryState === "ready";
             const isNoticePreviewOpen = Boolean(noticePreviewOpenByCase[item.id] && completeNoticeSource);
             const noticePreviewUnavailableId = `cases-notice-preview-unavailable-${item.id}`;
@@ -3350,11 +3357,11 @@ export default function CasesPage() {
                         <div className="mt-3 grid gap-3 md:grid-cols-3">
                           <label className="text-xs text-muted">
                             {t("cases-notice-dispatch-at")} (Europe/Zurich)
-                            <input name="dispatched_at" type="datetime-local" step="1" required disabled={isCaseBusy} className="mt-1 w-full rounded border border-white/10 bg-black/20 p-2 text-cream [color-scheme:dark]" />
+                            <input name="dispatched_at" type="datetime-local" step="1" required disabled={isCaseBusy || isNoticeDispatchHistoryLoading} className="mt-1 w-full rounded border border-white/10 bg-black/20 p-2 text-cream [color-scheme:dark]" />
                           </label>
                           <label className="text-xs text-muted">
                             {t("cases-notice-dispatch-channel")}
-                            <select name="channel" disabled={isCaseBusy} className="mt-1 w-full rounded border border-white/10 bg-black p-2 text-cream">
+                            <select name="channel" disabled={isCaseBusy || isNoticeDispatchHistoryLoading} className="mt-1 w-full rounded border border-white/10 bg-black p-2 text-cream">
                               {CASE_NOTICE_DISPATCH_CHANNELS.map((channel) => (
                                 <option key={channel} value={channel}>{t(CASE_NOTICE_DISPATCH_CHANNEL_KEYS[channel] as TranslationKey)}</option>
                               ))}
@@ -3362,10 +3369,10 @@ export default function CasesPage() {
                           </label>
                           <label className="text-xs text-muted">
                             {t("cases-notice-dispatch-reference")}
-                            <input name="reference" maxLength={200} disabled={isCaseBusy} className="mt-1 w-full rounded border border-white/10 bg-black/20 p-2 text-cream" />
+                            <input name="reference" maxLength={200} disabled={isCaseBusy || isNoticeDispatchHistoryLoading} className="mt-1 w-full rounded border border-white/10 bg-black/20 p-2 text-cream" />
                           </label>
                         </div>
-                        <button type="submit" disabled={isCaseBusy} className="mt-3 rounded-lg border border-emerald-400/30 px-3 py-2 text-sm text-emerald-100 disabled:opacity-50">
+                        <button type="submit" disabled={isCaseBusy || isNoticeDispatchHistoryLoading} className="mt-3 rounded-lg border border-emerald-400/30 px-3 py-2 text-sm text-emerald-100 disabled:opacity-50">
                           {t(isNoticeDispatchRecording ? "cases-notice-dispatch-recording" : "cases-notice-dispatch-submit")}
                         </button>
                         {noticeDispatchFeedbackByCase[item.id] && (
@@ -3391,7 +3398,15 @@ export default function CasesPage() {
                           ) : evidenceHistoryState === "error" ? (
                             <div id={`cases-evidence-history-error-${item.id}`} className="mt-2 text-rose-200">
                               <p role="alert">{t("cases-evidence-history-unavailable")}</p>
-                              <button type="button" onClick={triggerCasesRefresh} className="mt-2 rounded border border-rose-300/30 px-3 py-1.5 text-xs">
+                              <button
+                                type="button"
+                                disabled={isCaseBusy}
+                                onClick={() => {
+                                  if (noticeDispatchInFlightIdsRef.current.has(item.id)) return;
+                                  triggerCasesRefresh();
+                                }}
+                                className="mt-2 rounded border border-rose-300/30 px-3 py-1.5 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                              >
                                 {t("cases-evidence-history-retry")}
                               </button>
                             </div>

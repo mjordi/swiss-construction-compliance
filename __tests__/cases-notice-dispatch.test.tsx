@@ -426,6 +426,54 @@ describe("Cases notice dispatch recording", () => {
     expect((screen.getByRole("button", { name: "cases-export-dossier-pdf" }) as HTMLButtonElement).disabled).toBe(true);
   });
 
+  it("blocks evidence-history retries while a notice dispatch is pending", async () => {
+    noticeDispatches = [savedDispatch({
+      user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",
+      dispatched_at: "2026-08-15T09:00:00.000Z", channel: "courier", reference: null,
+    })];
+    dispatchEvidenceLoadError = true;
+    const pending = deferred<{ data: NoticeDispatchRecord; error: null }>();
+    dispatchInsertMock.mockImplementationOnce(() => pending.promise);
+    render(<CasesPage />);
+    const form = await dispatchForm();
+    const retry = await screen.findByRole("button", { name: "cases-evidence-history-retry" });
+    const queriesBeforeMutation = noticeDispatchPageQueries;
+
+    fireEvent.submit(form);
+
+    await waitFor(() => expect((retry as HTMLButtonElement).disabled).toBe(true));
+    fireEvent.click(retry);
+    expect(noticeDispatchPageQueries).toBe(queriesBeforeMutation);
+    pending.resolve({
+      data: savedDispatch({
+        user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",
+        dispatched_at: "2026-08-16T09:00:00.000Z", channel: "courier", reference: null,
+      }),
+      error: null,
+    });
+    await waitFor(() => expect((retry as HTMLButtonElement).disabled).toBe(false));
+  });
+
+  it("blocks dispatch submission synchronously after an evidence-history retry starts", async () => {
+    noticeDispatches = [savedDispatch({
+      user_id: "user-1", case_id: "case-1", notice_draft_id: "draft-latest",
+      dispatched_at: "2026-08-15T09:00:00.000Z", channel: "courier", reference: null,
+    })];
+    dispatchEvidenceLoadError = true;
+    render(<CasesPage />);
+    const form = await dispatchForm();
+    const retry = await screen.findByRole("button", { name: "cases-evidence-history-retry" });
+    dispatchEvidenceLoadError = false;
+    dispatchEvidenceLoadDeferred = deferred();
+
+    fireEvent.click(retry);
+    fireEvent.submit(form);
+
+    expect(dispatchInsertMock).not.toHaveBeenCalled();
+    dispatchEvidenceLoadDeferred.resolve({ data: [], error: null });
+    await waitFor(() => expect(noticeDispatchPageQueries).toBeGreaterThan(1));
+  });
+
   it("keeps the cached legal timeline visible when a same-user Cases refresh fails", async () => {
     const { rerender } = render(<CasesPage />);
 
