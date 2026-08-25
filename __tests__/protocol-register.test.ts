@@ -53,6 +53,59 @@ describe("protocol finalization timestamp migration", () => {
   });
 });
 
+describe("finalized protocol database integrity migration", () => {
+  it("limits authenticated access to owner-scoped finalized reads and inserts", () => {
+    const sql = readFileSync(
+      join(process.cwd(), "supabase/migrations/20260825000000_finalized_protocol_integrity.sql"),
+      "utf8",
+    );
+
+    expect(sql).toContain('drop policy if exists "Users can CRUD own protocols" on public.protocols;');
+    expect(sql).toContain("revoke all on public.protocols from anon;");
+    expect(sql).toContain("revoke all on public.protocols from authenticated;");
+    expect(sql).toContain("grant select on public.protocols to authenticated;");
+
+    const insertGrant = sql.match(
+      /grant insert\s*\(([\s\S]*?)\)\s*on public\.protocols to authenticated;/,
+    )?.[1];
+    expect(insertGrant?.split(",").map((column) => column.trim())).toEqual([
+      "user_id",
+      "case_id",
+      "project_name",
+      "contractor",
+      "client",
+      "defect_description",
+      "signature_data",
+      "status",
+    ]);
+
+    const selectPolicy = sql.match(
+      /create policy "Users can read own finalized protocols"[\s\S]*?;/,
+    )?.[0];
+    const insertPolicy = sql.match(
+      /create policy "Users can insert own finalized protocols"[\s\S]*?;/,
+    )?.[0];
+    expect(selectPolicy).toMatch(/for select[\s\S]*auth\.uid\(\) = protocols\.user_id[\s\S]*protocols\.status = 'finalized'/);
+    expect(insertPolicy).toMatch(/for insert[\s\S]*with check[\s\S]*auth\.uid\(\) = protocols\.user_id[\s\S]*protocols\.status = 'finalized'/);
+    expect(insertPolicy).toMatch(/protocols\.case_id is null\s+or exists\s*\([\s\S]*from public\.cases as compliance_case[\s\S]*compliance_case\.id = protocols\.case_id[\s\S]*compliance_case\.user_id = auth\.uid\(\)/);
+    expect(sql).not.toMatch(/grant\s+(?:update|delete|all)(?:\s*\([^)]*\))?\s+on public\.protocols to authenticated/i);
+    expect(sql).not.toMatch(/create policy[\s\S]*?for\s+(?:all|update|delete)\b/i);
+  });
+
+  it("states the exact content lock, Case unlink, and account cascade boundaries", () => {
+    const sql = readFileSync(
+      join(process.cwd(), "supabase/migrations/20260825000000_finalized_protocol_integrity.sql"),
+      "utf8",
+    );
+
+    expect(sql).toMatch(/content and signature fields cannot be changed/i);
+    expect(sql).toMatch(/cannot be individually deleted by authenticated users/i);
+    expect(sql).toMatch(/deleting a linked Case clears the Case association/i);
+    expect(sql).toMatch(/deleting the auth account (?:removes|deletes) its protocol records/i);
+    expect(sql).toMatch(/does not (?:provide|claim) external retention or absolute immutability/i);
+  });
+});
+
 describe("selectFinalizedProtocolRecords", () => {
   it("returns only finalized records newest first with an ID tie-break", () => {
     const rows = [

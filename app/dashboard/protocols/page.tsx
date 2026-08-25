@@ -232,6 +232,9 @@ export default function ProtocolRegisterPage() {
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 py-8">
       <PageHeader marker={t("menu-protocols")} title={t("protocols-title")} subtitle={t("protocols-subtitle")} />
+      <p role="note" className="mt-4 rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-3 text-sm leading-relaxed text-muted">
+        {t("protocols-integrity-note")}
+      </p>
 
       <div className="mt-8" aria-live="polite">
         {loading && (

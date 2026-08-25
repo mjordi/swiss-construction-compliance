@@ -76,6 +76,7 @@ vi.mock("@/context/LanguageContext", () => ({
     t: (key: string) => ({
       "protocols-title": "Finalized protocols",
       "protocols-subtitle": "Retrieve persisted finalized records. Download does not indicate delivery or acceptance.",
+      "protocols-integrity-note": "Finalized protocol content and signatures cannot be changed, and authenticated users cannot individually delete a protocol. Deleting a linked Case clears only its Case association. Deleting your account deletes its protocol records. This is not external retention or absolute immutability.",
       "protocols-loading": "Loading protocols…",
       "protocols-empty-title": "No finalized protocols",
       "protocols-empty-body": "Finalized protocols will appear here.",
@@ -138,6 +139,19 @@ beforeEach(() => {
 });
 
 describe("ProtocolRegisterPage", () => {
+  it("shows the finalized-record content, Case unlink, and account boundaries below the header", async () => {
+    queryResults.push(Promise.resolve({ data: [], error: null }));
+
+    render(<ProtocolRegisterPage />);
+    await screen.findByText("No finalized protocols");
+
+    const heading = screen.getByRole("heading", { name: "Finalized protocols" });
+    const note = screen.getByText(
+      "Finalized protocol content and signatures cannot be changed, and authenticated users cannot individually delete a protocol. Deleting a linked Case clears only its Case association. Deleting your account deletes its protocol records. This is not external retention or absolute immutability.",
+    );
+    expect(heading.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+  });
+
   it("queries by owner and renders finalized rows newest first, including standalone records", async () => {
     queryResults.push(Promise.resolve({ data: [
       registerRow({ id: "old", finalized_at: "2026-08-12T08:00:00.000Z", signature_captured: false, case_id: "case-9" }),

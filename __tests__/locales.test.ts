@@ -24,7 +24,7 @@ describe("locales", () => {
 
   it("includes complete protocol register copy in every locale", () => {
     const keys = [
-      "protocols-title", "protocols-subtitle", "protocols-loading", "protocols-empty-title",
+      "protocols-title", "protocols-subtitle", "protocols-integrity-note", "protocols-loading", "protocols-empty-title",
       "protocols-empty-body", "protocols-error", "protocols-retry", "protocols-project",
       "protocols-contractor", "protocols-client", "protocols-record-id", "protocols-record-date",
       "protocols-signature", "protocols-signature-captured", "protocols-signature-missing",
@@ -35,6 +35,22 @@ describe("locales", () => {
     for (const [lang, translations] of Object.entries(locales)) {
       for (const key of keys) {
         expect(translations[key], `Locale '${lang}' missing protocol register key '${key}'`).toBeDefined();
+      }
+    }
+  });
+
+  it("keeps finalized protocol content, Case unlink, and account boundaries truthful in every locale", () => {
+    const expectedTerms = {
+      de: [/inhalt und signaturen.*nicht geändert/i, /nicht einzeln löschen/i, /löschen.*verknüpften Falls.*Fallzuordnung/i, /löschen ihres kontos.*protokolldatensätze gelöscht/i, /weder eine externe aufbewahrung noch absolute unveränderlichkeit/i],
+      fr: [/contenu et les signatures.*ne peuvent pas être modifiés/i, /ne peuvent pas supprimer individuellement/i, /suppression.*Cas lié.*association au Cas/i, /suppression de votre compte.*enregistrements de protocole/i, /ni d.une conservation externe ni d.une immuabilité absolue/i],
+      it: [/contenuto e le firme.*non possono essere modificati/i, /non possono eliminare singolarmente/i, /eliminazione.*Caso collegato.*associazione al Caso/i, /elimini il tuo account.*record di protocollo/i, /non si tratta di conservazione esterna né di immutabilità assoluta/i],
+      en: [/content and signatures cannot be changed/i, /cannot individually delete/i, /deleting a linked Case.*Case association/i, /deleting your account.*protocol records/i, /not external retention or absolute immutability/i],
+    } as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      const copy = translations["protocols-integrity-note"];
+      for (const term of expectedTerms[lang as keyof typeof expectedTerms]) {
+        expect(copy, `Locale '${lang}' protocol integrity copy is missing ${term}`).toMatch(term);
       }
     }
   });
