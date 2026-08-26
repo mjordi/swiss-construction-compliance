@@ -206,6 +206,23 @@ describe("owner compliance work queue page", () => {
     await waitFor(() => expect(getSupabaseMock).toHaveBeenCalledTimes(2));
   });
 
+  it("reloads the queue when the Swiss legal calendar day changes", async () => {
+    rpcMock
+      .mockResolvedValueOnce(snapshot([buildCase({ project_name: "Before Midnight" })]))
+      .mockResolvedValueOnce(snapshot([buildCase({ project_name: "After Midnight" })]));
+
+    render(<ComplianceWorkQueuePage />);
+    expect(await screen.findByText("Before Midnight")).toBeTruthy();
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(12 * 60 * 60 * 1000);
+    });
+
+    expect(await screen.findByText("After Midnight")).toBeTruthy();
+    expect(screen.queryByText("Before Midnight")).toBeNull();
+    expect(rpcMock).toHaveBeenCalledTimes(2);
+  });
+
   it("states the personal point-in-time boundary without governance or delivery claims", async () => {
     rpcMock.mockResolvedValue(snapshot([]));
     render(<ComplianceWorkQueuePage />);

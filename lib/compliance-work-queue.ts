@@ -60,7 +60,7 @@ function isNonEmptyString(value: unknown): value is string {
 }
 
 function hasValidChecklist(value: unknown): boolean {
-  if (value === undefined) return true;
+  if (value === undefined || value === null) return true;
   if (!isRecord(value)) return false;
 
   return [

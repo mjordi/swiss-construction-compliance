@@ -13,6 +13,7 @@ import {
   type ComplianceWorkQueueRow,
 } from "@/lib/compliance-work-queue";
 import type { CaseDeadlineStatus } from "@/lib/case-timeline";
+import { getMillisecondsUntilNextSwissCalendarDay } from "@/lib/legal-utils";
 import type { TranslationKey } from "@/locales";
 
 const priorityLabelKey: Record<ComplianceWorkQueuePriority, TranslationKey> = {
@@ -130,6 +131,22 @@ export default function ComplianceWorkQueuePage() {
 
   useEffect(() => {
     void load();
+  }, [load]);
+
+  useEffect(() => {
+    let refreshTimer: number | undefined;
+
+    const scheduleNextCalendarDay = () => {
+      refreshTimer = window.setTimeout(() => {
+        void load();
+        scheduleNextCalendarDay();
+      }, getMillisecondsUntilNextSwissCalendarDay());
+    };
+
+    scheduleNextCalendarDay();
+    return () => {
+      if (refreshTimer !== undefined) window.clearTimeout(refreshTimer);
+    };
   }, [load]);
 
   const ownerId = user?.id ?? null;

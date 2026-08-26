@@ -138,6 +138,25 @@ describe("buildComplianceWorkQueue", () => {
     ]);
   });
 
+  it("accepts a nullable persisted checklist as missing state", () => {
+    const result = buildComplianceWorkQueueResult([
+      buildCase({
+        id: "nullable-checklist",
+        canton: "VD",
+        checklist: null,
+        discovery_date: "2026-08-25T00:00:00.000Z",
+      }),
+    ], [protocol("nullable-checklist")]);
+
+    expect(result.rejectedCaseCount).toBe(0);
+    expect(result.rows[0].checklist).toEqual({
+      defectDocumented: true,
+      evidenceAttached: false,
+      noticeDrafted: false,
+      calendarReminderExported: false,
+    });
+  });
+
   it("skips malformed timeline rows without dropping valid siblings", () => {
     const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
     const cases = [
