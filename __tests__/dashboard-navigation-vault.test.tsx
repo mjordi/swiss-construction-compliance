@@ -77,6 +77,17 @@ describe("dashboard navigation Tech Vault item", () => {
     );
   });
 
+  it("keeps the expanded mobile navigation scrollable on short viewports", () => {
+    render(<MobileNav />);
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation menu" }));
+
+    const navigation = within(
+      screen.getByRole("dialog", { name: "Dashboard navigation" })
+    ).getByRole("navigation");
+    expect(navigation.className).toContain("min-h-0");
+    expect(navigation.className).toContain("overflow-y-auto");
+  });
+
   it("renders the shared Protocol register link on desktop and mobile", () => {
     const desktop = render(<Sidebar />);
     expect(screen.getByRole("link", { name: "Protocol register" }).getAttribute("href")).toBe(

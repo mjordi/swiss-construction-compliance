@@ -100,6 +100,14 @@ describe("owner compliance work queue page", () => {
     expect(screen.getByText("work-reason-notice-not-drafted")).toBeTruthy();
   });
 
+  it("leaves the page-level main landmark to the dashboard layout", async () => {
+    rpcMock.mockResolvedValue(snapshot([]));
+    render(<ComplianceWorkQueuePage />);
+
+    expect(await screen.findByText("work-empty-title")).toBeTruthy();
+    expect(screen.queryByRole("main")).toBeNull();
+  });
+
   it("shows retryable RPC errors, loading on retry, and then the empty state", async () => {
     const retry = deferred<ReturnType<typeof snapshot>>();
     rpcMock

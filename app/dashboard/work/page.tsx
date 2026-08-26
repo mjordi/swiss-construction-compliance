@@ -154,7 +154,7 @@ export default function ComplianceWorkQueuePage() {
   const isLoading = ownerId !== null && loadingOwnerId === ownerId && loadedOwnerId !== ownerId;
 
   return (
-    <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
+    <div className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
       <header>
         <div className="flex items-center gap-2 text-accent">
           <BriefcaseBusiness className="h-5 w-5" />
@@ -223,6 +223,6 @@ export default function ComplianceWorkQueuePage() {
           ))}
         </ol>
       )}
-    </main>
+    </div>
   );
 }
