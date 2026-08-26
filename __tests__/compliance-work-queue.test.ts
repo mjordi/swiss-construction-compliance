@@ -181,6 +181,23 @@ describe("buildComplianceWorkQueue", () => {
     expect(result.rejectedProtocolCount).toBe(0);
   });
 
+  it("excludes archived Cases before reporting malformed queue inputs", () => {
+    const result = buildComplianceWorkQueueResult([
+      buildCase({
+        id: "archived-malformed",
+        status: "archived",
+        checklist: { ...COMPLETE, noticeDrafted: "yes" } as unknown as Case["checklist"],
+      }),
+      buildCase({
+        id: "active-valid",
+        checklist: { ...COMPLETE, noticeDrafted: false },
+      }),
+    ], []);
+
+    expect(result.rows.map((row) => row.id)).toEqual(["active-valid"]);
+    expect(result.rejectedCaseCount).toBe(0);
+  });
+
   it("reports all-malformed Cases and protocols instead of treating them as an affirmative empty queue", () => {
     const result = buildComplianceWorkQueueResult(
       [{ status: "active" }, "bad-case"],

@@ -105,12 +105,15 @@ export function buildComplianceWorkQueueResult(
   cases: readonly unknown[],
   protocols: readonly unknown[]
 ): ComplianceWorkQueueResult {
-  const validCases = cases.filter(isEvaluableCase);
+  const queueCases = cases.filter(
+    (value) => !isRecord(value) || value.status !== "archived"
+  );
+  const validCases = queueCases.filter(isEvaluableCase);
   const validProtocols = protocols.filter(isEvaluableProtocol);
 
   return {
     rows: buildComplianceWorkQueue(validCases, validProtocols),
-    rejectedCaseCount: cases.length - validCases.length,
+    rejectedCaseCount: queueCases.length - validCases.length,
     rejectedProtocolCount: protocols.length - validProtocols.length,
   };
 }
