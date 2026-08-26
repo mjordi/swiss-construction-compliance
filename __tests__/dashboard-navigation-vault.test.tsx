@@ -11,6 +11,7 @@ const translations: Record<string, string> = {
   "menu-cases": "Cases",
   "menu-protocols": "Protocol register",
   "menu-vault": "Tech Vault",
+  "menu-work": "Compliance work queue",
   "menu-settings": "Settings",
   "menu-logout": "Log out",
   "mobile-nav-dashboard": "Dashboard",
@@ -59,15 +60,33 @@ describe("dashboard navigation Tech Vault item", () => {
     );
   });
 
+  it("renders the shared compliance work queue link on desktop and mobile", () => {
+    const desktop = render(<Sidebar />);
+    expect(screen.getByRole("link", { name: "Compliance work queue" }).getAttribute("href")).toBe(
+      "/dashboard/work"
+    );
+
+    desktop.unmount();
+    mockPathname = "/dashboard/work";
+    render(<MobileNav />);
+    expect(screen.getByText("Compliance work queue")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Open navigation menu" }));
+    const dialog = screen.getByRole("dialog", { name: "Dashboard navigation" });
+    expect(within(dialog).getByRole("link", { name: "Compliance work queue" }).getAttribute("href")).toBe(
+      "/dashboard/work"
+    );
+  });
+
   it("renders the shared Protocol register link on desktop and mobile", () => {
-    render(<Sidebar />);
+    const desktop = render(<Sidebar />);
     expect(screen.getByRole("link", { name: "Protocol register" }).getAttribute("href")).toBe(
       "/dashboard/protocols"
     );
 
+    desktop.unmount();
     mockPathname = "/dashboard/protocols";
     render(<MobileNav />);
-    expect(screen.getAllByText("Protocol register").length).toBeGreaterThan(0);
+    expect(screen.getByText("Protocol register")).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Open navigation menu" }));
     const dialog = screen.getByRole("dialog", { name: "Dashboard navigation" });
     expect(within(dialog).getByRole("link", { name: "Protocol register" }).getAttribute("href")).toBe(

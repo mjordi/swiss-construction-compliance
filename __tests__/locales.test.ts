@@ -12,6 +12,7 @@ describe("locales", () => {
       "menu-cases",
       "menu-protocols",
       "menu-vault",
+      "menu-work",
       "menu-settings",
     ] as const;
 
@@ -20,6 +21,46 @@ describe("locales", () => {
         expect(translations[key], `Locale '${lang}' missing dashboard menu key '${key}'`).toBeDefined();
       }
     }
+  });
+
+  it("includes complete compliance work queue copy in every locale", () => {
+    const keys = [
+      "work-title", "work-description", "work-boundary", "work-loading", "work-error",
+      "work-malformed", "work-retry", "work-empty-title", "work-empty-body", "work-open-case",
+      "work-next-action", "work-countdown", "work-readiness", "work-progress",
+      "work-linked-protocols", "work-priority-expired", "work-priority-immediate-notice",
+      "work-priority-urgent", "work-priority-warning", "work-priority-lifecycle-review",
+      "work-priority-incomplete-readiness", "work-reason-defect-not-documented",
+      "work-reason-evidence-not-attached", "work-reason-notice-not-drafted",
+      "work-reason-calendar-not-exported", "work-reason-protocol-missing",
+    ] as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      for (const key of keys) {
+        expect(translations[key], `Locale '${lang}' missing work queue key '${key}'`).toBeDefined();
+      }
+    }
+  });
+
+  it("keeps the personal point-in-time and no-governance/delivery boundary in every locale", () => {
+    const expectedTerms = {
+      de: [/persönliche/i, /momentaufnahme/i, /keine zuweisungen/i, /keine überwachung/i, /keine benachrichtigungen/i],
+      fr: [/personnelle/i, /instantané/i, /aucune attribution/i, /aucune surveillance/i, /aucune notification/i],
+      it: [/personale/i, /istantanea/i, /nessuna assegnazione/i, /nessun monitoraggio/i, /nessuna notifica/i],
+      en: [/personal/i, /point-in-time/i, /no assignments/i, /no monitoring/i, /no notifications/i],
+    } as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      for (const term of expectedTerms[lang as keyof typeof expectedTerms]) {
+        expect(translations["work-boundary"], `Locale '${lang}' work boundary missing ${term}`).toMatch(term);
+      }
+    }
+  });
+
+  it("keeps the Italian empty state about schedule and readiness, not verified compliance", () => {
+    expect(itLocale["work-empty-body"]).toMatch(/tempi previsti/i);
+    expect(itLocale["work-empty-body"]).toMatch(/completamente preparati/i);
+    expect(itLocale["work-empty-body"]).not.toMatch(/in regola/i);
   });
 
   it("includes complete protocol register copy in every locale", () => {
