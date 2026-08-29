@@ -328,14 +328,14 @@ describe("dashboard linked-case loading retry", () => {
     expect(rows[2]?.textContent).toContain("cases-status-urgent");
     expect(rows[2]?.textContent).toContain("cases-next-action-urgent");
     expect(rows[2]?.textContent).toContain("2 cases-countdown-days-left-suffix");
-    expect(rows[0]?.getAttribute("href")).toBe("/dashboard/cases?q=Expired%20Case&status=triage");
-    expect(rows[1]?.getAttribute("href")).toBe("/dashboard/cases?q=Old%20Law&status=triage");
-    expect(rows[2]?.getAttribute("href")).toBe("/dashboard/cases?q=Urgent%20%26%20Central&status=triage");
+    expect(rows[0]?.getAttribute("href")).toBe("/dashboard/cases?case=expired");
+    expect(rows[1]?.getAttribute("href")).toBe("/dashboard/cases?case=immediate");
+    expect(rows[2]?.getAttribute("href")).toBe("/dashboard/cases?case=urgent");
     expect(cockpit.textContent).not.toContain("Warning Top");
     expect(cockpit.textContent).not.toContain("On Track");
   });
 
-  it("uses a search-only Cases link for a warning in the priority action cockpit", async () => {
+  it("uses an exact Case link for a warning in the priority action cockpit", async () => {
     caseResponseFactory = () => ({
       data: [buildCase("warning", "Warning Project", { discoveryDate: "2026-03-04T00:00:00.000Z" })],
       error: null,
@@ -345,7 +345,7 @@ describe("dashboard linked-case loading retry", () => {
 
     const cockpit = await screen.findByRole("region", { name: "dashboard-action-cockpit-title" });
     expect(within(cockpit).getByRole("link").getAttribute("href")).toBe(
-      "/dashboard/cases?q=Warning%20Project"
+      "/dashboard/cases?case=warning"
     );
   });
 
@@ -769,7 +769,7 @@ describe("dashboard linked-case loading retry", () => {
     const followUpLink = await screen.findByRole("link", { name: "dashboard-linked-case-follow-up-action" });
     expect(screen.getByText("dashboard-linked-case-follow-up-title")).toBeTruthy();
     expect(screen.getByText("dashboard-linked-case-follow-up-desc")).toBeTruthy();
-    expect(followUpLink.getAttribute("href")).toBe("/dashboard/cases?q=Alpine+Tower");
+    expect(followUpLink.getAttribute("href")).toBe("/dashboard/cases?case=case-1");
   });
 
   it("does not show linked-case follow-up after standalone protocol finalization", async () => {

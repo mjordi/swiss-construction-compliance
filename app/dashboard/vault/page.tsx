@@ -20,12 +20,12 @@ import {
 } from "@/lib/case-timeline";
 import {
   buildVaultCreateProjectHref,
-  buildVaultProjectCasesHref,
   getVaultEmptyState,
   parseVaultTab,
   type VaultEmptyStateAction,
   type VaultTab,
 } from "@/lib/vault";
+import { buildCaseHandoffHref } from "@/lib/case-handoff";
 import {
   buildVaultAuditCsv,
   vaultAuditCsvFilename,
@@ -521,7 +521,7 @@ export default function TechVault() {
     }
   }, []);
 
-  const navigateToProjectCases = useCallback((href: string) => {
+  const navigateToCase = useCallback((href: string) => {
     router.push(href);
   }, [router]);
 
@@ -908,10 +908,7 @@ export default function TechVault() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {filteredProjects.map((project, i) => {
-                const projectCasesHref = buildVaultProjectCasesHref({
-                  projectName: project.name,
-                  prefillTriage: project.prefillTriage,
-                });
+                const caseHandoffHref = buildCaseHandoffHref(project.id);
                 const isStatusMutationPending = statusMutationProjectIds.includes(project.id);
 
                 return (
@@ -933,7 +930,7 @@ export default function TechVault() {
                       </span>
                     ) : (
                       <Link
-                        href={projectCasesHref}
+                        href={caseHandoffHref}
                         data-testid={`vault-project-card-${project.id}`}
                         aria-label={`${project.name} ${t("vault-open-in-cases")}`}
                         onClick={(event) => {
@@ -942,7 +939,7 @@ export default function TechVault() {
                           }
 
                           event.preventDefault();
-                          navigateToProjectCases(projectCasesHref);
+                          navigateToCase(caseHandoffHref);
                         }}
                         onKeyDown={(event) => {
                           if (event.key !== "Enter" && event.key !== " ") {
@@ -954,7 +951,7 @@ export default function TechVault() {
                           }
 
                           event.preventDefault();
-                          navigateToProjectCases(projectCasesHref);
+                          navigateToCase(caseHandoffHref);
                         }}
                         className="absolute inset-0 rounded-2xl focus:outline-none focus:ring-2 focus:ring-accent/60 focus:ring-inset"
                       >

@@ -6,7 +6,7 @@ import {
   type FollowUpChecklistState,
 } from "@/lib/case-timeline";
 import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
-import { buildVaultProjectCasesHref } from "@/lib/vault";
+import { buildCaseHandoffHref } from "@/lib/case-handoff";
 
 export type ComplianceWorkQueuePriority =
   | "expired"
@@ -155,10 +155,6 @@ function getPriority(
   return "incomplete-readiness";
 }
 
-function isTriageStatus(status: ComplianceCaseViewModel["status"]): boolean {
-  return status === "expired" || status === "immediate-notice" || status === "urgent";
-}
-
 export function buildComplianceWorkQueue(
   cases: readonly Case[],
   protocols: readonly ComplianceWorkQueueProtocolIdentity[]
@@ -217,10 +213,7 @@ export function buildComplianceWorkQueue(
         },
         readinessReasons: reasons,
         linkedProtocolCount,
-        casesHref: buildVaultProjectCasesHref({
-          projectName: item.projectName,
-          prefillTriage: isTriageStatus(item.status),
-        }),
+        casesHref: buildCaseHandoffHref(item.id),
       }];
     })
     .sort((left, right) => {

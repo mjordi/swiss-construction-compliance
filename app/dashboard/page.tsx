@@ -11,10 +11,11 @@ import SignaturePad from 'signature_pad';
 import { useLanguage } from "@/context/LanguageContext";
 import type { TranslationKey } from "@/locales";
 import { buildComplianceRecord } from "@/lib/compliance-record";
+import { buildCaseHandoffHref } from "@/lib/case-handoff";
 import { getEffectiveSelectedCaseId, hasStaleLinkedCase as isStaleLinkedCase } from "@/lib/dashboard-linked-case";
 import { buildProtocolDefectDescription, buildWizardDraft, getProtocolFinalizeReadiness, type WizardDraft } from "@/lib/dashboard-protocol";
 import { buildFinalizedProtocolReport, type FinalizedProtocolReport } from "@/lib/protocol-report";
-import { buildCaseVaultHref, buildVaultProjectCasesHref } from "@/lib/vault";
+import { buildCaseVaultHref } from "@/lib/vault";
 import { useAuth } from "@/context/AuthContext";
 import { getSupabase } from "@/lib/supabase";
 import type { Case } from "@/lib/database.types";
@@ -402,7 +403,7 @@ export default function Dashboard() {
     ? t("dashboard-final-review-signature-ready")
     : t("dashboard-final-review-signature-missing");
   const linkedCaseFollowUpHref = effectiveSelectedCase
-    ? buildVaultProjectCasesHref({ projectName: effectiveSelectedCase.project_name })
+    ? buildCaseHandoffHref(effectiveSelectedCase.id)
     : null;
 
   useEffect(() => {
@@ -625,11 +626,7 @@ export default function Dashboard() {
           </div>
           <div className="grid gap-3 lg:grid-cols-3">
             {dashboardPriorityCases.map((item) => {
-              const query = encodeURIComponent(item.projectName);
-              const href =
-                item.status === "warning"
-                  ? `/dashboard/cases?q=${query}`
-                  : `/dashboard/cases?q=${query}&status=triage`;
+              const href = buildCaseHandoffHref(item.id);
 
               return (
                 <Link

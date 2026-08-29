@@ -89,8 +89,8 @@ describe("owner compliance work queue page", () => {
     expect(getSupabaseMock).toHaveBeenCalledTimes(1);
 
     const links = screen.getAllByRole("link", { name: "work-open-case" });
-    expect(links[0].getAttribute("href")).toBe("/dashboard/cases?q=Alpine+Tower&status=triage");
-    expect(links[1].getAttribute("href")).toBe("/dashboard/cases?q=Lake+House");
+    expect(links[0].getAttribute("href")).toBe("/dashboard/cases?case=case-1");
+    expect(links[1].getAttribute("href")).toBe("/dashboard/cases?case=case-ready");
     expect(screen.getAllByText("work-next-action")).toHaveLength(2);
     expect(screen.getByText("cases-next-action-expired")).toBeTruthy();
     expect(screen.getByText("4/4")).toBeTruthy();
