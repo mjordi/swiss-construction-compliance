@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Clock, Download, RotateCcw, AlertTriangle, CheckCircle, XCircle, Info } from "lucide-react";
 import { useLanguage } from "@/context/LanguageContext";
@@ -32,6 +33,7 @@ import {
   type CaseDeadlinePortfolioRow,
   type CaseDeadlinePortfolioSource,
 } from "@/lib/case-deadline-portfolio";
+import { buildCaseHandoffHref } from "@/lib/case-handoff";
 
 type PortfolioState = {
   ownerId: string | null;
@@ -698,7 +700,12 @@ export default function DeadlinesPage() {
               <ul className="mt-3 space-y-2 text-sm text-muted">
                 {visiblePortfolioState.rows.map((row) => (
                   <li key={`${row.caseId}-${row.deadlineDay}`} className="flex flex-wrap justify-between gap-2">
-                    <span className="text-cream">{row.projectName}</span>
+                    <Link
+                      href={buildCaseHandoffHref(row.caseId)}
+                      className="text-cream transition-colors hover:text-accent"
+                    >
+                      {row.projectName}
+                    </Link>
                     <time dateTime={row.deadlineDay}>{formatLocalizedDate(row.deadline, lang)}</time>
                   </li>
                 ))}

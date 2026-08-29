@@ -4,7 +4,17 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 let currentSearch = "";
 const replaceMock = vi.fn();
 const routerMock = { replace: replaceMock };
+const authUser = { id: "user-1" };
 const deleteCaseWithEvidenceMock = vi.fn();
+const casesQueryEqMock = vi.fn();
+const { buildCaseAuditRegisterCsvMock } = vi.hoisted(() => ({
+  buildCaseAuditRegisterCsvMock: vi.fn(
+    (rows: Array<{ item: { id: string; projectName: string } }>) =>
+      rows.map(({ item }) => `${item.id},${item.projectName}`).join("\n")
+  ),
+}));
+const createObjectURLMock = vi.fn<(blob: Blob) => string>(() => "blob:case-audit-register");
+const revokeObjectURLMock = vi.fn();
 
 type CasesResponse = { data: Array<Record<string, unknown>> | null; error: { message: string } | null };
 type ProtocolsResponse = { data: Array<{ case_id: string | null }> | null; error: { message: string } | null };
@@ -35,7 +45,7 @@ vi.mock("@/context/LanguageContext", () => ({
 
 vi.mock("@/context/AuthContext", () => ({
   useAuth: () => ({
-    user: { id: "user-1" },
+    user: authUser,
   }),
 }));
 
@@ -80,6 +90,7 @@ vi.mock("@/lib/case-timeline", () => ({
       },
     })),
   buildCaseDeadlineReminderICS: () => "BEGIN:VCALENDAR\nEND:VCALENDAR",
+  buildCaseAuditRegisterCsv: buildCaseAuditRegisterCsvMock,
   deriveCaseLegalMilestones: (item: { contractDateLabel: string; discoveryDateLabel: string; noticeDeadlineLabel: string }) => [
     { kind: "contract", date: new Date("2026-03-01"), dateLabel: item.contractDateLabel },
     { kind: "discovery", date: new Date("2026-03-21"), dateLabel: item.discoveryDateLabel },
@@ -99,9 +110,12 @@ vi.mock("@/lib/supabase", () => ({
       if (table === "cases") {
         return {
           select: () => ({
-            eq: () => ({
-              order: () => Promise.resolve().then(() => caseResponseFactory()),
-            }),
+            eq: (column: string, value: string) => {
+              casesQueryEqMock(column, value);
+              return {
+                order: () => Promise.resolve().then(() => caseResponseFactory()),
+              };
+            },
           }),
         };
       }
@@ -156,10 +170,22 @@ describe("cases filter URL synchronization", () => {
   beforeEach(() => {
     currentSearch = "";
     replaceMock.mockReset();
+    casesQueryEqMock.mockReset();
     deleteCaseWithEvidenceMock.mockReset();
     deleteCaseWithEvidenceMock.mockResolvedValue({ data: { deleted: true, storage_paths: [] }, error: null });
     caseResponseFactory = () => ({ data: [], error: null });
     protocolResponseFactory = () => ({ data: [], error: null });
+    buildCaseAuditRegisterCsvMock.mockClear();
+    createObjectURLMock.mockClear();
+    revokeObjectURLMock.mockClear();
+    Object.defineProperty(URL, "createObjectURL", {
+      configurable: true,
+      value: createObjectURLMock,
+    });
+    Object.defineProperty(URL, "revokeObjectURL", {
+      configurable: true,
+      value: revokeObjectURLMock,
+    });
   });
 
   it("hydrates the current query params into the visible filter controls, including triage", async () => {
@@ -186,6 +212,157 @@ describe("cases filter URL synchronization", () => {
     });
 
     expect((screen.getByLabelText("cases-search-label") as HTMLInputElement).value).toBe("Riverside Bridge");
+  });
+
+  it("renders only the exact owned Case despite conflicting view filters", async () => {
+    currentSearch = "case=case-1&q=unrelated&status=expired&regime=old&tab=active";
+    caseResponseFactory = () => ({
+      data: [successCase("case-1", "Exact Project"), successCase("case-2", "Other Project")],
+      error: null,
+    });
+
+    render(<CasesPage />);
+
+    expect(await screen.findByText("Exact Project")).toBeTruthy();
+    expect(screen.queryByText("Other Project")).toBeNull();
+    expect((screen.getByLabelText("cases-search-label") as HTMLInputElement).value).toBe("unrelated");
+    expect((screen.getByLabelText("cases-filter-status") as HTMLSelectElement).value).toBe("expired");
+    expect((screen.getByLabelText("cases-filter-regime") as HTMLSelectElement).value).toBe("old");
+    expect(screen.getByRole("link", { name: "cases-handoff-show-all" }).getAttribute("href")).toBe(
+      "/dashboard/cases?q=unrelated&status=expired&regime=old&tab=active"
+    );
+    expect(casesQueryEqMock).toHaveBeenCalledTimes(1);
+    expect(casesQueryEqMock).toHaveBeenCalledWith("user_id", "user-1");
+  });
+
+  it.each([
+    ["case=case-1&q=unrelated&status=expired&regime=old", "conflicting filters"],
+    ["case=case-1", "no filters"],
+  ])("exports only the exact owned Case with %s (%s)", async (search) => {
+    currentSearch = search;
+    caseResponseFactory = () => ({
+      data: [successCase("case-1", "Exact Project"), successCase("case-2", "Other Project")],
+      error: null,
+    });
+    const anchorClickMock = vi
+      .spyOn(HTMLAnchorElement.prototype, "click")
+      .mockImplementation(() => {});
+
+    try {
+      render(<CasesPage />);
+
+      fireEvent.click(await screen.findByRole("button", { name: "cases-export-audit-register" }));
+
+      expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+      const blob = createObjectURLMock.mock.calls[0][0] as Blob;
+      expect(blob.type).toBe("text/csv;charset=utf-8");
+      const csv = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsText(blob);
+      });
+      expect(csv).toContain("case-1,Exact Project");
+      expect(csv).not.toContain("case-2");
+      expect(csv).not.toContain("Other Project");
+    } finally {
+      anchorClickMock.mockRestore();
+    }
+  });
+
+  it("announces exact Case loading as an accessible status", async () => {
+    currentSearch = "case=case-1";
+    caseResponseFactory = () => new Promise<CasesResponse>(() => undefined);
+
+    render(<CasesPage />);
+
+    const status = await screen.findByRole("status");
+    expect(status.textContent).toContain("cases-handoff-loading");
+  });
+
+  it.each(["unknown-case", "non-owner-case", "missing-case", "deleted-case"])(
+    "shows the same recovery without exposing unrelated Cases for %s",
+    async (requestedCaseId) => {
+      let resolveCases!: (response: CasesResponse) => void;
+      caseResponseFactory = () => new Promise<CasesResponse>((resolve) => {
+        resolveCases = resolve;
+      });
+      currentSearch = `case=${requestedCaseId}&status=warning&tab=active`;
+
+      render(<CasesPage />);
+
+      await waitFor(() => {
+        expect(casesQueryEqMock).toHaveBeenCalledWith("user_id", "user-1");
+      });
+      expect(screen.queryByText("cases-handoff-unavailable-title")).toBeNull();
+      resolveCases({ data: [successCase("case-2", "Unrelated Project")], error: null });
+
+      expect(await screen.findByText("cases-handoff-unavailable-title")).toBeTruthy();
+      expect(screen.getByText("cases-handoff-unavailable-body")).toBeTruthy();
+      expect(screen.queryByText("Unrelated Project")).toBeNull();
+      expect(screen.getByRole("link", { name: "cases-handoff-show-all" }).getAttribute("href")).toBe(
+        "/dashboard/cases?status=warning&tab=active"
+      );
+      expect(casesQueryEqMock).toHaveBeenCalledTimes(1);
+      expect(casesQueryEqMock).toHaveBeenCalledWith("user_id", "user-1");
+    }
+  );
+
+  it("preserves a valid exact Case through URL normalization without replace loops", async () => {
+    currentSearch = "case=case-1&regime=bad&status=warning&tab=active";
+    caseResponseFactory = () => ({ data: [successCase()], error: null });
+
+    render(<CasesPage />);
+
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+    expect(replaceMock).toHaveBeenCalledTimes(1);
+    expect(replaceMock).toHaveBeenCalledWith(
+      "/dashboard/cases?case=case-1&status=warning&tab=active",
+      { scroll: false }
+    );
+  });
+
+  it("does not suppress legitimate repeated normalization across an external Case handoff cycle", async () => {
+    caseResponseFactory = () => ({
+      data: [successCase("case-1", "First Project"), successCase("case-2", "Second Project")],
+      error: null,
+    });
+    currentSearch = "case=case-1&regime=bad";
+    const { rerender } = render(<CasesPage />);
+
+    expect(await screen.findByText("First Project")).toBeTruthy();
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenLastCalledWith("/dashboard/cases?case=case-1", { scroll: false });
+    });
+
+    currentSearch = "case=case-2&regime=bad";
+    rerender(<CasesPage />);
+    expect(await screen.findByText("Second Project")).toBeTruthy();
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenLastCalledWith("/dashboard/cases?case=case-2", { scroll: false });
+    });
+
+    currentSearch = "case=case-1&regime=bad";
+    rerender(<CasesPage />);
+    expect(await screen.findByText("First Project")).toBeTruthy();
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledTimes(3);
+    });
+    expect(replaceMock).toHaveBeenLastCalledWith("/dashboard/cases?case=case-1", { scroll: false });
+  });
+
+  it("normalizes an empty exact Case parameter away while preserving other params", async () => {
+    currentSearch = "case=&status=warning&tab=active";
+
+    render(<CasesPage />);
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith(
+        "/dashboard/cases?status=warning&tab=active",
+        { scroll: false }
+      );
+    });
+    expect(screen.queryByText("cases-handoff-unavailable-title")).toBeNull();
   });
 
   it("removes invalid filter params while preserving valid search and unrelated params", async () => {

@@ -58,6 +58,7 @@ import {
   type CaseStatusFilter,
 } from "@/lib/case-timeline";
 import { buildDashboardProtocolHref } from "@/lib/dashboard-linked-case";
+import { parseCaseHandoffId } from "@/lib/case-handoff";
 import { buildCaseVaultHref } from "@/lib/vault";
 import {
   formatDateCH,
@@ -454,6 +455,8 @@ export default function CasesPage() {
     searchTerm,
   });
   const skipNextUrlWriteRef = useRef(false);
+  const lastUrlReplacementRef = useRef<string | null>(null);
+  const lastObservedSearchRef = useRef<string | null>(null);
 
   const updateNoticePreviewOpenByCase = useCallback(
     (updater: (current: Record<string, boolean>) => Record<string, boolean>) => {
@@ -961,6 +964,23 @@ export default function CasesPage() {
   }, [regimeFilter, statusFilter, sortMode, searchTerm]);
 
   const searchParamString = searchParams.toString();
+  const requestedCaseId = useMemo(
+    () => parseCaseHandoffId(new URLSearchParams(searchParamString).get("case")),
+    [searchParamString]
+  );
+
+  const replaceUrlOnce = useCallback((sourceSearch: string, nextSearch: string) => {
+    const replacementKey = `${sourceSearch}\n${nextSearch}`;
+    if (lastUrlReplacementRef.current === replacementKey) return;
+    lastUrlReplacementRef.current = replacementKey;
+    router.replace(nextSearch ? `${pathname}?${nextSearch}` : pathname, { scroll: false });
+  }, [pathname, router]);
+
+  useEffect(() => {
+    if (lastObservedSearchRef.current === searchParamString) return;
+    lastObservedSearchRef.current = searchParamString;
+    lastUrlReplacementRef.current = null;
+  }, [searchParamString]);
 
   useEffect(() => {
     const params = new URLSearchParams(searchParamString);
@@ -974,10 +994,14 @@ export default function CasesPage() {
     const handoffDiscoveryDate = sanitizeDateQueryParam(rawHandoffDiscoveryDate);
     const hasCaseHandoffParams = rawHandoffContractDate !== null || rawHandoffDiscoveryDate !== null;
     const sanitizedParams = new URLSearchParams(params);
+    const rawRequestedCaseId = params.get("case");
 
     if (params.has("regime") && nextRegime === "all") sanitizedParams.delete("regime");
     if (params.has("status") && nextStatus === "all") sanitizedParams.delete("status");
     if (params.has("sort") && nextSort === "nearest-deadline") sanitizedParams.delete("sort");
+    if (rawRequestedCaseId !== null && parseCaseHandoffId(rawRequestedCaseId) === null) {
+      sanitizedParams.delete("case");
+    }
     if (hasCaseHandoffParams) {
       sanitizedParams.delete("contract");
       sanitizedParams.delete("discovery");
@@ -995,7 +1019,7 @@ export default function CasesPage() {
 
     const sanitizedSearch = sanitizedParams.toString();
     if (sanitizedSearch !== searchParamString) {
-      router.replace(sanitizedSearch ? `${pathname}?${sanitizedSearch}` : pathname, { scroll: false });
+      replaceUrlOnce(searchParamString, sanitizedSearch);
     }
 
     const currentFilters = filterStateRef.current;
@@ -1017,7 +1041,7 @@ export default function CasesPage() {
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [searchParamString, pathname, router]);
+  }, [searchParamString, replaceUrlOnce]);
 
   useEffect(() => {
     if (skipNextUrlWriteRef.current) {
@@ -1042,9 +1066,9 @@ export default function CasesPage() {
     const next = params.toString();
     const current = searchParams.toString();
     if (next !== current) {
-      router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
+      replaceUrlOnce(current, next);
     }
-  }, [regimeFilter, statusFilter, sortMode, searchTerm, pathname, router, searchParams]);
+  }, [regimeFilter, statusFilter, sortMode, searchTerm, searchParams, replaceUrlOnce]);
 
   useEffect(() => {
     dossierMountedRef.current = true;
@@ -1290,8 +1314,23 @@ export default function CasesPage() {
   }, [cases, regimeFilter, sortMode, searchTerm]);
 
   const visibleCases = useMemo(() => {
+    if (requestedCaseId) {
+      const isOwnedCase = dbCases.some(
+        (item) => item.id === requestedCaseId && item.user_id === user?.id
+      );
+      if (!isOwnedCase) return [];
+      const requestedCase = cases.find((item) => item.id === requestedCaseId);
+      return requestedCase ? [requestedCase] : [];
+    }
     return filterCasesByStatus(searchScopedCases, statusFilter);
-  }, [searchScopedCases, statusFilter]);
+  }, [requestedCaseId, dbCases, user?.id, cases, searchScopedCases, statusFilter]);
+
+  const clearCaseHandoffHref = useMemo(() => {
+    const params = new URLSearchParams(searchParamString);
+    params.delete("case");
+    const next = params.toString();
+    return next ? `${pathname}?${next}` : pathname;
+  }, [pathname, searchParamString]);
 
   const statusCounters = useMemo(
     () => ({
@@ -1604,19 +1643,32 @@ export default function CasesPage() {
   }
 
   function downloadCaseAuditRegister() {
-    const currentSearchScopedCases = applyComplianceCaseView(
-      buildComplianceCaseTimeline(caseInputs),
-      regimeFilter,
-      "all",
-      sortMode
-    );
-    const query = searchTerm.trim().toLowerCase();
-    const currentSearchResults = query
-      ? currentSearchScopedCases.filter((item) =>
-          `${item.projectName} ${item.canton}`.toLowerCase().includes(query)
-        )
-      : currentSearchScopedCases;
-    const currentVisibleCases = filterCasesByStatus(currentSearchResults, statusFilter);
+    const currentCases = buildComplianceCaseTimeline(caseInputs);
+    let currentVisibleCases: ComplianceCaseViewModel[];
+
+    if (requestedCaseId) {
+      const isOwnedCase = dbCases.some(
+        (item) => item.id === requestedCaseId && item.user_id === user?.id
+      );
+      const requestedCase = isOwnedCase
+        ? currentCases.find((item) => item.id === requestedCaseId)
+        : undefined;
+      currentVisibleCases = requestedCase ? [requestedCase] : [];
+    } else {
+      const currentSearchScopedCases = applyComplianceCaseView(
+        currentCases,
+        regimeFilter,
+        "all",
+        sortMode
+      );
+      const query = searchTerm.trim().toLowerCase();
+      const currentSearchResults = query
+        ? currentSearchScopedCases.filter((item) =>
+            `${item.projectName} ${item.canton}`.toLowerCase().includes(query)
+          )
+        : currentSearchScopedCases;
+      currentVisibleCases = filterCasesByStatus(currentSearchResults, statusFilter);
+    }
     const currentViewHasChecklistSave = currentVisibleCases.some((item) =>
       Boolean(checklistSavingByCase[item.id])
     );
@@ -2670,8 +2722,12 @@ export default function CasesPage() {
 
   if (loading && !hasLoadedInitialCasesRef.current) {
     return (
-      <div className="flex items-center justify-center py-20">
+      <div
+        role={requestedCaseId ? "status" : undefined}
+        className="flex items-center justify-center py-20"
+      >
         <Loader2 className="w-6 h-6 animate-spin text-accent" />
+        {requestedCaseId && <span className="sr-only">{t("cases-handoff-loading")}</span>}
       </div>
     );
   }
@@ -2848,6 +2904,14 @@ export default function CasesPage() {
           >
             {t("cases-export-audit-register")}
           </button>
+          {requestedCaseId && visibleCases.length > 0 && (
+            <Link
+              href={clearCaseHandoffHref}
+              className="px-3 py-1.5 rounded-lg border border-amber-400/30 text-xs font-medium text-amber-100 hover:bg-amber-500/[0.1]"
+            >
+              {t("cases-handoff-show-all")}
+            </Link>
+          )}
           {hasActiveFilters && (
             <>
               <button
@@ -2890,6 +2954,25 @@ export default function CasesPage() {
               {t("cases-load-retry")}
             </button>
           </div>
+        </div>
+      ) : requestedCaseId && loading ? (
+        <div role="status" className="flex items-center justify-center py-16">
+          <Loader2 className="w-6 h-6 animate-spin text-accent" />
+          <span className="sr-only">{t("cases-handoff-loading")}</span>
+        </div>
+      ) : requestedCaseId && visibleCases.length === 0 ? (
+        <div
+          role="alert"
+          className="rounded-2xl border border-amber-500/30 bg-amber-500/[0.08] px-5 py-4 text-sm text-amber-100"
+        >
+          <h2 className="font-semibold text-amber-50">{t("cases-handoff-unavailable-title")}</h2>
+          <p className="mt-1">{t("cases-handoff-unavailable-body")}</p>
+          <Link
+            href={clearCaseHandoffHref}
+            className="mt-3 inline-flex rounded-lg border border-amber-200/30 px-4 py-2 font-medium text-amber-50 hover:bg-amber-500/[0.12]"
+          >
+            {t("cases-handoff-show-all")}
+          </Link>
         </div>
       ) : visibleCases.length === 0 ? (
         hasActiveFilters ? (

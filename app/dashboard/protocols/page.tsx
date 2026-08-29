@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { pdf } from "@react-pdf/renderer";
 import { Download, FileText, Loader2, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -16,6 +17,7 @@ import {
 } from "@/lib/protocol-register";
 import { getSupabase } from "@/lib/supabase";
 import type { TranslationKey } from "@/locales";
+import { buildCaseHandoffHref } from "@/lib/case-handoff";
 
 type Feedback = { key: TranslationKey; tone: "success" | "error" };
 type FinalizedProtocolDetail = Omit<Protocol, "status" | "finalized_at"> & {
@@ -270,7 +272,19 @@ export default function ProtocolRegisterPage() {
                       <div><dt className="text-muted">{t("protocols-client")}</dt><dd className="mt-1 text-cream">{record.client}</dd></div>
                       <div><dt className="text-muted">{t("protocols-record-date")}</dt><dd className="mt-1 text-cream">{formatDate(record.finalized_at)}</dd></div>
                       <div><dt className="text-muted">{t("protocols-signature")}</dt><dd className="mt-1 text-cream">{record.signature_captured ? t("protocols-signature-captured") : t("protocols-signature-missing")}</dd></div>
-                      <div className="sm:col-span-2"><dt className="text-muted">{t("protocols-context")}</dt><dd className="mt-1 text-cream">{record.case_id ? `${t("protocols-context-linked")}: ${record.case_id}` : t("protocols-context-standalone")}</dd></div>
+                      <div className="sm:col-span-2">
+                        <dt className="text-muted">{t("protocols-context")}</dt>
+                        <dd className="mt-1 text-cream">
+                          {record.case_id ? (
+                            <Link
+                              href={buildCaseHandoffHref(record.case_id)}
+                              className="transition-colors hover:text-accent"
+                            >
+                              {t("protocols-context-linked")}: {record.case_id}
+                            </Link>
+                          ) : t("protocols-context-standalone")}
+                        </dd>
+                      </div>
                     </dl>
                     <div className="sm:w-44">
                       <button type="button" onClick={() => void download(record)} disabled={generating} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2 text-sm font-semibold text-[#111827] disabled:opacity-60">

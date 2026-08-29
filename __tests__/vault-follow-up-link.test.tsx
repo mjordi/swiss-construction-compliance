@@ -273,7 +273,7 @@ describe("vault follow-up links", () => {
     mockUser = { id: "user-1" };
   });
 
-  it("routes only triage-eligible review projects into triage while keeping warning review cards scoped to project search", async () => {
+  it("routes every Case-backed project card to its exact Case", async () => {
     render(<TechVault />);
 
     await waitFor(() => {
@@ -284,10 +284,12 @@ describe("vault follow-up links", () => {
       .getAllByTestId(/vault-project-card-/)
       .map((link) => link.getAttribute("href"));
 
-    expect(hrefs).toContain("/dashboard/cases?q=Alpine+Tower");
-    expect(hrefs).toContain("/dashboard/cases?q=Harbor+Retrofit");
-    expect(hrefs).toContain("/dashboard/cases?q=Riverside+Bridge&status=triage");
-    expect(hrefs).toContain("/dashboard/cases?q=Lakeside+Annex&status=triage");
+    expect(hrefs).toEqual(expect.arrayContaining([
+      "/dashboard/cases?case=case-active",
+      "/dashboard/cases?case=case-warning",
+      "/dashboard/cases?case=case-review",
+      "/dashboard/cases?case=case-immediate",
+    ]));
   });
 
   it("derives compliance percentages and checklist counts from timeline defaults when persisted checklist data is sparse", async () => {
@@ -332,7 +334,7 @@ describe("vault follow-up links", () => {
     const projectCard = await screen.findByTestId("vault-project-card-case-review");
     fireEvent.click(projectCard);
 
-    expect(pushMock).toHaveBeenCalledWith("/dashboard/cases?q=Riverside+Bridge&status=triage");
+    expect(pushMock).toHaveBeenCalledWith("/dashboard/cases?case=case-review");
   });
 
   it("does not hijack modified Enter activation while still handling plain Enter keyboard activation", async () => {
@@ -348,7 +350,7 @@ describe("vault follow-up links", () => {
 
     fireEvent.keyDown(projectCard, { key: "Enter" });
 
-    expect(pushMock).toHaveBeenCalledWith("/dashboard/cases?q=Alpine+Tower");
+    expect(pushMock).toHaveBeenCalledWith("/dashboard/cases?case=case-active");
     expect(pushMock).toHaveBeenCalledTimes(1);
   });
 
@@ -359,17 +361,17 @@ describe("vault follow-up links", () => {
     projectCard.focus();
     fireEvent.keyDown(projectCard, { key: " " });
 
-    expect(pushMock).toHaveBeenCalledWith("/dashboard/cases?q=Harbor+Retrofit");
+    expect(pushMock).toHaveBeenCalledWith("/dashboard/cases?case=case-warning");
   });
 
-  it("shows the visible open-in-cases CTA without changing the project card destination", async () => {
+  it("shows the visible open-in-cases CTA with the exact Case destination", async () => {
     render(<TechVault />);
 
     await screen.findByText("Harbor Retrofit");
     expect(within(getProjectCard("Harbor Retrofit")).getByText("vault-open-in-cases")).toBeTruthy();
 
     const projectCard = await screen.findByRole("link", { name: "Harbor Retrofit vault-open-in-cases" });
-    expect(projectCard.getAttribute("href")).toBe("/dashboard/cases?q=Harbor+Retrofit");
+    expect(projectCard.getAttribute("href")).toBe("/dashboard/cases?case=case-warning");
   });
 
   it("archives a project through Supabase and moves it into the archived tab immediately", async () => {
@@ -513,7 +515,7 @@ describe("vault follow-up links", () => {
     expect(await screen.findByText("Summit Depot")).toBeTruthy();
   });
 
-  it("restores archived triage projects with their triage-prefill handoff intact", async () => {
+  it("restores archived triage projects with their exact Case handoff intact", async () => {
     mockCases = [
       {
         id: "case-archived-triage",
@@ -546,7 +548,7 @@ describe("vault follow-up links", () => {
     fireEvent.click(screen.getByRole("tab", { name: "vault-tab-projects" }));
 
     const restoredProjectCard = await screen.findByRole("link", { name: "Critical Depot vault-open-in-cases" });
-    expect(restoredProjectCard.getAttribute("href")).toBe("/dashboard/cases?q=Critical+Depot&status=triage");
+    expect(restoredProjectCard.getAttribute("href")).toBe("/dashboard/cases?case=case-archived-triage");
   });
 
   it("rolls back failed archive mutations and surfaces inline feedback", async () => {

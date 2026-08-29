@@ -486,6 +486,10 @@ describe("locales", () => {
       "cases-status-triage",
       "cases-create-error",
       "cases-delete-error",
+      "cases-handoff-unavailable-title",
+      "cases-handoff-unavailable-body",
+      "cases-handoff-show-all",
+      "cases-handoff-loading",
     ] as const;
 
     for (const [lang, translations] of Object.entries(locales)) {

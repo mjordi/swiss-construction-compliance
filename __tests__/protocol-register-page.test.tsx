@@ -152,7 +152,7 @@ describe("ProtocolRegisterPage", () => {
     expect(heading.compareDocumentPosition(note) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
-  it("queries by owner and renders finalized rows newest first, including standalone records", async () => {
+  it("queries by owner and renders finalized rows newest first with exact linked Case context and plain standalone context", async () => {
     queryResults.push(Promise.resolve({ data: [
       registerRow({ id: "old", finalized_at: "2026-08-12T08:00:00.000Z", signature_captured: false, case_id: "case-9" }),
       registerRow({ id: "draft", status: "draft" }),
@@ -164,8 +164,10 @@ describe("ProtocolRegisterPage", () => {
 
     const cards = await screen.findAllByTestId("protocol-record");
     expect(cards.map((card) => card.getAttribute("data-protocol-id"))).toEqual(["standalone-new", "old"]);
-    expect(screen.getByText("Standalone protocol")).toBeTruthy();
-    expect(screen.getByText("Linked case: case-9")).toBeTruthy();
+    const standaloneContext = screen.getByText("Standalone protocol");
+    expect(standaloneContext.closest("a")).toBeNull();
+    const linkedCase = screen.getByRole("link", { name: "Linked case: case-9" });
+    expect(linkedCase.getAttribute("href")).toBe("/dashboard/cases?case=case-9");
     expect(eqMock).toHaveBeenCalledWith("user_id", "owner-1");
     expect(statusEqMock).toHaveBeenCalledWith("status", "finalized");
     expect(orderMock).toHaveBeenCalledWith("finalized_at", { ascending: false });

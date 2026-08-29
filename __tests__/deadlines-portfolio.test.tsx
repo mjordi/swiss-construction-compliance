@@ -129,6 +129,19 @@ describe("Case deadline portfolio on the deadlines page", () => {
     expect(within(region).queryByText("Archived")).toBeNull();
   });
 
+  it("links each eligible portfolio row to its exact Case", async () => {
+    responseFactory = () => ({
+      data: [caseRow("case / exact?", "Exact Alpine Case")],
+      error: null,
+    });
+
+    render(<DeadlinesPage />);
+
+    const region = await screen.findByRole("region", { name: "deadlines-portfolio-title" });
+    const caseLink = await within(region).findByRole("link", { name: "Exact Alpine Case" });
+    expect(caseLink.getAttribute("href")).toBe("/dashboard/cases?case=case+%2F+exact%3F");
+  });
+
   it("renders the localized empty state", async () => {
     render(<DeadlinesPage />);
 

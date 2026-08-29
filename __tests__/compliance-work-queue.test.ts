@@ -45,7 +45,7 @@ describe("buildComplianceWorkQueue", () => {
 
   afterEach(() => vi.useRealTimers());
 
-  it("orders every priority branch and uses triage only for triage-valid legal statuses", () => {
+  it("orders every priority branch and exact-links every queue row by Case ID", () => {
     const cases = [
       buildCase({ id: "readiness", discovery_date: "2026-08-25T00:00:00.000Z", checklist: { ...COMPLETE, noticeDrafted: false } }),
       buildCase({ id: "review", status: "review", discovery_date: "2026-08-25T00:00:00.000Z" }),
@@ -65,8 +65,14 @@ describe("buildComplianceWorkQueue", () => {
       ["review", "lifecycle-review"],
       ["readiness", "incomplete-readiness"],
     ]);
-    expect(rows.slice(0, 3).every((row) => row.casesHref.includes("status=triage"))).toBe(true);
-    expect(rows.slice(3).every((row) => !row.casesHref.includes("status="))).toBe(true);
+    expect(rows.map((row) => row.casesHref)).toEqual([
+      "/dashboard/cases?case=expired",
+      "/dashboard/cases?case=immediate",
+      "/dashboard/cases?case=urgent",
+      "/dashboard/cases?case=warning",
+      "/dashboard/cases?case=review",
+      "/dashboard/cases?case=readiness",
+    ]);
   });
 
   it("uses stable deadline, discovery date, then Case ID ties", () => {
@@ -239,6 +245,6 @@ describe("buildComplianceWorkQueue", () => {
       nextAction: "Draft notice package and schedule legal review.",
     });
     expect(row.linkedProtocolCount).toBe(1);
-    expect(row.casesHref).toBe("/dashboard/cases?q=Alpine+Tower");
+    expect(row.casesHref).toBe("/dashboard/cases?case=immutable");
   });
 });
