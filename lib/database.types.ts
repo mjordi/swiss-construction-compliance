@@ -85,6 +85,20 @@ export interface CaseActivityEvent {
   occurred_at: string;
 }
 
+export interface ComplianceQueueOwnedGrant {
+  membershipId: string;
+  collaboratorId: string;
+  collaboratorEmail: string;
+  grantedAt: string;
+}
+
+export interface ComplianceQueueSharedOwner {
+  ownerId: string;
+  ownerName: string | null;
+  ownerCompany: string | null;
+  grantedAt: string;
+}
+
 export interface Protocol {
   id: string;
   user_id: string;
