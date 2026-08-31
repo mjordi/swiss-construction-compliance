@@ -18,9 +18,15 @@ create unique index compliance_queue_memberships_one_active_relationship
   on public.compliance_queue_memberships (owner_id, collaborator_id)
   where revoked_at is null;
 
+create index compliance_queue_memberships_active_collaborator_lookup
+  on public.compliance_queue_memberships (collaborator_id, owner_id)
+  where revoked_at is null;
+
 create table public.compliance_queue_membership_events (
   id uuid primary key default gen_random_uuid(),
-  membership_id uuid not null references public.compliance_queue_memberships(id) on delete cascade,
+  -- Keep the source membership UUID as an immutable fact without a foreign key:
+  -- account deletion may remove memberships, but must not erase their audit history.
+  membership_id uuid not null,
   owner_id uuid not null,
   collaborator_id uuid not null,
   actor_id uuid not null,

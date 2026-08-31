@@ -19,7 +19,10 @@ describe("shared compliance queue migration", () => {
     expect(sql).toMatch(/owner_id uuid[^;]+collaborator_id uuid[^;]+granted_at timestamptz[^;]+revoked_at timestamptz/is);
     expect(sql).toMatch(/check\s*\(owner_id\s*<>\s*collaborator_id\)/i);
     expect(sql).toMatch(/create unique index[^;]+where revoked_at is null/is);
+    expect(sql).toMatch(/create index compliance_queue_memberships_active_collaborator_lookup\s+on public\.compliance_queue_memberships \(collaborator_id, owner_id\)\s+where revoked_at is null/i);
     expect(sql).toMatch(/create table public\.compliance_queue_membership_events/i);
+    expect(sql).toMatch(/membership_id uuid not null,/i);
+    expect(sql).not.toMatch(/membership_id uuid[^,;]+references public\.compliance_queue_memberships[^,;]+on delete cascade/i);
     expect(sql).toMatch(/event_type text[^;]+check\s*\(event_type in \('grant', 'revoke'\)\)/is);
     expect(sql).not.toMatch(/trigger[^;]+on public\.compliance_queue_membership_events/is);
     expect(sql).not.toMatch(/function public\.[^(]*(?:mutat|update|delete)[^(]*membership_event/i);
