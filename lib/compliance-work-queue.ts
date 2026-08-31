@@ -25,7 +25,7 @@ export type ComplianceWorkQueueReadinessReason =
 
 export type ComplianceWorkQueueProtocolIdentity = Pick<
   Protocol,
-  "id" | "case_id" | "project_name"
+  "id" | "case_id"
 >;
 
 export interface ComplianceWorkQueueRow {
@@ -97,8 +97,7 @@ function isEvaluableCase(value: unknown): value is Case {
 function isEvaluableProtocol(value: unknown): value is ComplianceWorkQueueProtocolIdentity {
   return isRecord(value) &&
     isNonEmptyString(value.id) &&
-    (value.case_id === null || isNonEmptyString(value.case_id)) &&
-    isNonEmptyString(value.project_name);
+    (value.case_id === null || isNonEmptyString(value.case_id));
 }
 
 export function buildComplianceWorkQueueResult(

@@ -34,7 +34,6 @@ function buildCase(overrides: Partial<Case> = {}): Case {
 const protocol = (caseId: string, id = `protocol-${caseId}`) => ({
   id,
   case_id: caseId,
-  project_name: `Project ${caseId}`,
 });
 
 describe("buildComplianceWorkQueue", () => {
