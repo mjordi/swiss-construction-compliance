@@ -1496,15 +1496,15 @@ export default function CasesPage() {
     );
   }, [formData.contractDate, formData.discoveryDate]);
 
-  const caseAcceptanceDateValidationError = useMemo(() => {
-    if (!formData.contractDate || !formData.discoveryDate) return null;
-    return validateAcceptanceChronology(
+  const caseAcceptanceDateValidationError =
+    !formData.contractDate || !formData.discoveryDate
+      ? null
+      : validateAcceptanceChronology(
       formData.contractDate,
       formData.acceptanceDate,
       formData.discoveryDate,
       getSwissCalendarDateInputValue()
     );
-  }, [formData.acceptanceDate, formData.contractDate, formData.discoveryDate]);
 
   const editCaseDateValidationError = useMemo(() => {
     if (!editFormData.contractDate || !editFormData.discoveryDate) return null;
@@ -1514,15 +1514,15 @@ export default function CasesPage() {
     );
   }, [editFormData.contractDate, editFormData.discoveryDate]);
 
-  const editCaseAcceptanceDateValidationError = useMemo(() => {
-    if (!editFormData.contractDate || !editFormData.discoveryDate) return null;
-    return validateAcceptanceChronology(
+  const editCaseAcceptanceDateValidationError =
+    !editFormData.contractDate || !editFormData.discoveryDate
+      ? null
+      : validateAcceptanceChronology(
       editFormData.contractDate,
       editFormData.acceptanceDate,
       editFormData.discoveryDate,
       getSwissCalendarDateInputValue()
     );
-  }, [editFormData.acceptanceDate, editFormData.contractDate, editFormData.discoveryDate]);
 
   const hasDeletingCases = Object.keys(deletingCaseIds).length > 0;
   const hasChecklistSave = Object.values(checklistSavingByCase).some(Boolean);

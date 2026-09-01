@@ -15,6 +15,7 @@ import {
   getDaysRemaining,
   getSwissCalendarDateInputValue,
   getMillisecondsUntilNextSwissCalendarDay,
+  validateAcceptanceChronology,
   OR_REVISION_DATE,
 } from "../lib/legal-utils";
 
@@ -135,6 +136,13 @@ describe("Swiss legal calendar day", () => {
     expect(
       getMillisecondsUntilNextSwissCalendarDay(new Date("2026-12-31T22:30:00.000Z"))
     ).toBe(30 * 60 * 1000);
+  });
+
+  it("revalidates acceptance chronology against the current Swiss day", () => {
+    expect(validateAcceptanceChronology("2026-04-01", "2026-04-20", "2026-04-20", "2026-04-19"))
+      .toBe("acceptance-in-future");
+    expect(validateAcceptanceChronology("2026-04-01", "2026-04-20", "2026-04-20", "2026-04-20"))
+      .toBeNull();
   });
 });
 
