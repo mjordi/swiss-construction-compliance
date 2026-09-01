@@ -255,14 +255,17 @@ describe("locales", () => {
       "deadlines-portfolio-download-error",
       "deadlines-portfolio-guidance",
       "deadlines-portfolio-event-only-guidance",
+      "deadlines-portfolio-milestone-notice",
+      "deadlines-portfolio-milestone-warranty-2y",
+      "deadlines-portfolio-milestone-limitation-5y",
       "deadlines-portfolio-ics-summary-template",
-      "deadlines-portfolio-ics-deadline",
       "deadlines-portfolio-ics-source-label",
       "deadlines-portfolio-ics-source",
       "deadlines-portfolio-ics-project-label",
       "deadlines-portfolio-ics-case-label",
       "deadlines-portfolio-ics-contract-label",
       "deadlines-portfolio-ics-discovery-label",
+      "deadlines-portfolio-ics-acceptance-label",
       "deadlines-portfolio-ics-point-in-time",
       "deadlines-portfolio-ics-alarm-singular",
       "deadlines-portfolio-ics-alarm-plural",
@@ -293,14 +296,49 @@ describe("locales", () => {
       expect(translations["deadlines-portfolio-ics-point-in-time"]).toMatch(importTerms[locale]);
       expect(translations["deadlines-portfolio-ics-point-in-time"]).toMatch(noDeliveryTerms[locale]);
       for (const key of [
+        "deadlines-portfolio-milestone-notice",
+        "deadlines-portfolio-milestone-warranty-2y",
+        "deadlines-portfolio-milestone-limitation-5y",
         "deadlines-portfolio-ics-source-label",
         "deadlines-portfolio-ics-project-label",
         "deadlines-portfolio-ics-case-label",
         "deadlines-portfolio-ics-contract-label",
         "deadlines-portfolio-ics-discovery-label",
+        "deadlines-portfolio-ics-acceptance-label",
       ] as const) {
         expect(translations[key].trim(), `Locale '${lang}' calendar label '${key}' must not be blank`).not.toBe("");
       }
+    }
+  });
+
+  it("describes portfolio milestones without claiming monitoring or legal completeness", () => {
+    const milestoneTerms = {
+      de: [/rügefrist/i, /2-jahres.*sia/i, /5-jahres.*or/i],
+      fr: [/notification.*60 jours/i, /garantie sia.*2 ans/i, /prescription.*5 ans.*co/i],
+      it: [/notifica.*60 giorni/i, /garanzia sia.*2 anni/i, /prescrizione.*5 anni.*co/i],
+      en: [/60-day notice/i, /two-year SIA warranty/i, /five-year CO limitation/i],
+    } as const;
+    const prohibitedClaims = {
+      de: /aktive überwachung|rechtlich vollständig/i,
+      fr: /surveillance active|exhaustivité juridique/i,
+      it: /monitoraggio attivo|completezza giuridica/i,
+      en: /active monitoring|legally complete/i,
+    } as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      const locale = lang as keyof typeof milestoneTerms;
+      const labels = [
+        translations["deadlines-portfolio-milestone-notice"],
+        translations["deadlines-portfolio-milestone-warranty-2y"],
+        translations["deadlines-portfolio-milestone-limitation-5y"],
+      ];
+      milestoneTerms[locale].forEach((term, index) => expect(labels[index]).toMatch(term));
+      const portfolioCopy = [
+        translations["deadlines-portfolio-description"],
+        translations["deadlines-portfolio-empty"],
+        translations["deadlines-portfolio-count"],
+      ].join(" ");
+      expect(portfolioCopy).not.toMatch(prohibitedClaims[locale]);
     }
   });
 

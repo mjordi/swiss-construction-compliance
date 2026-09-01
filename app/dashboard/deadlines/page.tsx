@@ -42,6 +42,12 @@ type PortfolioState = {
   rows: CaseDeadlinePortfolioRow[];
 };
 
+const PORTFOLIO_MILESTONE_LABEL_KEYS = {
+  notice: "deadlines-portfolio-milestone-notice",
+  "warranty-2y": "deadlines-portfolio-milestone-warranty-2y",
+  "limitation-5y": "deadlines-portfolio-milestone-limitation-5y",
+} as const satisfies Record<CaseDeadlinePortfolioRow["kind"], TranslationKey>;
+
 function getLongDeadlineStatus(days: number): "ok" | "warning" | "urgent" | "expired" {
   if (days < 0) return "expired";
   if (days <= 14) return "urgent";
@@ -170,7 +176,7 @@ export default function DeadlinesPage() {
       if (!requestIsCurrent()) return null;
       let query = supabase
         .from("cases")
-        .select("id, project_name, contract_date, discovery_date, status")
+        .select("id, project_name, contract_date, discovery_date, acceptance_date, status")
         .eq("user_id", ownerId);
       if (afterId) query = query.gt("id", afterId);
       const result = await query
@@ -507,13 +513,18 @@ export default function DeadlinesPage() {
 
       const calendarCopy: CaseDeadlinePortfolioCalendarCopy = {
         summaryTemplate: t("deadlines-portfolio-ics-summary-template"),
-        deadline: t("deadlines-portfolio-ics-deadline"),
+        deadlineLabels: {
+          notice: t(PORTFOLIO_MILESTONE_LABEL_KEYS.notice),
+          "warranty-2y": t(PORTFOLIO_MILESTONE_LABEL_KEYS["warranty-2y"]),
+          "limitation-5y": t(PORTFOLIO_MILESTONE_LABEL_KEYS["limitation-5y"]),
+        },
         sourceLabel: t("deadlines-portfolio-ics-source-label"),
         source: t("deadlines-portfolio-ics-source"),
         projectLabel: t("deadlines-portfolio-ics-project-label"),
         caseLabel: t("deadlines-portfolio-ics-case-label"),
         contractDateLabel: t("deadlines-portfolio-ics-contract-label"),
         discoveryDateLabel: t("deadlines-portfolio-ics-discovery-label"),
+        acceptanceDateLabel: t("deadlines-portfolio-ics-acceptance-label"),
         pointInTimeNotice: t("deadlines-portfolio-ics-point-in-time"),
         alarmDescriptionSingular: t("deadlines-portfolio-ics-alarm-singular"),
         alarmDescriptionPlural: t("deadlines-portfolio-ics-alarm-plural"),
@@ -699,13 +710,17 @@ export default function DeadlinesPage() {
               </p>
               <ul className="mt-3 space-y-2 text-sm text-muted">
                 {visiblePortfolioState.rows.map((row) => (
-                  <li key={`${row.caseId}-${row.deadlineDay}`} className="flex flex-wrap justify-between gap-2">
-                    <Link
-                      href={buildCaseHandoffHref(row.caseId)}
-                      className="text-cream transition-colors hover:text-accent"
-                    >
-                      {row.projectName}
-                    </Link>
+                  <li key={`${row.caseId}-${row.kind}-${row.deadlineDay}`} className="flex flex-wrap justify-between gap-2">
+                    <span>
+                      <span>{t(PORTFOLIO_MILESTONE_LABEL_KEYS[row.kind])}</span>
+                      <span aria-hidden="true">: </span>
+                      <Link
+                        href={buildCaseHandoffHref(row.caseId)}
+                        className="text-cream transition-colors hover:text-accent"
+                      >
+                        {row.projectName}
+                      </Link>
+                    </span>
                     <time dateTime={row.deadlineDay}>{formatLocalizedDate(row.deadline, lang)}</time>
                   </li>
                 ))}

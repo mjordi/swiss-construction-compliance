@@ -35,6 +35,7 @@ type CaseRecord = {
   canton: string;
   contract_date: string;
   discovery_date: string;
+  acceptance_date: string | null;
   notice_recipient_name: string | null;
   notice_recipient_address: string | null;
   defect_statement: string | null;
@@ -313,6 +314,7 @@ function buildCase(id: string, projectName: string): CaseRecord {
     canton: "ZH",
     contract_date: "2026-03-01T00:00:00.000Z",
     discovery_date: "2026-03-21T00:00:00.000Z",
+    acceptance_date: id === "case-1" ? "2026-03-25" : null,
     notice_recipient_name: id === "case-1" ? "Alpine Build AG" : null,
     notice_recipient_address: id === "case-1" ? "Werkstrasse 4\n8000 Zürich" : null,
     defect_statement: id === "case-1" ? "Water ingress at the north facade." : null,
@@ -384,6 +386,7 @@ describe("cases inline edit", () => {
   it("reviews complete and incomplete notice source facts and persists normalized edits", async () => {
     updateEqMock.mockImplementationOnce(async (payload: Record<string, unknown>, field: string, caseId: string) => {
       expect(payload).toMatchObject({
+        acceptance_date: "2026-03-26",
         notice_recipient_name: "New Builder AG",
         notice_recipient_address: "Main Road 8\n3000 Bern",
         defect_statement: "Cracked waterproofing membrane.",
@@ -407,6 +410,10 @@ describe("cases inline edit", () => {
     expect(within(incompleteCard).getByText("cases-notice-source-incomplete")).toBeTruthy();
 
     fireEvent.click(within(completeCard).getByRole("button", { name: "cases-edit" }));
+    expect((within(completeCard).getByLabelText("cases-acceptance-date-input") as HTMLInputElement).value).toBe("2026-03-25");
+    fireEvent.change(within(completeCard).getByLabelText("cases-acceptance-date-input"), {
+      target: { value: "2026-03-26" },
+    });
     fireEvent.change(within(completeCard).getByLabelText("cases-notice-recipient-name"), {
       target: { value: "  New Builder AG  " },
     });
@@ -417,6 +424,26 @@ describe("cases inline edit", () => {
       target: { value: "  Cracked waterproofing membrane.  " },
     });
     fireEvent.click(within(completeCard).getByRole("button", { name: "cases-save" }));
+
+    await waitFor(() => expect(updateEqMock).toHaveBeenCalledTimes(1));
+  });
+
+  it("hydrates a missing acceptance date as blank and explicitly clears it as null", async () => {
+    updateEqMock.mockImplementationOnce(async (payload: Record<string, unknown>) => {
+      expect(payload.acceptance_date).toBeNull();
+      return { error: null };
+    });
+
+    render(<CasesPage />);
+
+    const incompleteCard = (await screen.findByText("Riverside Hall")).closest("article") as HTMLElement;
+    fireEvent.click(within(incompleteCard).getByRole("button", { name: "cases-edit" }));
+
+    const acceptanceDate = within(incompleteCard).getByLabelText("cases-acceptance-date-input") as HTMLInputElement;
+    expect(acceptanceDate.value).toBe("");
+    expect(acceptanceDate.required).toBe(false);
+
+    fireEvent.click(within(incompleteCard).getByRole("button", { name: "cases-save" }));
 
     await waitFor(() => expect(updateEqMock).toHaveBeenCalledTimes(1));
   });

@@ -20,6 +20,7 @@ function buildCase(overrides: Partial<Case> = {}): Case {
     canton: "ZH",
     contract_date: "2026-01-10T00:00:00.000Z",
     discovery_date: "2026-07-01T00:00:00.000Z",
+    acceptance_date: null,
     notice_recipient_name: null,
     notice_recipient_address: null,
     defect_statement: null,

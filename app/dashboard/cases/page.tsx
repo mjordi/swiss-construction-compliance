@@ -223,6 +223,7 @@ type CaseFormState = {
   canton: string;
   contractDate: string;
   discoveryDate: string;
+  acceptanceDate: string;
   noticeRecipientName: string;
   noticeRecipientAddress: string;
   defectStatement: string;
@@ -233,17 +234,19 @@ const EMPTY_CASE_FORM: CaseFormState = {
   canton: "ZH",
   contractDate: "",
   discoveryDate: "",
+  acceptanceDate: "",
   noticeRecipientName: "",
   noticeRecipientAddress: "",
   defectStatement: "",
 };
 
-function buildCaseFormState(item: Pick<Case, "project_name" | "canton" | "contract_date" | "discovery_date" | "notice_recipient_name" | "notice_recipient_address" | "defect_statement">): CaseFormState {
+function buildCaseFormState(item: Pick<Case, "project_name" | "canton" | "contract_date" | "discovery_date" | "acceptance_date" | "notice_recipient_name" | "notice_recipient_address" | "defect_statement">): CaseFormState {
   return {
     projectName: item.project_name,
     canton: item.canton,
     contractDate: item.contract_date.slice(0, 10),
     discoveryDate: item.discovery_date.slice(0, 10),
+    acceptanceDate: item.acceptance_date?.slice(0, 10) ?? "",
     noticeRecipientName: item.notice_recipient_name ?? "",
     noticeRecipientAddress: item.notice_recipient_address ?? "",
     defectStatement: item.defect_statement ?? "",
@@ -2475,6 +2478,7 @@ export default function CasesPage() {
         canton: formData.canton,
         contract_date: formData.contractDate,
         discovery_date: formData.discoveryDate,
+        acceptance_date: formData.acceptanceDate || null,
         notice_recipient_name: normalizeOptionalSourceFact(formData.noticeRecipientName),
         notice_recipient_address: normalizeOptionalSourceFact(formData.noticeRecipientAddress),
         defect_statement: normalizeOptionalSourceFact(formData.defectStatement),
@@ -2640,6 +2644,7 @@ export default function CasesPage() {
         canton: editFormData.canton,
         contract_date: editFormData.contractDate,
         discovery_date: editFormData.discoveryDate,
+        acceptance_date: editFormData.acceptanceDate || null,
         notice_recipient_name: normalizeOptionalSourceFact(editFormData.noticeRecipientName),
         notice_recipient_address: normalizeOptionalSourceFact(editFormData.noticeRecipientAddress),
         defect_statement: normalizeOptionalSourceFact(editFormData.defectStatement),
@@ -2784,6 +2789,10 @@ export default function CasesPage() {
               {caseDateValidationError === "discovery-before-contract" && (
                 <p className="mt-2 text-xs text-red-400">{t("calc-discovery-before-contract")}</p>
               )}
+            </div>
+            <div>
+              <label htmlFor="cases-acceptance-date" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-acceptance-date-input")}</label>
+              <input id="cases-acceptance-date" type="date" value={formData.acceptanceDate} onChange={(e) => updateFormData({ ...formData, acceptanceDate: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none [color-scheme:dark] disabled:cursor-not-allowed disabled:opacity-60" disabled={saving} />
             </div>
             <div>
               <label htmlFor="cases-notice-recipient-name" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-notice-recipient-name")}</label>
@@ -3218,6 +3227,19 @@ export default function CasesPage() {
                         {editCaseDateValidationError === "discovery-before-contract" && (
                           <p className="mt-2 text-xs text-red-400">{t("calc-discovery-before-contract")}</p>
                         )}
+                      </div>
+                      <div>
+                        <label htmlFor={`cases-edit-acceptance-date-${item.id}`} className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+                          {t("cases-acceptance-date-input")}
+                        </label>
+                        <input
+                          id={`cases-edit-acceptance-date-${item.id}`}
+                          type="date"
+                          value={editFormData.acceptanceDate}
+                          onChange={(event) => updateEditForm({ ...editFormData, acceptanceDate: event.target.value })}
+                          className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm text-cream outline-none [color-scheme:dark] focus:border-accent/40"
+                          disabled={updatingCaseId === item.id || hasDeletingCases}
+                        />
                       </div>
                       <div>
                         <label htmlFor={`cases-edit-notice-recipient-name-${item.id}`} className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
