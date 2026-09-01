@@ -12,6 +12,7 @@ export interface Case {
   canton: string;
   contract_date: string;
   discovery_date: string;
+  acceptance_date: string | null;
   notice_recipient_name: string | null;
   notice_recipient_address: string | null;
   defect_statement: string | null;

@@ -18,6 +18,7 @@ type CaseRecord = {
   canton: string;
   contract_date: string;
   discovery_date: string;
+  acceptance_date: string | null;
   checklist: Record<string, boolean> | null;
   created_at: string;
   updated_at: string;
@@ -165,6 +166,7 @@ function buildCase(id: string, projectName: string): CaseRecord {
     canton: "ZH",
     contract_date: "2026-03-01T00:00:00.000Z",
     discovery_date: "2026-03-21T00:00:00.000Z",
+    acceptance_date: null,
     checklist: null,
     created_at: "2026-03-21T00:00:00.000Z",
     updated_at: "2026-03-21T00:00:00.000Z",
@@ -271,6 +273,47 @@ describe("cases mutation feedback", () => {
     expect((screen.getByLabelText("cases-discovery-date-input") as HTMLInputElement).value).toBe("2026-04-20");
   });
 
+  it("creates with an entered acceptance date and sends null when it is blank", async () => {
+    insertMock.mockResolvedValue({ error: { message: "keep form open" } });
+
+    render(<CasesPage />);
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+
+    openCreateForm();
+    fillCreateForm("Acceptance House");
+    const acceptanceDate = screen.getByLabelText("cases-acceptance-date-input") as HTMLInputElement;
+    expect(acceptanceDate.value).toBe("");
+    expect(acceptanceDate.required).toBe(false);
+
+    fireEvent.change(acceptanceDate, { target: { value: "2026-04-15" } });
+    fireEvent.click(screen.getByRole("button", { name: "cases-save" }));
+    await waitFor(() => expect(insertMock).toHaveBeenCalledTimes(1));
+    expect(insertMock.mock.calls[0][0]).toMatchObject({ acceptance_date: "2026-04-15" });
+
+    fireEvent.change(acceptanceDate, { target: { value: "" } });
+    fireEvent.click(screen.getByRole("button", { name: "cases-save" }));
+    await waitFor(() => expect(insertMock).toHaveBeenCalledTimes(2));
+    expect(insertMock.mock.calls[1][0]).toMatchObject({ acceptance_date: null });
+  });
+
+  it.each([
+    ["cases-acceptance-before-contract", "2026-03-31"],
+    ["cases-acceptance-after-discovery", "2026-04-21"],
+  ])("does not persist invalid acceptance chronology: %s", async (message: string, acceptanceDate: string) => {
+    render(<CasesPage />);
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+
+    openCreateForm();
+    fillCreateForm("Invalid acceptance");
+    fireEvent.change(screen.getByLabelText("cases-acceptance-date-input"), {
+      target: { value: acceptanceDate },
+    });
+
+    expect(screen.getByText(message)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "cases-save" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
   it("clears stale create feedback on input change and after a successful retry closes the form", async () => {
     insertMock
       .mockRejectedValueOnce(new Error("network down"))
@@ -333,6 +376,7 @@ describe("cases mutation feedback", () => {
       expect((screen.getByLabelText("cases-canton-label") as HTMLSelectElement).disabled).toBe(true);
       expect((screen.getByLabelText("cases-contract-date-input") as HTMLInputElement).disabled).toBe(true);
       expect((screen.getByLabelText("cases-discovery-date-input") as HTMLInputElement).disabled).toBe(true);
+      expect((screen.getByLabelText("cases-acceptance-date-input") as HTMLInputElement).disabled).toBe(true);
       expect((screen.getByRole("button", { name: /cases-add-case/i }) as HTMLButtonElement).disabled).toBe(true);
       expect((screen.getByRole("button", { name: "cases-cancel" }) as HTMLButtonElement).disabled).toBe(true);
     });

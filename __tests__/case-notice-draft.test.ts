@@ -11,6 +11,7 @@ function persistedCase(overrides: Partial<Case> = {}): Case {
     canton: "ZH",
     contract_date: "2026-03-01T00:00:00.000Z",
     discovery_date: "2026-03-21T00:00:00.000Z",
+    acceptance_date: null,
     notice_recipient_name: "Alpine Build AG",
     notice_recipient_address: "Werkstrasse 4\n8000 Zürich",
     defect_statement: "Water ingress at the north facade.",

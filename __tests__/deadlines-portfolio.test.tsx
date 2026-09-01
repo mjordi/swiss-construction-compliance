@@ -14,6 +14,7 @@ let responseFactory: (ownerId: string, afterId: string | null) =>
   | { data: Array<Record<string, unknown>> | null; error: { message: string } | null };
 const ownerScopes: string[] = [];
 const requestedCursors: Array<string | null> = [];
+const selectedColumns: string[] = [];
 
 function caseQuery(ownerId: string, afterId: string | null = null) {
   return {
@@ -35,12 +36,15 @@ const supabaseMock = {
   from: vi.fn((table: string) => {
     if (table !== "cases") throw new Error(`Unexpected table: ${table}`);
     return {
-      select: vi.fn(() => ({
-        eq: vi.fn((_column: string, ownerId: string) => {
-          ownerScopes.push(ownerId);
-          return caseQuery(ownerId);
-        }),
-      })),
+      select: vi.fn((columns: string) => {
+        selectedColumns.push(columns);
+        return {
+          eq: vi.fn((_column: string, ownerId: string) => {
+            ownerScopes.push(ownerId);
+            return caseQuery(ownerId);
+          }),
+        };
+      }),
     };
   }),
 };
@@ -49,7 +53,10 @@ vi.mock("@/context/AuthContext", () => ({ useAuth: () => authState }));
 vi.mock("@/context/LanguageContext", () => ({
   useLanguage: () => ({
     lang: languageState.lang,
-    t: (key: string) => key.startsWith("deadlines-portfolio-ics-") ? `${languageState.lang}:${key}` : key,
+    t: (key: string) =>
+      key.startsWith("deadlines-portfolio-ics-") || key.startsWith("deadlines-portfolio-milestone-")
+        ? `${languageState.lang}:${key}`
+        : key,
   }),
 }));
 vi.mock("@/components/dashboard/PageHeader", () => ({
@@ -64,12 +71,19 @@ vi.mock("@/lib/case-deadline-portfolio", async (importOriginal) => {
 
 import DeadlinesPage from "@/app/dashboard/deadlines/page";
 
-function caseRow(id: string, projectName: string, discoveryDate = "2026-05-01", status = "active") {
+function caseRow(
+  id: string,
+  projectName: string,
+  discoveryDate = "2026-05-01",
+  status = "active",
+  acceptanceDate: string | null = null
+) {
   return {
     id,
     project_name: projectName,
     contract_date: "2026-01-15",
     discovery_date: discoveryDate,
+    acceptance_date: acceptanceDate,
     status,
   };
 }
@@ -87,6 +101,7 @@ describe("Case deadline portfolio on the deadlines page", () => {
     responseFactory = () => ({ data: [], error: null });
     ownerScopes.length = 0;
     requestedCursors.length = 0;
+    selectedColumns.length = 0;
     supabaseMock.from.mockClear();
     portfolioMocks.generateICS.mockClear();
     createObjectURL.mockReset();
@@ -111,6 +126,9 @@ describe("Case deadline portfolio on the deadlines page", () => {
 
     expect(screen.getByText("deadlines-portfolio-loading")).toBeTruthy();
     expect(ownerScopes).toEqual(["owner-1"]);
+    expect(selectedColumns).toEqual([
+      "id, project_name, contract_date, discovery_date, acceptance_date, status",
+    ]);
     await waitFor(() => expect(resolveQuery).toBeTypeOf("function"));
 
     resolveQuery?.({
@@ -140,6 +158,37 @@ describe("Case deadline portfolio on the deadlines page", () => {
     const region = await screen.findByRole("region", { name: "deadlines-portfolio-title" });
     const caseLink = await within(region).findByRole("link", { name: "Exact Alpine Case" });
     expect(caseLink.getAttribute("href")).toBe("/dashboard/cases?case=case+%2F+exact%3F");
+  });
+
+  it("renders every eligible labeled notice and acceptance milestone with a localized date", async () => {
+    responseFactory = () => ({
+      data: [caseRow("all-milestones", "Milestone Project", "2026-05-01", "active", "2026-02-01")],
+      error: null,
+    });
+
+    render(<DeadlinesPage />);
+
+    const region = await screen.findByRole("region", { name: "deadlines-portfolio-title" });
+    expect(within(region).getByText("3")).toBeTruthy();
+    expect(within(region).getByText("en:deadlines-portfolio-milestone-notice")).toBeTruthy();
+    expect(within(region).getByText("en:deadlines-portfolio-milestone-warranty-2y")).toBeTruthy();
+    expect(within(region).getByText("en:deadlines-portfolio-milestone-limitation-5y")).toBeTruthy();
+    expect(within(region).getAllByRole("link", { name: "Milestone Project" })).toHaveLength(3);
+    expect(within(region).getByText("30 June 2026")).toBeTruthy();
+    expect(within(region).getByText("1 February 2028")).toBeTruthy();
+    expect(within(region).getByText("1 February 2031")).toBeTruthy();
+  });
+
+  it("keeps a Case without acceptance notice-only", async () => {
+    responseFactory = () => ({ data: [caseRow("notice-only", "Notice Only")], error: null });
+
+    render(<DeadlinesPage />);
+
+    const region = await screen.findByRole("region", { name: "deadlines-portfolio-title" });
+    expect(within(region).getByText("1")).toBeTruthy();
+    expect(within(region).getByText("en:deadlines-portfolio-milestone-notice")).toBeTruthy();
+    expect(within(region).queryByText("en:deadlines-portfolio-milestone-warranty-2y")).toBeNull();
+    expect(within(region).queryByText("en:deadlines-portfolio-milestone-limitation-5y")).toBeNull();
   });
 
   it("renders the localized empty state", async () => {
@@ -355,6 +404,12 @@ describe("Case deadline portfolio on the deadlines page", () => {
     expect(portfolioMocks.generateICS.mock.calls[0][1]).toEqual([]);
     expect(portfolioMocks.generateICS.mock.calls[0][2]).toMatchObject({
       summaryTemplate: "it:deadlines-portfolio-ics-summary-template",
+      deadlineLabels: {
+        notice: "it:deadlines-portfolio-milestone-notice",
+        "warranty-2y": "it:deadlines-portfolio-milestone-warranty-2y",
+        "limitation-5y": "it:deadlines-portfolio-milestone-limitation-5y",
+      },
+      acceptanceDateLabel: "it:deadlines-portfolio-ics-acceptance-label",
       pointInTimeNotice: "it:deadlines-portfolio-ics-point-in-time",
     });
     expect(await within(region).findByRole("button", { name: "deadlines-portfolio-event-only-ready" })).toBeTruthy();
