@@ -162,7 +162,7 @@ describe("Case deadline portfolio on the deadlines page", () => {
 
   it("renders every eligible labeled notice and acceptance milestone with a localized date", async () => {
     responseFactory = () => ({
-      data: [caseRow("all-milestones", "Milestone Project", "2026-05-01", "active", "2024-06-30")],
+      data: [caseRow("all-milestones", "Milestone Project", "2026-05-01", "active", "2026-02-01")],
       error: null,
     });
 
@@ -174,8 +174,9 @@ describe("Case deadline portfolio on the deadlines page", () => {
     expect(within(region).getByText("en:deadlines-portfolio-milestone-warranty-2y")).toBeTruthy();
     expect(within(region).getByText("en:deadlines-portfolio-milestone-limitation-5y")).toBeTruthy();
     expect(within(region).getAllByRole("link", { name: "Milestone Project" })).toHaveLength(3);
-    expect(within(region).getAllByText("30 June 2026")).toHaveLength(2);
-    expect(within(region).getByText("30 June 2029")).toBeTruthy();
+    expect(within(region).getByText("30 June 2026")).toBeTruthy();
+    expect(within(region).getByText("1 February 2028")).toBeTruthy();
+    expect(within(region).getByText("1 February 2031")).toBeTruthy();
   });
 
   it("keeps a Case without acceptance notice-only", async () => {

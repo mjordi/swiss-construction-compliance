@@ -69,6 +69,25 @@ export function getSwissCalendarDateInputValue(now: Date = new Date()): string {
   return `${year}-${String(month).padStart(2, "0")}-${String(day).padStart(2, "0")}`;
 }
 
+export type AcceptanceChronologyError =
+  | "acceptance-before-contract"
+  | "acceptance-after-discovery"
+  | "acceptance-in-future";
+
+/** Validates an optional acceptance day against the Case chronology. */
+export function validateAcceptanceChronology(
+  contractDay: string,
+  acceptanceDay: string,
+  discoveryDay: string,
+  today: string = getSwissCalendarDateInputValue()
+): AcceptanceChronologyError | null {
+  if (!acceptanceDay) return null;
+  if (acceptanceDay < contractDay) return "acceptance-before-contract";
+  if (acceptanceDay > discoveryDay) return "acceptance-after-discovery";
+  if (acceptanceDay > today) return "acceptance-in-future";
+  return null;
+}
+
 /** Milliseconds until the next legal calendar day begins in Europe/Zurich. */
 export function getMillisecondsUntilNextSwissCalendarDay(now: Date = new Date()): number {
   const current = getSwissCalendarParts(now);

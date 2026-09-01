@@ -63,8 +63,10 @@ import { buildCaseVaultHref } from "@/lib/vault";
 import {
   formatDateCH,
   formatTimestampDateCH,
+  getSwissCalendarDateInputValue,
   getMillisecondsUntilNextSwissCalendarDay,
   sanitizeDateQueryParam,
+  validateAcceptanceChronology,
   validateRuegefristInput,
 } from "@/lib/legal-utils";
 import type { TranslationKey } from "@/locales";
@@ -1494,6 +1496,16 @@ export default function CasesPage() {
     );
   }, [formData.contractDate, formData.discoveryDate]);
 
+  const caseAcceptanceDateValidationError = useMemo(() => {
+    if (!formData.contractDate || !formData.discoveryDate) return null;
+    return validateAcceptanceChronology(
+      formData.contractDate,
+      formData.acceptanceDate,
+      formData.discoveryDate,
+      getSwissCalendarDateInputValue()
+    );
+  }, [formData.acceptanceDate, formData.contractDate, formData.discoveryDate]);
+
   const editCaseDateValidationError = useMemo(() => {
     if (!editFormData.contractDate || !editFormData.discoveryDate) return null;
     return validateRuegefristInput(
@@ -1501,6 +1513,16 @@ export default function CasesPage() {
       new Date(editFormData.discoveryDate)
     );
   }, [editFormData.contractDate, editFormData.discoveryDate]);
+
+  const editCaseAcceptanceDateValidationError = useMemo(() => {
+    if (!editFormData.contractDate || !editFormData.discoveryDate) return null;
+    return validateAcceptanceChronology(
+      editFormData.contractDate,
+      editFormData.acceptanceDate,
+      editFormData.discoveryDate,
+      getSwissCalendarDateInputValue()
+    );
+  }, [editFormData.acceptanceDate, editFormData.contractDate, editFormData.discoveryDate]);
 
   const hasDeletingCases = Object.keys(deletingCaseIds).length > 0;
   const hasChecklistSave = Object.values(checklistSavingByCase).some(Boolean);
@@ -2464,7 +2486,8 @@ export default function CasesPage() {
       !formData.projectName ||
       !formData.contractDate ||
       !formData.discoveryDate ||
-      caseDateValidationError
+      caseDateValidationError ||
+      caseAcceptanceDateValidationError
     ) {
       return;
     }
@@ -2622,6 +2645,7 @@ export default function CasesPage() {
       !editFormData.contractDate ||
       !editFormData.discoveryDate ||
       editCaseDateValidationError ||
+      editCaseAcceptanceDateValidationError ||
       updatingCaseIdRef.current ||
       noticeDispatchInFlightIdsRef.current.has(caseId) ||
       dispatchEvidenceInFlightRef.current.has(caseId) ||
@@ -2793,6 +2817,9 @@ export default function CasesPage() {
             <div>
               <label htmlFor="cases-acceptance-date" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-acceptance-date-input")}</label>
               <input id="cases-acceptance-date" type="date" value={formData.acceptanceDate} onChange={(e) => updateFormData({ ...formData, acceptanceDate: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none [color-scheme:dark] disabled:cursor-not-allowed disabled:opacity-60" disabled={saving} />
+              {caseAcceptanceDateValidationError && (
+                <p className="mt-2 text-xs text-red-400">{t(`cases-${caseAcceptanceDateValidationError}`)}</p>
+              )}
             </div>
             <div>
               <label htmlFor="cases-notice-recipient-name" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-notice-recipient-name")}</label>
@@ -2808,7 +2835,7 @@ export default function CasesPage() {
             </div>
           </div>
           <div className="flex gap-3">
-            <button type="submit" disabled={saving || !!caseDateValidationError} className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white font-semibold rounded-lg text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
+            <button type="submit" disabled={saving || !!caseDateValidationError || !!caseAcceptanceDateValidationError} className="px-5 py-2.5 bg-accent hover:bg-accent/90 text-white font-semibold rounded-lg text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed">
               {saving && <Loader2 className="w-4 h-4 animate-spin" />} {t("cases-save")}
             </button>
             <button type="button" onClick={closeCreateForm} disabled={saving} className="px-5 py-2.5 bg-white/[0.03] border border-white/[0.06] text-muted hover:text-cream font-medium rounded-lg text-sm disabled:cursor-not-allowed disabled:opacity-50">
@@ -3240,6 +3267,9 @@ export default function CasesPage() {
                           className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm text-cream outline-none [color-scheme:dark] focus:border-accent/40"
                           disabled={updatingCaseId === item.id || hasDeletingCases}
                         />
+                        {editCaseAcceptanceDateValidationError && (
+                          <p className="mt-2 text-xs text-red-400">{t(`cases-${editCaseAcceptanceDateValidationError}`)}</p>
+                        )}
                       </div>
                       <div>
                         <label htmlFor={`cases-edit-notice-recipient-name-${item.id}`} className="mb-1.5 block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
@@ -3263,7 +3293,7 @@ export default function CasesPage() {
                     <div className="mt-4 flex gap-3">
                       <button
                         type="submit"
-                        disabled={updatingCaseId === item.id || hasDeletingCases || !!editCaseDateValidationError}
+                        disabled={updatingCaseId === item.id || hasDeletingCases || !!editCaseDateValidationError || !!editCaseAcceptanceDateValidationError}
                         className="flex items-center gap-2 rounded-lg bg-accent px-5 py-2.5 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:opacity-50"
                       >
                         {updatingCaseId === item.id && <Loader2 className="h-4 w-4 animate-spin" />} {t("cases-save")}

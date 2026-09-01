@@ -4,6 +4,7 @@ import {
   getSwissCalendarDateInputValue,
   normalizeDeadlineReminderOffsets,
   parseDateInputAsUTC,
+  validateAcceptanceChronology,
 } from "@/lib/legal-utils";
 
 export const CASE_DEADLINE_PORTFOLIO_PAGE_SIZE = 500;
@@ -108,7 +109,12 @@ export function buildCaseDeadlinePortfolio(
 
       if (typeof source.acceptance_date === "string") {
         const acceptance = parseStoredCalendarDay(source.acceptance_date);
-        if (acceptance) {
+        if (
+          acceptance &&
+          contract &&
+          discovery &&
+          !validateAcceptanceChronology(contract.day, acceptance.day, discovery.day, today)
+        ) {
           for (const [kind, years] of [["warranty-2y", 2], ["limitation-5y", 5]] as const) {
             const deadline = addUTCCalendarYears(acceptance.date, years);
             const deadlineDay = deadline.toISOString().slice(0, 10);

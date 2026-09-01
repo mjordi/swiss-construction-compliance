@@ -296,6 +296,24 @@ describe("cases mutation feedback", () => {
     expect(insertMock.mock.calls[1][0]).toMatchObject({ acceptance_date: null });
   });
 
+  it.each([
+    ["cases-acceptance-before-contract", "2026-03-31"],
+    ["cases-acceptance-after-discovery", "2026-04-21"],
+  ])("does not persist invalid acceptance chronology: %s", async (message: string, acceptanceDate: string) => {
+    render(<CasesPage />);
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+
+    openCreateForm();
+    fillCreateForm("Invalid acceptance");
+    fireEvent.change(screen.getByLabelText("cases-acceptance-date-input"), {
+      target: { value: acceptanceDate },
+    });
+
+    expect(screen.getByText(message)).toBeTruthy();
+    expect((screen.getByRole("button", { name: "cases-save" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
   it("clears stale create feedback on input change and after a successful retry closes the form", async () => {
     insertMock
       .mockRejectedValueOnce(new Error("network down"))

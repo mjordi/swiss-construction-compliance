@@ -73,7 +73,7 @@ describe("Case deadline portfolio", () => {
   it("adds current acceptance milestones while ignoring null, invalid, and expired acceptance dates", () => {
     const rows = buildCaseDeadlinePortfolio(
       [
-        source("valid", "Valid", "2026-05-01", { acceptance_date: "2024-06-01" }),
+        source("valid", "Valid", "2026-05-01", { acceptance_date: "2026-02-01" }),
         source("null", "Null", "2026-05-01"),
         source("invalid", "Invalid", "2026-05-01", { acceptance_date: "2024-02-30" }),
         source("expired", "Expired milestones", "2026-05-01", { acceptance_date: "2020-05-31" }),
@@ -82,13 +82,26 @@ describe("Case deadline portfolio", () => {
     );
 
     expect(rows.map(({ caseId, kind, deadlineDay, acceptanceDay }) => ({ caseId, kind, deadlineDay, acceptanceDay }))).toEqual([
-      { caseId: "valid", kind: "warranty-2y", deadlineDay: "2026-06-01", acceptanceDay: "2024-06-01" },
       { caseId: "expired", kind: "notice", deadlineDay: "2026-06-30", acceptanceDay: null },
       { caseId: "invalid", kind: "notice", deadlineDay: "2026-06-30", acceptanceDay: null },
       { caseId: "null", kind: "notice", deadlineDay: "2026-06-30", acceptanceDay: null },
       { caseId: "valid", kind: "notice", deadlineDay: "2026-06-30", acceptanceDay: null },
-      { caseId: "valid", kind: "limitation-5y", deadlineDay: "2029-06-01", acceptanceDay: "2024-06-01" },
+      { caseId: "valid", kind: "warranty-2y", deadlineDay: "2028-02-01", acceptanceDay: "2026-02-01" },
+      { caseId: "valid", kind: "limitation-5y", deadlineDay: "2031-02-01", acceptanceDay: "2026-02-01" },
     ]);
+  });
+
+  it.each([
+    ["before contract", "2025-12-31"],
+    ["after discovery", "2026-05-02"],
+    ["in the future", "2026-06-02"],
+  ])("does not derive acceptance milestones when acceptance is %s", (_label: string, acceptanceDate: string) => {
+    const rows = buildCaseDeadlinePortfolio(
+      [source("invalid-chronology", "Invalid chronology", "2026-05-01", { acceptance_date: acceptanceDate })],
+      NOW
+    );
+
+    expect(rows.map((row) => row.kind)).toEqual(["notice"]);
   });
 
   it.each(["2024-06-01T", "2024-06-01Tgarbage"])(
@@ -108,7 +121,7 @@ describe("Case deadline portfolio", () => {
   it("uses calendar-year arithmetic for leap-day acceptance milestones", () => {
     const rows = buildCaseDeadlinePortfolio(
       [source("leap", "Leap", "2025-01-01", {
-        contract_date: "2025-01-01",
+        contract_date: "2024-01-01",
         acceptance_date: "2024-02-29T12:00:00.000Z",
       })],
       new Date("2026-02-28T12:00:00.000Z")
@@ -127,8 +140,8 @@ describe("Case deadline portfolio", () => {
       for (const timezone of ["Europe/Zurich", "America/Los_Angeles", "Pacific/Kiritimati"]) {
         process.env.TZ = timezone;
         const rows = buildCaseDeadlinePortfolio(
-          [source("utc", "UTC anniversary", "invalid", {
-            contract_date: "invalid",
+          [source("utc", "UTC anniversary", "2024-04-01", {
+            contract_date: "2024-01-01",
             acceptance_date: "2024-03-31T23:30:00.000-07:00",
           })],
           new Date("2026-01-01T12:00:00.000Z")
@@ -145,7 +158,7 @@ describe("Case deadline portfolio", () => {
     }
   });
 
-  it("omits malformed notice source dates from acceptance rows and calendar descriptions", () => {
+  it("does not derive acceptance milestones without valid chronology source dates", () => {
     const rows = buildCaseDeadlinePortfolio(
       [source("acceptance-only", "Acceptance only", "not-a-discovery-date", {
         contract_date: "not-a-contract-date",
@@ -154,13 +167,7 @@ describe("Case deadline portfolio", () => {
       NOW
     );
 
-    expect(rows).toHaveLength(2);
-    expect(rows.every((row) => row.kind !== "notice" && row.contractDay === null && row.discoveryDay === null)).toBe(true);
-
-    const unfolded = generate(rows, [], NOW).replace(/\r\n[ \t]/g, "");
-    expect(unfolded).not.toContain("Contract date:");
-    expect(unfolded).not.toContain("Discovery date:");
-    expect(unfolded.match(/Acceptance date: 2024-06-01/g)).toHaveLength(2);
+    expect(rows).toEqual([]);
   });
 
   it("uses the Europe/Zurich calendar day when rejecting future discoveries", () => {
@@ -179,7 +186,7 @@ describe("Case deadline portfolio", () => {
       [
         source("z", "Beta", "2026-05-01"),
         source("b", "Alpha", "2026-05-01"),
-        source("a", "Alpha", "2026-05-01", { acceptance_date: "2024-06-30" }),
+        source("a", "Alpha", "2026-05-01", { acceptance_date: "2026-02-01" }),
         source("first", "Zulu", "2026-04-20"),
       ],
       NOW
@@ -188,9 +195,9 @@ describe("Case deadline portfolio", () => {
     expect(rows.map((row) => `${row.caseId}:${row.kind}`)).toEqual([
       "first:notice",
       "a:notice",
-      "a:warranty-2y",
       "b:notice",
       "z:notice",
+      "a:warranty-2y",
       "a:limitation-5y",
     ]);
   });
@@ -236,9 +243,9 @@ describe("Case deadline portfolio", () => {
     expect(renamed).not.toContain("DTSTAMP:20260601T000000Z");
   });
 
-  it("creates distinct kind-qualified UIDs for same-Case same-day milestones and keeps them stable across renames", () => {
+  it("creates distinct kind-qualified UIDs and keeps them stable across renames", () => {
     const rows = buildCaseDeadlinePortfolio(
-      [source("case-42", "Original project", "2026-05-01", { acceptance_date: "2024-06-30" })],
+      [source("case-42", "Original project", "2026-05-01", { acceptance_date: "2026-02-01" })],
       NOW
     );
     const first = generate(rows, [], new Date("2026-06-01T00:00:00.000Z"));
@@ -254,25 +261,27 @@ describe("Case deadline portfolio", () => {
     expect(new Set(firstUids).size).toBe(3);
     expect(firstUids.some((uid) => uid.includes("case-42-20260630@"))).toBe(true);
     expect(firstUids.some((uid) => uid.includes("-notice-"))).toBe(false);
-    expect(firstUids.some((uid) => uid.includes("-warranty-2y-20260630"))).toBe(true);
+    expect(firstUids.some((uid) => uid.includes("-warranty-2y-20280201"))).toBe(true);
     expect(renamedUids).toEqual(firstUids);
   });
 
   it("keeps acceptance UIDs distinct for Case IDs that differ only by control characters", () => {
     const rows = buildCaseDeadlinePortfolio(
       [
-        source("caseid", "Plain", "invalid", { contract_date: "invalid", acceptance_date: "2024-06-30" }),
-        source("case\u0001id", "Controlled", "invalid", { contract_date: "invalid", acceptance_date: "2024-06-30" }),
+        source("caseid", "Plain", "2026-05-01", { acceptance_date: "2026-02-01" }),
+        source("case\u0001id", "Controlled", "2026-05-01", { acceptance_date: "2026-02-01" }),
       ],
       NOW
     );
     const unfolded = generate(rows, [], NOW).replace(/\r\n[ \t]/g, "");
-    const uids = [...unfolded.matchAll(/^UID:(.+)\r$/gm)].map((match) => match[1]);
+    const uids = [...unfolded.matchAll(/^UID:(.+)\r$/gm)]
+      .map((match) => match[1])
+      .filter((uid) => uid.includes("-warranty-2y-") || uid.includes("-limitation-5y-"));
 
     expect(uids).toHaveLength(4);
     expect(new Set(uids).size).toBe(4);
-    expect(uids.some((uid) => uid.includes("case%01id-warranty-2y-20260630"))).toBe(true);
-    expect(uids.some((uid) => uid.includes("caseid-warranty-2y-20260630"))).toBe(true);
+    expect(uids.some((uid) => uid.includes("case%01id-warranty-2y-20280201"))).toBe(true);
+    expect(uids.some((uid) => uid.includes("caseid-warranty-2y-20280201"))).toBe(true);
   });
 
   it("emits no VALARM when no reminders are selected", () => {
@@ -285,7 +294,7 @@ describe("Case deadline portfolio", () => {
 
   it("localizes generated content without changing factual Case values", () => {
     const rows = buildCaseDeadlinePortfolio(
-      [source("case-7", "Casa Élite", "2026-05-01", { acceptance_date: "2024-06-01" })],
+      [source("case-7", "Casa Élite", "2026-05-01", { acceptance_date: "2026-02-01" })],
       NOW
     );
     const italian: CaseDeadlinePortfolioCalendarCopy = {
@@ -311,7 +320,7 @@ describe("Case deadline portfolio", () => {
     expect(ics).toContain("SUMMARY:BauCompliance: termine di garanzia di 2 anni — Casa Élite");
     expect(ics).toContain("SUMMARY:BauCompliance: termine di prescrizione di 5 anni — Casa Élite");
     expect(ics).toContain("Progetto: Casa Élite\\nID del caso: case-7");
-    expect(ics.match(/Data di accettazione: 2024-06-01/g)).toHaveLength(2);
+    expect(ics.match(/Data di accettazione: 2026-02-01/g)).toHaveLength(2);
     expect(ics).toContain("DESCRIPTION:termine di garanzia di 2 anni tra 1 giorno");
     expect(ics).toContain("DESCRIPTION:termine di prescrizione di 5 anni tra 7 giorni");
   });

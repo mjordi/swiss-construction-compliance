@@ -314,7 +314,7 @@ function buildCase(id: string, projectName: string): CaseRecord {
     canton: "ZH",
     contract_date: "2026-03-01T00:00:00.000Z",
     discovery_date: "2026-03-21T00:00:00.000Z",
-    acceptance_date: id === "case-1" ? "2026-03-25" : null,
+    acceptance_date: id === "case-1" ? "2026-03-20" : null,
     notice_recipient_name: id === "case-1" ? "Alpine Build AG" : null,
     notice_recipient_address: id === "case-1" ? "Werkstrasse 4\n8000 Zürich" : null,
     defect_statement: id === "case-1" ? "Water ingress at the north facade." : null,
@@ -386,7 +386,7 @@ describe("cases inline edit", () => {
   it("reviews complete and incomplete notice source facts and persists normalized edits", async () => {
     updateEqMock.mockImplementationOnce(async (payload: Record<string, unknown>, field: string, caseId: string) => {
       expect(payload).toMatchObject({
-        acceptance_date: "2026-03-26",
+        acceptance_date: "2026-03-21",
         notice_recipient_name: "New Builder AG",
         notice_recipient_address: "Main Road 8\n3000 Bern",
         defect_statement: "Cracked waterproofing membrane.",
@@ -410,9 +410,9 @@ describe("cases inline edit", () => {
     expect(within(incompleteCard).getByText("cases-notice-source-incomplete")).toBeTruthy();
 
     fireEvent.click(within(completeCard).getByRole("button", { name: "cases-edit" }));
-    expect((within(completeCard).getByLabelText("cases-acceptance-date-input") as HTMLInputElement).value).toBe("2026-03-25");
+    expect((within(completeCard).getByLabelText("cases-acceptance-date-input") as HTMLInputElement).value).toBe("2026-03-20");
     fireEvent.change(within(completeCard).getByLabelText("cases-acceptance-date-input"), {
-      target: { value: "2026-03-26" },
+      target: { value: "2026-03-21" },
     });
     fireEvent.change(within(completeCard).getByLabelText("cases-notice-recipient-name"), {
       target: { value: "  New Builder AG  " },
@@ -426,6 +426,20 @@ describe("cases inline edit", () => {
     fireEvent.click(within(completeCard).getByRole("button", { name: "cases-save" }));
 
     await waitFor(() => expect(updateEqMock).toHaveBeenCalledTimes(1));
+  });
+
+  it("does not persist an acceptance date after discovery", async () => {
+    render(<CasesPage />);
+
+    const completeCard = (await screen.findByText("Alpine Tower")).closest("article") as HTMLElement;
+    fireEvent.click(within(completeCard).getByRole("button", { name: "cases-edit" }));
+    fireEvent.change(within(completeCard).getByLabelText("cases-acceptance-date-input"), {
+      target: { value: "2026-03-22" },
+    });
+
+    expect(within(completeCard).getByText("cases-acceptance-after-discovery")).toBeTruthy();
+    expect((within(completeCard).getByRole("button", { name: "cases-save" }) as HTMLButtonElement).disabled).toBe(true);
+    expect(updateEqMock).not.toHaveBeenCalled();
   });
 
   it("hydrates a missing acceptance date as blank and explicitly clears it as null", async () => {
@@ -621,7 +635,7 @@ describe("cases inline edit", () => {
 
     fireEvent.click(screen.getByRole("button", { name: "cases-add-case" }));
     fireEvent.change(screen.getByLabelText("cases-project-name"), { target: { value: "New Site" } });
-    fireEvent.change(screen.getByLabelText("cases-contract-date-input"), { target: { value: "2026-04-01" } });
+    fireEvent.change(screen.getByLabelText("cases-contract-date-input"), { target: { value: "2026-03-01" } });
     fireEvent.change(screen.getByLabelText("cases-discovery-date-input"), { target: { value: "2026-04-02" } });
     fireEvent.change(screen.getByLabelText("cases-notice-recipient-name"), { target: { value: "  Builder AG  " } });
     fireEvent.change(screen.getByLabelText("cases-notice-recipient-address"), { target: { value: "  Road 1\n8000 Zürich  " } });
@@ -644,7 +658,7 @@ describe("cases inline edit", () => {
         expect(payload).toMatchObject({
           project_name: "Retention House Updated",
           canton: "BE",
-          contract_date: "2026-04-01",
+          contract_date: "2026-03-01",
           discovery_date: "2026-04-20",
         });
         expect(field).toBe("id");
@@ -655,7 +669,7 @@ describe("cases inline edit", () => {
                 ...item,
                 project_name: "Retention House Updated",
                 canton: "BE",
-                contract_date: "2026-04-01",
+                contract_date: "2026-03-01",
                 discovery_date: "2026-04-20",
               }
             : item
@@ -678,7 +692,7 @@ describe("cases inline edit", () => {
       target: { value: "BE" },
     });
     fireEvent.change(within(caseCard).getByLabelText("cases-contract-date-input"), {
-      target: { value: "2026-04-01" },
+      target: { value: "2026-03-01" },
     });
     fireEvent.change(within(caseCard).getByLabelText("cases-discovery-date-input"), {
       target: { value: "2026-04-20" },
@@ -689,7 +703,7 @@ describe("cases inline edit", () => {
     expect(await within(caseCard).findByText("cases-update-error")).toBeTruthy();
     expect((within(caseCard).getByLabelText("cases-project-name") as HTMLInputElement).value).toBe("Retention House");
     expect((within(caseCard).getByLabelText("cases-canton-label") as HTMLSelectElement).value).toBe("BE");
-    expect((within(caseCard).getByLabelText("cases-contract-date-input") as HTMLInputElement).value).toBe("2026-04-01");
+    expect((within(caseCard).getByLabelText("cases-contract-date-input") as HTMLInputElement).value).toBe("2026-03-01");
     expect((within(caseCard).getByLabelText("cases-discovery-date-input") as HTMLInputElement).value).toBe("2026-04-20");
 
     fireEvent.change(within(caseCard).getByLabelText("cases-project-name"), {
@@ -874,7 +888,7 @@ describe("cases inline edit", () => {
               ...item,
               project_name: "Alpine Tower Revised",
               canton: "BE",
-              contract_date: "2026-04-01",
+              contract_date: "2026-03-01",
               discovery_date: "2026-04-20",
             }
           : item
@@ -896,7 +910,7 @@ describe("cases inline edit", () => {
       target: { value: "BE" },
     });
     fireEvent.change(within(firstCard).getByLabelText("cases-contract-date-input"), {
-      target: { value: "2026-04-01" },
+      target: { value: "2026-03-01" },
     });
     fireEvent.change(within(firstCard).getByLabelText("cases-discovery-date-input"), {
       target: { value: "2026-04-20" },
@@ -909,7 +923,7 @@ describe("cases inline edit", () => {
         expect.objectContaining({
           project_name: "Alpine Tower Revised",
           canton: "BE",
-          contract_date: "2026-04-01",
+          contract_date: "2026-03-01",
           discovery_date: "2026-04-20",
         }),
         "id",
@@ -949,7 +963,7 @@ describe("cases inline edit", () => {
                 ...item,
                 project_name: "Alpine Tower Revised",
                 canton: "BE",
-                contract_date: "2026-04-01",
+                contract_date: "2026-03-01",
                 discovery_date: "2026-04-20",
               }
             : item
@@ -980,7 +994,7 @@ describe("cases inline edit", () => {
       target: { value: "BE" },
     });
     fireEvent.change(within(firstCard).getByLabelText("cases-contract-date-input"), {
-      target: { value: "2026-04-01" },
+      target: { value: "2026-03-01" },
     });
     fireEvent.change(within(firstCard).getByLabelText("cases-discovery-date-input"), {
       target: { value: "2026-04-20" },
@@ -1023,7 +1037,7 @@ describe("cases inline edit", () => {
                 ...item,
                 project_name: "Alpine Tower Revised",
                 canton: "BE",
-                contract_date: "2026-04-01",
+                contract_date: "2026-03-01",
                 discovery_date: "2026-04-20",
               }
             : item
@@ -1056,7 +1070,7 @@ describe("cases inline edit", () => {
       target: { value: "BE" },
     });
     fireEvent.change(within(firstCard).getByLabelText("cases-contract-date-input"), {
-      target: { value: "2026-04-01" },
+      target: { value: "2026-03-01" },
     });
     fireEvent.change(within(firstCard).getByLabelText("cases-discovery-date-input"), {
       target: { value: "2026-04-20" },
