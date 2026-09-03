@@ -275,6 +275,13 @@ describe("buildProtocolRegisterAuditCsv", () => {
 });
 
 describe("protocolRegisterAuditCsvFilename", () => {
+  it("requires an explicit generation timestamp", () => {
+    expectTypeOf<Parameters<typeof protocolRegisterAuditCsvFilename>>().toEqualTypeOf<
+      [generatedAt: Date]
+    >();
+    expect(protocolRegisterAuditCsvFilename).toHaveLength(1);
+  });
+
   it("uses only the UTC calendar date and contains no register PII", () => {
     const generatedAt = new Date("2026-09-03T23:30:00-02:00");
 

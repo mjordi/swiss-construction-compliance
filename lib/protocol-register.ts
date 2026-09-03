@@ -82,6 +82,6 @@ export function buildProtocolRegisterAuditCsv(
   return `\uFEFF${lines.join("\r\n")}\r\n`;
 }
 
-export function protocolRegisterAuditCsvFilename(generatedAt: Date = new Date()): string {
+export function protocolRegisterAuditCsvFilename(generatedAt: Date): string {
   return `baucompliance-protocol-register-audit-${generatedAt.toISOString().slice(0, 10)}.csv`;
 }
