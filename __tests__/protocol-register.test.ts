@@ -2,7 +2,29 @@ import { describe, expect, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Protocol } from "@/lib/database.types";
-import { protocolPdfFilename, selectFinalizedProtocolRecords } from "@/lib/protocol-register";
+import {
+  buildProtocolRegisterAuditCsv,
+  protocolPdfFilename,
+  protocolRegisterAuditCsvFilename,
+  selectFinalizedProtocolRecords,
+  type ProtocolRegisterAuditCsvLabels,
+} from "@/lib/protocol-register";
+
+const auditCsvLabels: ProtocolRegisterAuditCsvLabels = {
+  generatedAt: "Generated at",
+  scope: "Scope",
+  scopeValue: "Point-in-time finalized protocol register",
+  protocolId: "Protocol ID",
+  caseId: "Case ID",
+  standalone: "Standalone protocol",
+  project: "Project",
+  contractor: "Contractor",
+  client: "Client",
+  finalizedAt: "Finalized at",
+  signatureState: "Signature state",
+  signatureCaptured: "Captured",
+  signatureMissing: "Not captured",
+};
 
 function protocol(overrides: Partial<Protocol>): Protocol {
   return {
@@ -145,5 +167,94 @@ describe("protocolPdfFilename", () => {
 
   it("normalizes unsafe filename characters without adding record PII", () => {
     expect(protocolPdfFilename(" protocol/id? ")).toBe("baucompliance-protocol-protocol-id.pdf");
+  });
+});
+
+describe("buildProtocolRegisterAuditCsv", () => {
+  it("adds a UTF-8 BOM, CRLF metadata, and the complete localized audit-index columns", () => {
+    const csv = buildProtocolRegisterAuditCsv(
+      [
+        {
+          ...protocol({ id: "protocol-1", case_id: null }),
+          finalized_at: "2026-09-02T09:30:00.000Z",
+          signature_captured: false,
+        },
+      ],
+      auditCsvLabels,
+      new Date("2026-09-03T12:34:56.789Z"),
+    );
+
+    expect(csv).toBe(
+      '\uFEFF"Generated at","2026-09-03T12:34:56.789Z"\r\n' +
+        '"Scope","Point-in-time finalized protocol register"\r\n' +
+        "\r\n" +
+        '"Protocol ID","Case ID","Project","Contractor","Client","Finalized at","Signature state"\r\n' +
+        '"protocol-1","Standalone protocol","Private project name","Private contractor","Private client","2026-09-02T09:30:00.000Z","Not captured"\r\n',
+    );
+    expect(csv.slice(1)).not.toMatch(/(^|[^\r])\n/);
+  });
+
+  it("uses current register ordering without mutating the input", () => {
+    const rows = [
+      {
+        ...protocol({ id: "older", case_id: "case-2" }),
+        finalized_at: "2026-09-01T10:00:00.000Z",
+        signature_captured: true,
+      },
+      {
+        ...protocol({ id: "b-new", case_id: "case-3" }),
+        finalized_at: "2026-09-02T10:00:00.000Z",
+        signature_captured: false,
+      },
+      {
+        ...protocol({ id: "a-new", case_id: "case-1" }),
+        finalized_at: "2026-09-02T10:00:00.000Z",
+        signature_captured: true,
+      },
+    ];
+    const original = [...rows];
+
+    const csv = buildProtocolRegisterAuditCsv(rows, auditCsvLabels, new Date("2026-09-03T00:00:00Z"));
+
+    expect(rows).toEqual(original);
+    expect(csv.indexOf('"a-new"')).toBeLessThan(csv.indexOf('"b-new"'));
+    expect(csv.indexOf('"b-new"')).toBeLessThan(csv.indexOf('"older"'));
+    expect(csv).toContain('"case-1"');
+    expect(csv).toContain('"Captured"');
+  });
+
+  it("escapes CSV delimiters and neutralizes formulas after leading whitespace", () => {
+    const csv = buildProtocolRegisterAuditCsv(
+      [
+        {
+          ...protocol({
+            id: "formula-safe",
+            case_id: "\t@case",
+            project_name: 'Site, "North"\nPhase 2',
+            contractor: "  =DANGEROUS()",
+            client: "+SUM(1,1)",
+          }),
+          finalized_at: "2026-09-02T10:00:00.000Z",
+          signature_captured: true,
+        },
+      ],
+      auditCsvLabels,
+      new Date("2026-09-03T00:00:00Z"),
+    );
+
+    expect(csv).toContain('"\'\t@case"');
+    expect(csv).toContain('"Site, ""North""\nPhase 2"');
+    expect(csv).toContain('"\'  =DANGEROUS()"');
+    expect(csv).toContain('"\'+SUM(1,1)"');
+  });
+});
+
+describe("protocolRegisterAuditCsvFilename", () => {
+  it("uses only the UTC calendar date and contains no register PII", () => {
+    const generatedAt = new Date("2026-09-03T23:30:00-02:00");
+
+    expect(protocolRegisterAuditCsvFilename(generatedAt)).toBe(
+      "baucompliance-protocol-register-audit-2026-09-04.csv",
+    );
   });
 });
