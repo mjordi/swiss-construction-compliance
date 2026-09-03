@@ -11,7 +11,9 @@ import { useLanguage } from "@/context/LanguageContext";
 import type { Protocol } from "@/lib/database.types";
 import { buildFinalizedProtocolReportFromRecord } from "@/lib/protocol-report";
 import {
+  buildProtocolRegisterAuditCsv,
   protocolPdfFilename,
+  protocolRegisterAuditCsvFilename,
   selectFinalizedProtocolRecords,
   type ProtocolRegisterRecord,
 } from "@/lib/protocol-register";
@@ -42,6 +44,8 @@ export default function ProtocolRegisterPage() {
   const [loadGeneration, setLoadGeneration] = useState(0);
   const [generatingById, setGeneratingById] = useState<Record<string, boolean>>({});
   const [feedbackById, setFeedbackById] = useState<Record<string, Feedback>>({});
+  const [auditExporting, setAuditExporting] = useState(false);
+  const [auditExportFeedback, setAuditExportFeedback] = useState<Feedback | null>(null);
   const mountedRef = useRef(false);
   const latestUserIdRef = useRef(user?.id ?? null);
   const recordsRef = useRef<ProtocolRegisterRecord[]>([]);
@@ -49,6 +53,9 @@ export default function ProtocolRegisterPage() {
   const downloadRequestIdsRef = useRef<Record<string, number>>({});
   const inFlightIdsRef = useRef(new Set<string>());
   const feedbackTimersRef = useRef<Record<string, number>>({});
+  const auditExportRequestRef = useRef(0);
+  const auditExportInFlightRef = useRef(false);
+  const auditExportFeedbackTimerRef = useRef<number | null>(null);
 
   latestUserIdRef.current = user?.id ?? null;
   const visibleRecords = user?.id && recordsOwnerId === user.id ? records : [];
@@ -60,8 +67,12 @@ export default function ProtocolRegisterPage() {
     return () => {
       mountedRef.current = false;
       loadRequestRef.current += 1;
+      auditExportRequestRef.current += 1;
       for (const timer of Object.values(feedbackTimersRef.current)) window.clearTimeout(timer);
       feedbackTimersRef.current = {};
+      if (auditExportFeedbackTimerRef.current !== null) window.clearTimeout(auditExportFeedbackTimerRef.current);
+      auditExportFeedbackTimerRef.current = null;
+      auditExportInFlightRef.current = false;
       inFlightIds.clear();
     };
   }, []);
@@ -75,9 +86,15 @@ export default function ProtocolRegisterPage() {
     setLoadError(false);
     setFeedbackById({});
     setGeneratingById({});
+    setAuditExporting(false);
+    setAuditExportFeedback(null);
     inFlightIdsRef.current.clear();
+    auditExportRequestRef.current += 1;
+    auditExportInFlightRef.current = false;
     for (const timer of Object.values(feedbackTimersRef.current)) window.clearTimeout(timer);
     feedbackTimersRef.current = {};
+    if (auditExportFeedbackTimerRef.current !== null) window.clearTimeout(auditExportFeedbackTimerRef.current);
+    auditExportFeedbackTimerRef.current = null;
 
     if (!ownerId) {
       setLoading(false);
@@ -137,6 +154,82 @@ export default function ProtocolRegisterPage() {
   }, [loadGeneration, supabase, user?.id]);
 
   const retryLoad = useCallback(() => setLoadGeneration((value) => value + 1), []);
+
+  const downloadAuditIndex = useCallback(async () => {
+    const ownerId = latestUserIdRef.current;
+    const exportRecords = recordsRef.current;
+    if (
+      !ownerId
+      || exportRecords.length === 0
+      || exportRecords.some((record) => record.user_id !== ownerId || record.status !== "finalized")
+      || auditExportInFlightRef.current
+    ) return;
+
+    auditExportInFlightRef.current = true;
+    const requestId = ++auditExportRequestRef.current;
+    const generatedAt = new Date();
+    if (auditExportFeedbackTimerRef.current !== null) window.clearTimeout(auditExportFeedbackTimerRef.current);
+    auditExportFeedbackTimerRef.current = null;
+    setAuditExportFeedback(null);
+    setAuditExporting(true);
+
+    const isCurrent = () =>
+      mountedRef.current
+      && latestUserIdRef.current === ownerId
+      && auditExportRequestRef.current === requestId
+      && recordsRef.current === exportRecords;
+
+    const showFeedback = (key: TranslationKey, tone: Feedback["tone"]) => {
+      if (!isCurrent()) return;
+      setAuditExportFeedback({ key, tone });
+      auditExportFeedbackTimerRef.current = window.setTimeout(() => {
+        if (!isCurrent()) return;
+        setAuditExportFeedback(null);
+        auditExportFeedbackTimerRef.current = null;
+      }, 2000);
+    };
+
+    try {
+      await Promise.resolve();
+      if (!isCurrent()) return;
+      const csv = buildProtocolRegisterAuditCsv(exportRecords, {
+        generatedAt: t("protocols-audit-export-generated-at"),
+        scope: t("protocols-audit-export-scope"),
+        scopeValue: t("protocols-audit-export-scope-value"),
+        protocolId: t("protocols-audit-export-protocol-id"),
+        caseId: t("protocols-audit-export-case-id"),
+        standalone: t("protocols-audit-export-standalone"),
+        project: t("protocols-audit-export-project"),
+        contractor: t("protocols-audit-export-contractor"),
+        client: t("protocols-audit-export-client"),
+        finalizedAt: t("protocols-audit-export-finalized-at"),
+        signatureState: t("protocols-audit-export-signature-state"),
+        signatureCaptured: t("protocols-audit-export-signature-captured"),
+        signatureMissing: t("protocols-audit-export-signature-missing"),
+      }, generatedAt);
+      if (!isCurrent()) return;
+
+      const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      try {
+        anchor.href = url;
+        anchor.download = protocolRegisterAuditCsvFilename(generatedAt);
+        anchor.click();
+      } finally {
+        anchor.remove();
+        URL.revokeObjectURL(url);
+      }
+      showFeedback("protocols-audit-export-success", "success");
+    } catch {
+      showFeedback("protocols-audit-export-error", "error");
+    } finally {
+      if (auditExportRequestRef.current === requestId) {
+        auditExportInFlightRef.current = false;
+        if (isCurrent()) setAuditExporting(false);
+      }
+    }
+  }, [t]);
 
   const download = useCallback(async (record: ProtocolRegisterRecord) => {
     const ownerId = latestUserIdRef.current;
@@ -259,6 +352,20 @@ export default function ProtocolRegisterPage() {
         )}
         {!loading && !loadError && visibleRecords.length > 0 && (
           <div className="space-y-4">
+            <section className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-5">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+                <p role="note" className="max-w-2xl text-sm leading-relaxed text-muted">
+                  {t("protocols-audit-export-guidance")}
+                </p>
+                <div className="sm:w-56">
+                  <button type="button" onClick={() => void downloadAuditIndex()} disabled={auditExporting} className="inline-flex w-full items-center justify-center gap-2 rounded-lg border border-accent/40 px-3 py-2 text-sm font-semibold text-accent disabled:opacity-60">
+                    {auditExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                    {auditExporting ? t("protocols-audit-export-pending") : t("protocols-audit-export-action")}
+                  </button>
+                  {auditExportFeedback && <p className={`mt-2 text-xs ${auditExportFeedback.tone === "success" ? "text-emerald-300" : "text-red-300"}`}>{t(auditExportFeedback.key)}</p>}
+                </div>
+              </div>
+            </section>
             {visibleRecords.map((record) => {
               const feedback = feedbackById[record.id];
               const generating = Boolean(generatingById[record.id]);

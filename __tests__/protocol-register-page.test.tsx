@@ -1,5 +1,5 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Protocol } from "@/lib/database.types";
 import type { ProtocolRegisterRecord } from "@/lib/protocol-register";
 
@@ -97,6 +97,24 @@ vi.mock("@/context/LanguageContext", () => ({
       "protocols-downloading": "Generating PDF…",
       "protocols-download-success": "PDF downloaded.",
       "protocols-download-error": "PDF could not be created. Try again.",
+      "protocols-audit-export-action": "Download audit index (.csv)",
+      "protocols-audit-export-pending": "Preparing audit index…",
+      "protocols-audit-export-guidance": "This CSV is a point-in-time register index. It is not proof of legal completeness, delivery, acceptance, or external retention.",
+      "protocols-audit-export-success": "Audit index downloaded.",
+      "protocols-audit-export-error": "Audit index could not be created. Try again.",
+      "protocols-audit-export-generated-at": "Generated at",
+      "protocols-audit-export-scope": "Scope",
+      "protocols-audit-export-scope-value": "Point-in-time finalized protocol register",
+      "protocols-audit-export-protocol-id": "Protocol ID",
+      "protocols-audit-export-case-id": "Case ID",
+      "protocols-audit-export-standalone": "Standalone protocol",
+      "protocols-audit-export-project": "Project",
+      "protocols-audit-export-contractor": "Contractor",
+      "protocols-audit-export-client": "Client",
+      "protocols-audit-export-finalized-at": "Finalized at",
+      "protocols-audit-export-signature-state": "Signature state",
+      "protocols-audit-export-signature-captured": "Captured",
+      "protocols-audit-export-signature-missing": "Missing",
     }[key] ?? key),
   }),
 }));
@@ -138,7 +156,26 @@ beforeEach(() => {
   vi.spyOn(HTMLAnchorElement.prototype, "click").mockImplementation(clickMock);
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe("ProtocolRegisterPage", () => {
+  it("exposes no audit-index export while the register is loading, failed, or empty", async () => {
+    const loading = deferred<{ data: ProtocolRegisterRecord[] | null; error: { message: string } | null }>();
+    queryResults.push(loading.promise, Promise.resolve({ data: [], error: null }));
+    render(<ProtocolRegisterPage />);
+
+    expect(screen.queryByRole("button", { name: "Download audit index (.csv)" })).toBeNull();
+    await act(async () => loading.resolve({ data: null, error: { message: "offline" } }));
+    expect(await screen.findByText("Protocols could not be loaded.")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Download audit index (.csv)" })).toBeNull();
+
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(await screen.findByText("No finalized protocols")).toBeTruthy();
+    expect(screen.queryByRole("button", { name: "Download audit index (.csv)" })).toBeNull();
+  });
+
   it("shows the finalized-record content, Case unlink, and account boundaries below the header", async () => {
     queryResults.push(Promise.resolve({ data: [], error: null }));
 
@@ -201,6 +238,124 @@ describe("ProtocolRegisterPage", () => {
       "finalized_at.lt.2026-08-12T08:39:00.000Z,and(finalized_at.eq.2026-08-12T08:39:00.000Z,id.gt.page-one-999)",
     );
     expect(await screen.findAllByTestId("protocol-record")).toHaveLength(2);
+  });
+
+  it("exports every loaded finalized page without another query and uses one captured timestamp", async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-09-03T12:34:56.789Z"));
+    const firstPage = Array.from({ length: 1000 }, (_, index) => registerRow({
+      id: `page-one-${index}`,
+      finalized_at: `2026-08-12T08:${String(index % 60).padStart(2, "0")}:00.000Z`,
+      status: index === 999 ? "finalized" : "draft",
+      signature_captured: false,
+      case_id: index === 999 ? null : "ignored",
+    }));
+    queryResults.push(
+      Promise.resolve({ data: firstPage, error: null }),
+      Promise.resolve({ data: [registerRow({ id: "page-two", case_id: "case-2" })], error: null }),
+    );
+    render(<ProtocolRegisterPage />);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+    const queryCount = fromMock.mock.calls.length;
+
+    expect(screen.getByText("This CSV is a point-in-time register index. It is not proof of legal completeness, delivery, acceptance, or external retention.")).toBeTruthy();
+    fireEvent.click(screen.getByRole("button", { name: "Download audit index (.csv)" }));
+    expect(screen.getByRole("button", { name: "Preparing audit index…" }).hasAttribute("disabled")).toBe(true);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(fromMock).toHaveBeenCalledTimes(queryCount);
+    expect(pdfMock).not.toHaveBeenCalled();
+    expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+    const csv = await ((createObjectURLMock.mock.calls as unknown as [[Blob]])[0][0]).text();
+    expect(csv).toContain('"Generated at","2026-09-03T12:34:56.789Z"');
+    expect(csv).toContain('"page-one-999","Standalone protocol"');
+    expect(csv).toContain('"page-two","case-2"');
+    expect(csv).toContain('"Signature state"');
+    expect((clickMock.mock.instances[0] as HTMLAnchorElement).download).toBe("baucompliance-protocol-register-audit-2026-09-03.csv");
+    expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:protocol");
+    expect(screen.getByText("Audit index downloaded.")).toBeTruthy();
+
+    act(() => vi.runOnlyPendingTimers());
+    expect(screen.queryByText("Audit index downloaded.")).toBeNull();
+    vi.useRealTimers();
+  });
+
+  it("suppresses synchronous duplicate audit exports and expires localized creation errors", async () => {
+    vi.useFakeTimers();
+    queryResults.push(Promise.resolve({ data: [registerRow({ id: "exportable" })], error: null }));
+    createObjectURLMock.mockImplementationOnce(() => { throw new Error("blocked"); });
+    render(<ProtocolRegisterPage />);
+    await act(async () => { await Promise.resolve(); });
+    const button = screen.getByRole("button", { name: "Download audit index (.csv)" });
+
+    act(() => {
+      button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+      button.dispatchEvent(new MouseEvent("click", { bubbles: true }));
+    });
+    await act(async () => { await Promise.resolve(); });
+
+    expect(screen.getByText("Audit index could not be created. Try again.")).toBeTruthy();
+    expect(createObjectURLMock).toHaveBeenCalledTimes(1);
+    expect(clickMock).not.toHaveBeenCalled();
+
+    act(() => vi.runOnlyPendingTimers());
+    expect(screen.queryByText("Audit index could not be created. Try again.")).toBeNull();
+  });
+
+  it("ignores pending audit export after an account switch", async () => {
+    queryResults.push(Promise.resolve({ data: [registerRow({ id: "owner-one-export" })], error: null }), Promise.resolve({ data: [], error: null }));
+    const view = render(<ProtocolRegisterPage />);
+    const button = await screen.findByRole("button", { name: "Download audit index (.csv)" });
+
+    fireEvent.click(button);
+    currentUser = { id: "owner-2", email: "two@example.ch", name: "Two" };
+    mocks.currentUser = currentUser;
+    view.rerender(<ProtocolRegisterPage />);
+    await act(async () => { await Promise.resolve(); });
+
+    expect(createObjectURLMock).not.toHaveBeenCalled();
+    expect(clickMock).not.toHaveBeenCalled();
+    expect(screen.queryByText("Audit index downloaded.")).toBeNull();
+  });
+
+  it("invalidates a pending audit export request even if the original owner returns", async () => {
+    queryResults.push(
+      Promise.resolve({ data: [registerRow({ id: "stale-request" })], error: null }),
+      Promise.resolve({ data: [], error: null }),
+      Promise.resolve({ data: [registerRow({ id: "fresh-request" })], error: null }),
+    );
+    const view = render(<ProtocolRegisterPage />);
+    const button = await screen.findByRole("button", { name: "Download audit index (.csv)" });
+
+    fireEvent.click(button);
+    currentUser = { id: "owner-2", email: "two@example.ch", name: "Two" };
+    mocks.currentUser = currentUser;
+    view.rerender(<ProtocolRegisterPage />);
+    currentUser = { id: "owner-1", email: "owner@example.ch", name: "Owner" };
+    mocks.currentUser = currentUser;
+    view.rerender(<ProtocolRegisterPage />);
+    await act(async () => { await Promise.resolve(); await Promise.resolve(); });
+
+    expect(createObjectURLMock).not.toHaveBeenCalled();
+    expect(clickMock).not.toHaveBeenCalled();
+    expect(screen.queryByText("Audit index downloaded.")).toBeNull();
+    expect(await screen.findByText("fresh-request")).toBeTruthy();
+  });
+
+  it("ignores pending audit export after unmount and leaves no timers", async () => {
+    vi.useFakeTimers();
+    queryResults.push(Promise.resolve({ data: [registerRow({ id: "unmounted-export" })], error: null }));
+    const view = render(<ProtocolRegisterPage />);
+    await act(async () => { await Promise.resolve(); });
+
+    fireEvent.click(screen.getByRole("button", { name: "Download audit index (.csv)" }));
+    view.unmount();
+    await act(async () => { await Promise.resolve(); });
+
+    expect(createObjectURLMock).not.toHaveBeenCalled();
+    expect(clickMock).not.toHaveBeenCalled();
+    expect(vi.getTimerCount()).toBe(0);
+    vi.useRealTimers();
   });
 
   it("shows empty and error states and retries", async () => {
