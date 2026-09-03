@@ -71,6 +71,13 @@ describe("locales", () => {
       "protocols-signature", "protocols-signature-captured", "protocols-signature-missing",
       "protocols-context", "protocols-context-linked", "protocols-context-standalone",
       "protocols-download", "protocols-downloading", "protocols-download-success", "protocols-download-error",
+      "protocols-audit-export-action", "protocols-audit-export-pending", "protocols-audit-export-guidance",
+      "protocols-audit-export-success", "protocols-audit-export-error", "protocols-audit-export-generated-at",
+      "protocols-audit-export-scope", "protocols-audit-export-scope-value", "protocols-audit-export-protocol-id",
+      "protocols-audit-export-case-id", "protocols-audit-export-standalone", "protocols-audit-export-project",
+      "protocols-audit-export-contractor", "protocols-audit-export-client", "protocols-audit-export-finalized-at",
+      "protocols-audit-export-signature-state", "protocols-audit-export-signature-captured",
+      "protocols-audit-export-signature-missing",
     ] as const;
 
     for (const [lang, translations] of Object.entries(locales)) {
@@ -92,6 +99,22 @@ describe("locales", () => {
       const copy = translations["protocols-integrity-note"];
       for (const term of expectedTerms[lang as keyof typeof expectedTerms]) {
         expect(copy, `Locale '${lang}' protocol integrity copy is missing ${term}`).toMatch(term);
+      }
+    }
+  });
+
+  it("keeps the protocol audit index point-in-time and consequence boundaries truthful in every locale", () => {
+    const expectedTerms = {
+      de: [/momentaufnahme/i, /kein nachweis rechtlicher vollständigkeit/i, /zustellung/i, /annahme/i, /extern.*aufbewahrung/i],
+      fr: [/instantané/i, /aucune preuve d.exhaustivité juridique/i, /livraison/i, /acceptation/i, /conservation externe/i],
+      it: [/istantanea/i, /(?:nessuna|alcuna) prova di completezza giuridica/i, /consegna/i, /accettazione/i, /conservazione esterna/i],
+      en: [/point-in-time/i, /not proof of legal completeness/i, /delivery/i, /acceptance/i, /external retention/i],
+    } as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      const copy = `${translations["protocols-audit-export-guidance"]} ${translations["protocols-audit-export-scope-value"]}`;
+      for (const term of expectedTerms[lang as keyof typeof expectedTerms]) {
+        expect(copy, `Locale '${lang}' protocol audit export copy is missing ${term}`).toMatch(term);
       }
     }
   });
