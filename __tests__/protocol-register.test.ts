@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import type { Protocol } from "@/lib/database.types";
@@ -8,6 +8,7 @@ import {
   protocolRegisterAuditCsvFilename,
   selectFinalizedProtocolRecords,
   type ProtocolRegisterAuditCsvLabels,
+  type ProtocolRegisterRecord,
 } from "@/lib/protocol-register";
 
 const auditCsvLabels: ProtocolRegisterAuditCsvLabels = {
@@ -171,6 +172,30 @@ describe("protocolPdfFilename", () => {
 });
 
 describe("buildProtocolRegisterAuditCsv", () => {
+  it("requires an explicit generation timestamp and is deterministic for identical inputs", () => {
+    expectTypeOf<Parameters<typeof buildProtocolRegisterAuditCsv>>().toEqualTypeOf<
+      [
+        records: readonly ProtocolRegisterRecord[],
+        labels: ProtocolRegisterAuditCsvLabels,
+        generatedAt: Date,
+      ]
+    >();
+    expect(buildProtocolRegisterAuditCsv).toHaveLength(3);
+
+    const rows = [
+      {
+        ...protocol({ id: "deterministic" }),
+        finalized_at: "2026-09-02T09:30:00.000Z",
+        signature_captured: true,
+      },
+    ];
+    const generatedAt = new Date("2026-09-03T12:34:56.789Z");
+
+    expect(buildProtocolRegisterAuditCsv(rows, auditCsvLabels, generatedAt)).toBe(
+      buildProtocolRegisterAuditCsv(rows, auditCsvLabels, generatedAt),
+    );
+  });
+
   it("adds a UTF-8 BOM, CRLF metadata, and the complete localized audit-index columns", () => {
     const csv = buildProtocolRegisterAuditCsv(
       [

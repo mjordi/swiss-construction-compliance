@@ -51,7 +51,7 @@ export function protocolPdfFilename(protocolId: string): string {
 export function buildProtocolRegisterAuditCsv(
   records: readonly ProtocolRegisterRecord[],
   labels: ProtocolRegisterAuditCsvLabels,
-  generatedAt: Date = new Date(),
+  generatedAt: Date,
 ): string {
   const lines = [
     csvLine([labels.generatedAt, generatedAt.toISOString()]),
