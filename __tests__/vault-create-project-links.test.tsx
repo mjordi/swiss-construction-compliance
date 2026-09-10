@@ -115,14 +115,14 @@ vi.mock("@/lib/supabase", () => ({
 import TechVault from "@/app/dashboard/vault/page";
 
 describe("vault create-project links", () => {
-  it("renders both create-project CTAs as dashboard links", async () => {
+  it("renders both create-project CTAs as Cases handoff links", async () => {
     render(<TechVault />);
 
     await waitFor(() => {
       expect(screen.getByText("Alpine Tower")).toBeTruthy();
     });
 
-    expect(screen.getByRole("link", { name: "vault-new-project" }).getAttribute("href")).toBe("/dashboard");
-    expect(screen.getByRole("link", { name: "vault-create-project" }).getAttribute("href")).toBe("/dashboard");
+    expect(screen.getByRole("link", { name: "vault-new-project" }).getAttribute("href")).toBe("/dashboard/cases?create=1");
+    expect(screen.getByRole("link", { name: "vault-create-project" }).getAttribute("href")).toBe("/dashboard/cases?create=1");
   });
 });

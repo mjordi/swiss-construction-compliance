@@ -93,7 +93,7 @@ vi.mock("@/lib/supabase", () => ({
 import TechVault from "@/app/dashboard/vault/page";
 
 describe("vault empty first-project CTA", () => {
-  it("renders the no-content empty-state action as a dashboard create-project link", async () => {
+  it("renders the no-content empty-state action as a Cases handoff link", async () => {
     render(<TechVault />);
 
     await waitFor(() => {
@@ -101,7 +101,7 @@ describe("vault empty first-project CTA", () => {
     });
 
     const links = screen.getAllByRole("link", { name: "vault-create-project" });
-    expect(links.some((link) => link.getAttribute("href") === "/dashboard")).toBe(true);
+    expect(links.some((link) => link.getAttribute("href") === "/dashboard/cases?create=1")).toBe(true);
     expect(screen.queryByRole("button", { name: "vault-create-project" })).toBeNull();
   });
 });
