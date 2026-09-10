@@ -995,6 +995,7 @@ export default function CasesPage() {
     const nextSearch = params.get("q") ?? "";
     const rawHandoffContractDate = params.get("contract");
     const rawHandoffDiscoveryDate = params.get("discovery");
+    const rawCreateHandoff = params.get("create");
     const handoffContractDate = sanitizeDateQueryParam(rawHandoffContractDate);
     const handoffDiscoveryDate = sanitizeDateQueryParam(rawHandoffDiscoveryDate);
     const hasCaseHandoffParams = rawHandoffContractDate !== null || rawHandoffDiscoveryDate !== null;
@@ -1011,10 +1012,13 @@ export default function CasesPage() {
       sanitizedParams.delete("contract");
       sanitizedParams.delete("discovery");
     }
+    if (params.has("create")) sanitizedParams.delete("create");
 
-    if (handoffContractDate || handoffDiscoveryDate) {
+    if (rawCreateHandoff === "1" || handoffContractDate || handoffDiscoveryDate) {
       setCreateError(null);
       setShowForm(true);
+    }
+    if (handoffContractDate || handoffDiscoveryDate) {
       setFormData((current) => ({
         ...current,
         contractDate: handoffContractDate ?? current.contractDate,
@@ -2795,7 +2799,7 @@ export default function CasesPage() {
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
             <div>
               <label htmlFor="cases-project-name" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-project-name")}</label>
-              <input id="cases-project-name" type="text" value={formData.projectName} onChange={(e) => updateFormData({ ...formData, projectName: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-60" disabled={saving} required />
+              <input id="cases-project-name" type="text" value={formData.projectName} onChange={(e) => updateFormData({ ...formData, projectName: e.target.value })} className="w-full bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-2.5 text-sm text-cream focus:border-accent/40 outline-none transition-colors duration-200 disabled:cursor-not-allowed disabled:opacity-60" disabled={saving} required autoFocus />
             </div>
             <div>
               <label htmlFor="cases-canton" className="block text-[11px] font-semibold uppercase tracking-[0.1em] text-muted mb-1.5">{t("cases-canton-label")}</label>

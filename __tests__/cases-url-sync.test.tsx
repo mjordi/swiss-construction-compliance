@@ -214,6 +214,68 @@ describe("cases filter URL synchronization", () => {
     expect((screen.getByLabelText("cases-search-label") as HTMLInputElement).value).toBe("Riverside Bridge");
   });
 
+  it("consumes a valid Vault create handoff, opens and focuses the form, and preserves sibling params", async () => {
+    currentSearch = "create=1&q=Riverside+Bridge&status=triage&from=vault";
+
+    render(<CasesPage />);
+
+    const projectNameInput = await screen.findByLabelText("cases-project-name");
+    expect(projectNameInput).toBe(document.activeElement);
+    expect(screen.getByText("cases-add-title")).toBeTruthy();
+    expect((screen.getByLabelText("cases-search-label") as HTMLInputElement).value).toBe("Riverside Bridge");
+    expect((screen.getByLabelText("cases-filter-status") as HTMLSelectElement).value).toBe("triage");
+    expect(replaceMock).toHaveBeenCalledWith(
+      "/dashboard/cases?q=Riverside+Bridge&status=triage&from=vault",
+      { scroll: false }
+    );
+  });
+
+  it("removes an invalid Vault create handoff without opening the form", async () => {
+    currentSearch = "create=&q=Riverside+Bridge&from=vault";
+
+    render(<CasesPage />);
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledWith(
+        "/dashboard/cases?q=Riverside+Bridge&from=vault",
+        { scroll: false }
+      );
+    });
+    expect(screen.queryByText("cases-add-title")).toBeNull();
+  });
+
+  it("consumes externally introduced Vault create handoffs without loops or erasing existing input", async () => {
+    const { rerender } = render(<CasesPage />);
+
+    await waitFor(() => {
+      expect(screen.getByLabelText("cases-filter-regime")).toBeTruthy();
+    });
+
+    currentSearch = "create=1&from=vault";
+    rerender(<CasesPage />);
+
+    const projectNameInput = await screen.findByLabelText("cases-project-name");
+    expect(projectNameInput).toBe(document.activeElement);
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledTimes(1);
+    });
+    expect(replaceMock).toHaveBeenLastCalledWith("/dashboard/cases?from=vault", { scroll: false });
+
+    fireEvent.change(projectNameInput, { target: { value: "Preserved project" } });
+    currentSearch = "from=vault";
+    rerender(<CasesPage />);
+    currentSearch = "create=1&from=vault";
+    rerender(<CasesPage />);
+
+    await waitFor(() => {
+      expect(replaceMock).toHaveBeenCalledTimes(2);
+    });
+    expect((screen.getByLabelText("cases-project-name") as HTMLInputElement).value).toBe("Preserved project");
+
+    rerender(<CasesPage />);
+    expect(replaceMock).toHaveBeenCalledTimes(2);
+  });
+
   it("renders only the exact owned Case despite conflicting view filters", async () => {
     currentSearch = "case=case-1&q=unrelated&status=expired&regime=old&tab=active";
     caseResponseFactory = () => ({
