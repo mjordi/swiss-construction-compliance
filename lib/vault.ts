@@ -28,7 +28,7 @@ export interface VaultProjectCasesHrefInput {
 }
 
 export function buildVaultCreateProjectHref(): string {
-  return "/dashboard";
+  return "/dashboard/cases?create=1";
 }
 
 export function buildCaseVaultHref(projectName: string): string {

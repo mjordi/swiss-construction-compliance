@@ -1,5 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { buildCaseVaultHref, buildVaultProjectCasesHref, getVaultEmptyState } from "../lib/vault";
+import {
+  buildCaseVaultHref,
+  buildVaultCreateProjectHref,
+  buildVaultProjectCasesHref,
+  getVaultEmptyState,
+} from "../lib/vault";
+
+describe("buildVaultCreateProjectHref", () => {
+  it("routes Vault project creation to the Cases handoff", () => {
+    expect(buildVaultCreateProjectHref()).toBe("/dashboard/cases?create=1");
+  });
+});
 
 describe("getVaultEmptyState", () => {
   it("prefers a clear-search action when the current query yields no results", () => {
