@@ -522,6 +522,39 @@ describe("locales", () => {
     }
   });
 
+  it("describes captured signatures in source-bound finalized records without unsupported guarantees", () => {
+    const signatureClaimKeys = [
+      "how-step3-desc",
+      "feat-handover-desc",
+      "success-desc",
+    ] as const;
+    const requiredTerms = {
+      de: [/erfasste[nr]? unterschrift/i, /finalisiert/i, /(?:quell|zugrunde liegenden).*datensatz/i],
+      fr: [/signature recueillie/i, /finalis/i, /enregistrement.*source/i],
+      it: [/firma acquisita/i, /finalizz/i, /record.*origine/i],
+      en: [/captured signature/i, /finalized/i, /source.*record/i],
+    } as const;
+    const prohibitedClaims = {
+      de: /kryptograf|qualifiziert|rechtsgültig|rechtssicher|rechtliche gültigkeit|rechtsverbindlich|bindende wirkung|(?:identität|unterschrift|signatur).*?(?:verifiz|geprüft)|(?:verifiz|geprüft).*?identität|sicher (?:gespeichert|aufbewahrt)|externe aufbewahrung/i,
+      fr: /cryptograph|qualifi|juridiquement valable|validité juridique|valeur juridique|juridiquement contraignant|force obligatoire|effet contraignant|(?:identité|signature).*?vérifi|vérifi.*?identité|(?:stocké|conservé).*manière sécurisée|conservation externe/i,
+      it: /crittograf|qualificat|giuridicamente valida|validità giuridica|valore legale|vincolant|(?:identità|firma).*?verificat|verificat.*?identità|(?:archiviat|conservat).*modo sicuro|conservazione esterna/i,
+      en: /cryptograph|qualified signature|legally valid|legal validity|legally binding|binding effect|(?:identity|signature).*?verif|verif.*?identity|securely (?:stored|retained)|secure external retention|external retention/i,
+    } as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      const locale = lang as keyof typeof requiredTerms;
+      for (const key of signatureClaimKeys) {
+        const copy = translations[key];
+        for (const term of requiredTerms[locale]) {
+          expect(copy, `Locale '${lang}' signature claim '${key}' is missing ${term}`).toMatch(term);
+        }
+        expect(copy, `Locale '${lang}' signature claim '${key}' makes an unsupported guarantee`).not.toMatch(
+          prohibitedClaims[locale]
+        );
+      }
+    }
+  });
+
   it("includes calculator share-link localization keys in every locale", () => {
     const requiredCalculatorShareKeys = [
       "calc-share-link",

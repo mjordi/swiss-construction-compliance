@@ -17,10 +17,10 @@ BauCompliance.ch helps Swiss construction firms navigate the 2026 revision of th
 
 | Feature | Description |
 |---|---|
-| **Digital Handover Protocol** | Generate legally binding Abnahmeprotokolle (SIA 118) on-site with digital signatures |
+| **Digital Handover Protocol** | Generate SIA 118 handover protocols on-site with captured signatures in finalized PDFs tied to their source records |
 | **Canton Risk Map** | Real-time legislative risk scores for all 26 Swiss cantons |
 | **Tech Vault** | Geo-tagged photo evidence storage to defend against unjustified defect claims |
-| **PDF Generation** | Cryptographically signed PDF reports via `@react-pdf/renderer` |
+| **PDF Generation** | Finalized PDF reports with captured signatures tied to source records via `@react-pdf/renderer` |
 | **Multi-language** | Full support for DE / FR / IT / RM / EN |
 
 ---
