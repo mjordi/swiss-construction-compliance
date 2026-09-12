@@ -5,9 +5,13 @@ import { decode as decodeJpeg } from "jpeg-js";
 
 export const MAX_SIGNATURE_IMAGE_BYTES = 256 * 1024;
 // SignaturePad canvases are small, but high-DPI devices can multiply their backing size.
-// These limits leave practical headroom while bounding renderer memory consumption.
-export const MAX_SIGNATURE_IMAGE_DIMENSION = 4096;
-export const MAX_SIGNATURE_IMAGE_PIXELS = 8 * 1024 * 1024;
+// A 2048 × 1024 canvas preserves practical high-DPI signatures while limiting a full
+// RGBA renderer decode to 8 MiB and keeping validation suitable for a mobile main thread.
+export const MAX_SIGNATURE_IMAGE_DIMENSION = 2048;
+export const MAX_SIGNATURE_IMAGE_PIXELS = 2 * 1024 * 1024;
+export const MAX_SIGNATURE_IMAGE_DECODED_BYTES = MAX_SIGNATURE_IMAGE_PIXELS * 4;
+export const MAX_SIGNATURE_PNG_INFLATED_BYTES =
+  MAX_SIGNATURE_IMAGE_DECODED_BYTES + MAX_SIGNATURE_IMAGE_DIMENSION * 2;
 
 const SIGNATURE_IMAGE_DATA_URI_PATTERN =
   /^data:image\/(png|jpeg);base64,([A-Za-z0-9+/]+={0,2})$/;
@@ -26,7 +30,9 @@ const JPEG_SOF_MARKERS = new Set([
   0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
 ]);
 const SUPPORTED_JPEG_SOF_MARKERS = new Set([0xc0, 0xc2]);
-const MAX_JPEG_DECODE_MEMORY_MB = 128;
+// Four times the maximum 8 MiB renderer output leaves decoder workspace without
+// restoring the previous mobile-hostile 128 MiB allowance.
+export const MAX_SIGNATURE_JPEG_DECODE_MEMORY_MB = 32;
 
 interface ImageDimensions {
   width: number;
@@ -182,7 +188,7 @@ function isValidPng(bytes: Uint8Array, dimensions: ImageDimensions): boolean {
       const validBitDepth = PNG_BIT_DEPTHS.get(colorType)?.includes(bitDepth);
       if (
         !hasSafeDimensions(width, height) ||
-        !validBitDepth ||
+        !validBitDepth || bitDepth > 8 ||
         bytes[dataStart + 10] !== 0 ||
         bytes[dataStart + 11] !== 0 ||
         interlaceMethod > 1
@@ -231,6 +237,7 @@ function isValidPng(bytes: Uint8Array, dimensions: ImageDimensions): boolean {
         colorType,
         interlaceMethod
       );
+      if (dimensions.pngInflatedByteLength > MAX_SIGNATURE_PNG_INFLATED_BYTES) return false;
       return true;
     }
 
@@ -412,9 +419,10 @@ function hasMatchingDecodedDimensions(
         formatAsRGBA: false,
         tolerantDecoding: false,
         maxResolutionInMP: MAX_SIGNATURE_IMAGE_PIXELS / 1_000_000,
-        maxMemoryUsageInMB: MAX_JPEG_DECODE_MEMORY_MB,
+        maxMemoryUsageInMB: MAX_SIGNATURE_JPEG_DECODE_MEMORY_MB,
       });
-    return decoded.width === expected.width && decoded.height === expected.height;
+    return decoded.width === expected.width && decoded.height === expected.height &&
+      decoded.data.byteLength <= MAX_SIGNATURE_IMAGE_DECODED_BYTES;
   } catch {
     return false;
   }

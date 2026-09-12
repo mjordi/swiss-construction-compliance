@@ -3,6 +3,7 @@ import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const dashboardMocks = vi.hoisted(() => ({
+  pngSignature: "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAAABAAAAAQBPJcTWAAAADklEQVR4nGP4DwYMEAoAU7oL9ZisIGcAAAAASUVORK5CYII=",
   buildFinalizedProtocolReport: vi.fn((input: Record<string, unknown>) => ({
     status: "finalized",
     defectEvidence: { kind: "none-visible-confirmed" },
@@ -13,7 +14,11 @@ const dashboardMocks = vi.hoisted(() => ({
   })),
   insert: vi.fn<(row: Record<string, unknown>) => Promise<{ error: null }>>()
     .mockResolvedValue({ error: null }),
-  toDataURL: vi.fn(() => "data:image/png;base64,captured-signature"),
+  toDataURL: vi.fn(() => "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAAABAAAAAQBPJcTWAAAADklEQVR4nGP4DwYMEAoAU7oL9ZisIGcAAAAASUVORK5CYII="),
+  pdf: vi.fn((document: unknown) => {
+    void document;
+    return { toBlob: async () => new Blob() };
+  }),
 }));
 
 vi.mock("next/navigation", () => ({
@@ -50,7 +55,7 @@ vi.mock("signature_pad", () => ({
     toDataURL() { return dashboardMocks.toDataURL(); }
   },
 }));
-vi.mock("@react-pdf/renderer", () => ({ pdf: () => ({ toBlob: async () => new Blob() }) }));
+vi.mock("@react-pdf/renderer", () => ({ pdf: dashboardMocks.pdf }));
 vi.mock("@/components/dashboard/AuditReportPDF", () => ({ AuditReportPDF: () => null }));
 vi.mock("@/lib/protocol-report", () => ({
   buildFinalizedProtocolReport: dashboardMocks.buildFinalizedProtocolReport,
@@ -74,6 +79,7 @@ describe("dashboard protocol finalization", () => {
     dashboardMocks.buildFinalizedProtocolReport.mockClear();
     dashboardMocks.insert.mockClear();
     dashboardMocks.toDataURL.mockClear();
+    dashboardMocks.pdf.mockClear();
     HTMLCanvasElement.prototype.getContext = vi.fn(() => ({
       scale: vi.fn(),
     })) as unknown as typeof HTMLCanvasElement.prototype.getContext;
@@ -102,11 +108,18 @@ describe("dashboard protocol finalization", () => {
 
     await waitFor(() => expect(dashboardMocks.buildFinalizedProtocolReport).toHaveBeenCalledTimes(1));
     const persistedSignature = dashboardMocks.insert.mock.calls[0]![0].signature_data;
-    expect(persistedSignature).toBe("data:image/png;base64,captured-signature");
+    expect(persistedSignature).toBe(dashboardMocks.pngSignature);
     expect(dashboardMocks.buildFinalizedProtocolReport).toHaveBeenCalledWith(
       expect.objectContaining({ signatureData: persistedSignature })
     );
     expect(dashboardMocks.toDataURL).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(await screen.findByRole("button", { name: "btn-download" }));
+    await waitFor(() => expect(dashboardMocks.pdf).toHaveBeenCalledTimes(1));
+    const pdfDocument = dashboardMocks.pdf.mock.calls[0][0] as {
+      props: { report: { signatureImageData: string | null } };
+    };
+    expect(pdfDocument.props.report.signatureImageData).toBe(dashboardMocks.pngSignature);
   });
 });
 

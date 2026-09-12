@@ -9,7 +9,7 @@
 
 ## Overview
 
-BauCompliance.ch helps Swiss construction firms navigate the 2026 revision of the Code of Obligations (Obligationenrecht / OR). Capture handover protocol data and signatures, calculate warranty deadlines, assess canton-specific legislative risk, and organize supporting evidence — all in one platform.
+BauCompliance.ch helps Swiss construction firms navigate the 2026 revision of the Code of Obligations (Obligationenrecht / OR). Capture handover protocol data and signature drawings, calculate warranty deadlines, assess canton-specific legislative risk, and organize supporting evidence — all in one platform.
 
 ---
 
@@ -17,7 +17,7 @@ BauCompliance.ch helps Swiss construction firms navigate the 2026 revision of th
 
 | Feature | Description |
 |---|---|
-| **Digital Handover Protocol** | Capture SIA 118 handover protocol details and signatures on-site; downloaded PDFs contain the captured signature and finalized protocol details |
+| **Digital Handover Protocol** | Capture SIA 118 handover protocol details and signature drawings on-site; downloaded PDFs contain finalized protocol details and the captured signature drawing when safely renderable |
 | **Canton Risk Map** | Real-time legislative risk scores for all 26 Swiss cantons |
 | **Tech Vault** | Geo-tagged photo evidence storage to defend against unjustified defect claims |
 | **PDF Generation** | Generate PDF reports from finalized protocol data with `@react-pdf/renderer` |

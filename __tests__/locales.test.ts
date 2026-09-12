@@ -523,17 +523,18 @@ describe("locales", () => {
     }
   });
 
-  it("describes PDFs generated from finalized protocol data without unsupported guarantees", () => {
-    const signatureClaimKeys = [
-      "how-step3-desc",
-      "feat-handover-desc",
-      "success-desc",
-    ] as const;
-    const capturedSignatureTerms = {
-      de: /erfasste[nr]? unterschrift/i,
-      fr: /signature recueillie/i,
-      it: /firma acquisita/i,
-      en: /captured signature/i,
+  it("describes signature drawings and PDF exports without unsupported guarantees", () => {
+    const signatureDrawingTerms = {
+      de: /unterschriftszeichnung/i,
+      fr: /dessin de signature/i,
+      it: /disegno della firma/i,
+      en: /signature drawing/i,
+    } as const;
+    const safelyRenderableTerms = {
+      de: /sicher darstellbar/i,
+      fr: /affiché en toute sécurité/i,
+      it: /visualizzato in sicurezza/i,
+      en: /safely renderable/i,
     } as const;
     const finalizedDataTerms = {
       de: /finalisierte[nr]? protokoll(?:daten|angaben)/i,
@@ -541,37 +542,43 @@ describe("locales", () => {
       it: /dati finalizzati del protocollo/i,
       en: /finalized protocol (?:data|details)/i,
     } as const;
-    const successTerms = {
-      de: [/protokoll.*finalisiert/i, /pdf.*erzeugen/i],
-      fr: [/protocole.*finalisé/i, /générer.*document/i],
-      it: [/protocollo.*finalizzato/i, /generare.*documento/i],
-      en: [/protocol.*finalized/i, /generate.*document/i],
-    } as const;
     const prohibitedClaims = {
-      de: /kryptograf|qualifiziert|rechtsgültig|rechtssicher|rechtliche gültigkeit|rechtsverbindlich|bindende wirkung|gerichtsfest|beweissicher|fälschungssicher|manipulationssicher|authentifiziert|(?:identität|unterschrift|signatur).*?(?:verifiz|geprüft)|(?:verifiz|geprüft).*?identität|sicher (?:gespeichert|aufbewahrt)|externe aufbewahrung|(?:zugeordnet|verknüpft|bezug).*(?:quell|zugrunde liegenden).*datensatz/i,
-      fr: /cryptograph|qualifi|juridiquement valable|validité juridique|valeur juridique|juridiquement contraignant|force obligatoire|effet contraignant|opposable|force probante|infalsifiable|inviolable|authentifi|(?:identité|signature).*?vérifi|vérifi.*?identité|(?:stocké|conservé).*manière sécurisée|conservation externe|(?:lié|rattaché|associé).*enregistrement.*source/i,
-      it: /crittograf|qualificat|giuridicamente valida|validità giuridica|valore legale|valore probatorio|vincolant|opponibile|antimanomissione|a prova di manomissione|autenticat|(?:identità|firma).*?verificat|verificat.*?identità|(?:archiviat|conservat).*modo sicuro|conservazione esterna|(?:collegat|associat|assegnat).*record.*origine/i,
-      en: /cryptograph|qualified signature|legally valid|legal validity|legally binding|binding effect|court-admissible|evidentiary value|tamper[- ](?:proof|evident)|authenticated|(?:identity|signature).*?verif|verif.*?identity|securely (?:stored|retained)|secure external retention|external retention|(?:tied|linked|assigned) to (?:the )?source.*record/i,
+      de: /pdf-signatur|kryptograf|qualifiziert|rechtsgültig|rechtssicher|rechtliche gültigkeit|rechtsverbindlich|bindende wirkung|gerichtsfest|beweissicher|fälschungssicher|manipulationssicher|authentifiziert|(?:identität|unterschrift|signatur).*?(?:verifiz|geprüft)|(?:verifiz|geprüft).*?identität|sicher (?:gespeichert|aufbewahrt)|externe aufbewahrung/i,
+      fr: /signature pdf|cryptograph|qualifi|juridiquement valable|validité juridique|valeur juridique|juridiquement contraignant|force obligatoire|effet contraignant|opposable|force probante|infalsifiable|inviolable|authentifi|(?:identité|signature).*?vérifi|vérifi.*?identité|(?:stocké|conservé).*manière sécurisée|conservation externe/i,
+      it: /firma pdf|crittograf|qualificat|giuridicamente valida|validità giuridica|valore legale|valore probatorio|vincolant|opponibile|antimanomissione|a prova di manomissione|autenticat|(?:identità|firma).*?verificat|verificat.*?identità|(?:archiviat|conservat).*modo sicuro|conservazione esterna/i,
+      en: /pdf signing|cryptograph|qualified signature|legally compliant acceptance report|legally valid|legal validity|legally binding|binding effect|court-admissible|evidentiary value|tamper[- ](?:proof|evident)|authenticated|(?:identity|signature).*?verif|verif.*?identity|securely (?:stored|retained)|secure external retention|external retention/i,
     } as const;
+    const drawingKeys = ["how-step1-desc", "label-signature", "how-step3-desc", "feat-handover-desc", "success-desc"] as const;
+    const safelyRenderableKeys = ["how-step3-desc", "feat-handover-desc", "success-desc", "dashboard-download-success"] as const;
+    const sweptKeys = [
+      ...drawingKeys,
+      "plan-team-f3",
+      "plan-pro-f3",
+      "wizard-subtitle",
+      "btn-generating",
+      "dashboard-download-success",
+    ] as const;
 
     for (const [lang, translations] of Object.entries(locales)) {
-      const locale = lang as keyof typeof capturedSignatureTerms;
-      for (const key of signatureClaimKeys) {
-        const copy = translations[key];
-        expect(copy, `Locale '${lang}' signature claim '${key}' omits the captured signature`).toMatch(
-          capturedSignatureTerms[locale]
-        );
-        expect(copy, `Locale '${lang}' signature claim '${key}' makes an unsupported guarantee`).not.toMatch(
-          prohibitedClaims[locale]
-        );
+      const locale = lang as keyof typeof signatureDrawingTerms;
+      for (const key of drawingKeys) {
+        expect(translations[key], `Locale '${lang}' key '${key}' omits the signature drawing`).toMatch(signatureDrawingTerms[locale]);
+      }
+      for (const key of safelyRenderableKeys) {
+        expect(translations[key], `Locale '${lang}' key '${key}' omits the safe-rendering condition`).toMatch(safelyRenderableTerms[locale]);
+      }
+      for (const key of sweptKeys) {
+        expect(translations[key], `Locale '${lang}' key '${key}' makes an unsupported guarantee`).not.toMatch(prohibitedClaims[locale]);
       }
 
       const pdfCopy = `${translations["how-step3-desc"]} ${translations["feat-handover-desc"]}`;
       expect(pdfCopy, `Locale '${lang}' PDF copy omits finalized protocol data`).toMatch(finalizedDataTerms[locale]);
-      expect(pdfCopy, `Locale '${lang}' PDF copy does not describe a PDF`).toMatch(/pdf/i);
-      for (const term of successTerms[locale]) {
-        expect(translations["success-desc"], `Locale '${lang}' success copy is missing ${term}`).toMatch(term);
+      for (const key of ["plan-team-f3", "plan-pro-f3", "wizard-subtitle"] as const) {
+        expect(translations[key], `Locale '${lang}' key '${key}' must describe PDF output`).toMatch(/pdf/i);
       }
+      expect(translations["plan-team-f3"], `Locale '${lang}' Team plan must say export`).toMatch(/export|esportazione/i);
+      expect(translations["plan-pro-f3"], `Locale '${lang}' Pro plan must say export`).toMatch(/export|esportazione/i);
+      expect(translations["wizard-subtitle"], `Locale '${lang}' wizard must describe finalized protocol data`).toMatch(finalizedDataTerms[locale]);
     }
   });
 
@@ -579,9 +586,10 @@ describe("locales", () => {
     const readme = readFileSync("README.md", "utf8");
     const trustCopy = readme.split("## Tech Stack")[0];
 
-    expect(trustCopy).toMatch(/capture handover protocol data and signatures/i);
+    expect(trustCopy).toMatch(/capture handover protocol data and signature drawings/i);
     expect(trustCopy).toMatch(/organize supporting evidence/i);
-    expect(trustCopy).toMatch(/(?:generated? from finalized protocol data|contain(?:s)? the captured signature and finalized protocol details)/i);
+    expect(trustCopy).toMatch(/downloaded PDFs contain finalized protocol details/i);
+    expect(trustCopy).toMatch(/captured signature drawing when safely renderable/i);
     expect(trustCopy).not.toMatch(
       /legally compliant digital handover|legally binding|legally valid|cryptograph|qualified signature|court-admissible|evidentiary value|tamper[- ](?:proof|evident)|authenticated|securely (?:store|stored|retain|retained)|(?:tied|linked|assigned) to (?:their |the )?source.*records?/i
     );

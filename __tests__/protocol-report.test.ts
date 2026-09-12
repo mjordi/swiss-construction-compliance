@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { zlibSync } from "fflate";
 
 import {
   MAX_SIGNATURE_IMAGE_BYTES,
+  MAX_SIGNATURE_IMAGE_DECODED_BYTES,
   MAX_SIGNATURE_IMAGE_DIMENSION,
   MAX_SIGNATURE_IMAGE_PIXELS,
+  MAX_SIGNATURE_JPEG_DECODE_MEMORY_MB,
+  MAX_SIGNATURE_PNG_INFLATED_BYTES,
   buildFinalizedProtocolReport,
   buildFinalizedProtocolReportFromRecord,
   normalizeSignatureImageData,
@@ -52,6 +56,46 @@ function pngWithDimensions(source: string, width: number, height: number): strin
   view.setUint32(29, pngCrc32(bytes, 12, 29));
 
   return encodeDataUri(prefix, bytes);
+}
+
+function pngWithBitDepth(source: string, bitDepth: number): string {
+  const [prefix, bytes] = decodeDataUri(source);
+  const view = new DataView(bytes.buffer);
+  bytes[24] = bitDepth;
+  view.setUint32(29, pngCrc32(bytes, 12, 29));
+  return encodeDataUri(prefix, bytes);
+}
+
+function grayscalePng(width: number, height: number): string {
+  const chunk = (type: string, data: Uint8Array) => {
+    const bytes = new Uint8Array(12 + data.length);
+    const view = new DataView(bytes.buffer);
+    view.setUint32(0, data.length);
+    for (let index = 0; index < 4; index += 1) bytes[4 + index] = type.charCodeAt(index);
+    bytes.set(data, 8);
+    view.setUint32(8 + data.length, pngCrc32(bytes, 4, 8 + data.length));
+    return bytes;
+  };
+  const header = new Uint8Array(13);
+  const headerView = new DataView(header.buffer);
+  headerView.setUint32(0, width);
+  headerView.setUint32(4, height);
+  header[8] = 8;
+  const scanlines = new Uint8Array(height * (width + 1));
+  const chunks = [
+    Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk("IHDR", header),
+    chunk("IDAT", zlibSync(scanlines, { level: 9 })),
+    chunk("IEND", new Uint8Array()),
+  ];
+  const byteLength = chunks.reduce((total, bytes) => total + bytes.length, 0);
+  const png = new Uint8Array(byteLength);
+  let offset = 0;
+  for (const bytes of chunks) {
+    png.set(bytes, offset);
+    offset += bytes.length;
+  }
+  return encodeDataUri("data:image/png;base64", png);
 }
 
 function pngWithCorruptImageData(source: string): string {
@@ -203,6 +247,24 @@ describe("normalizeSignatureImageData", () => {
     expect(normalizeSignatureImageData(pngSignature)).toBe(pngSignature);
     expect(normalizeSignatureImageData(jpegSignature)).toBe(jpegSignature);
     expect(normalizeSignatureImageData(progressiveJpegSignature)).toBe(progressiveJpegSignature);
+  });
+
+  it("accepts a practical high-DPI signature at the exact pixel and dimension bounds", () => {
+    const highDpiSignature = grayscalePng(
+      MAX_SIGNATURE_IMAGE_DIMENSION,
+      MAX_SIGNATURE_IMAGE_PIXELS / MAX_SIGNATURE_IMAGE_DIMENSION
+    );
+
+    expect(MAX_SIGNATURE_IMAGE_DIMENSION).toBe(2048);
+    expect(MAX_SIGNATURE_IMAGE_PIXELS).toBe(2_097_152);
+    expect(MAX_SIGNATURE_IMAGE_DECODED_BYTES).toBe(8_388_608);
+    expect(MAX_SIGNATURE_PNG_INFLATED_BYTES).toBe(8_392_704);
+    expect(MAX_SIGNATURE_JPEG_DECODE_MEMORY_MB).toBe(32);
+    expect(normalizeSignatureImageData(highDpiSignature)).toBe(highDpiSignature);
+  });
+
+  it("rejects 16-bit PNG signature canvases", () => {
+    expect(normalizeSignatureImageData(pngWithBitDepth(pngSignature, 16))).toBeNull();
   });
 
   it.each([
