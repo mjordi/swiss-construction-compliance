@@ -30,7 +30,7 @@ export const de = {
   "how-step2-title": "Fristen automatisch berechnen",
   "how-step2-desc": "Alle gesetzlichen Fristen werden automatisch berechnet. Laden Sie Kalendererinnerungen als .ics-Datei herunter und importieren Sie sie in Ihren Kalender.",
   "how-step3-title": "Beweise sichern",
-  "how-step3-desc": "Georeferenzierte Fotos und finalisierte PDFs mit erfasster Unterschrift und Bezug zum zugrunde liegenden Protokolldatensatz.",
+  "how-step3-desc": "Georeferenzierte Fotos und PDFs, die aus finalisierten Protokolldaten erzeugt werden und die erfasste Unterschrift enthalten.",
 
   // Final CTA
   "cta-title": "Bereit für die OR-Revision 2026?",
@@ -39,7 +39,7 @@ export const de = {
 
   // Features
   "feat-handover-title": "Digitale Abnahmeprotokolle",
-  "feat-handover-desc": "Erstellen Sie SIA-118-Protokolle direkt auf der Baustelle — mit erfasster Unterschrift in einem finalisierten PDF mit Bezug zum zugrunde liegenden Protokolldatensatz.",
+  "feat-handover-desc": "Erstellen Sie SIA-118-Protokolle direkt auf der Baustelle. Die heruntergeladene PDF-Datei enthält die erfasste Unterschrift und die finalisierten Protokollangaben.",
   "feat-warranty-title": "Automatische Fristberechnung",
   "feat-warranty-desc": "Die neue 5-Jahres-Verjährungsfrist und 60-Tage-Rügefrist werden pro Projekt berechnet — mit .ics-Kalenderdateien zum Herunterladen und Importieren.",
   "feat-evidence-title": "Protokoll-Archiv",
@@ -216,7 +216,7 @@ export const de = {
 
   // Success Step
   "success-title": "Protokoll generiert!",
-  "success-desc": "Das Abnahmeprotokoll wurde mit der erfassten Unterschrift finalisiert; das PDF ist dem zugrunde liegenden Protokolldatensatz zugeordnet.",
+  "success-desc": "Das Abnahmeprotokoll wurde mit der erfassten Unterschrift finalisiert. Über „PDF herunterladen“ können Sie daraus eine PDF-Datei erzeugen.",
   "btn-download": "PDF Herunterladen",
   "btn-new": "Neue Abnahme",
   "dashboard-download-success": "PDF wurde heruntergeladen.",
@@ -832,7 +832,7 @@ export const fr = {
   "how-step2-title": "Calculer les délais automatiquement",
   "how-step2-desc": "Tous les délais légaux sont calculés automatiquement. Téléchargez les rappels au format .ics et importez-les dans votre calendrier.",
   "how-step3-title": "Sécuriser les preuves",
-  "how-step3-desc": "Photos géolocalisées et PDF finalisés avec la signature recueillie et un lien vers l’enregistrement de protocole source.",
+  "how-step3-desc": "Photos géolocalisées et PDF générés à partir des données finalisées du protocole, avec la signature recueillie.",
 
   // Final CTA
   "cta-title": "Prêt pour la révision CO 2026 ?",
@@ -841,7 +841,7 @@ export const fr = {
 
   // Features
   "feat-handover-title": "Protocoles de réception numériques",
-  "feat-handover-desc": "Générez des protocoles SIA 118 directement sur le chantier, avec une signature recueillie et un PDF finalisé lié à l’enregistrement source.",
+  "feat-handover-desc": "Générez des protocoles SIA 118 directement sur le chantier. Le PDF téléchargé contient la signature recueillie et les informations finalisées du protocole.",
   "feat-warranty-title": "Calcul automatique des délais",
   "feat-warranty-desc": "La prescription de 5 ans et le délai de notification de 60 jours sont calculés par projet — avec fichiers calendrier .ics à télécharger et à importer.",
   "feat-evidence-title": "Archive de Protocoles",
@@ -1018,7 +1018,7 @@ export const fr = {
 
   // Success Step
   "success-title": "Protocole généré !",
-  "success-desc": "Le protocole de réception a été finalisé avec la signature recueillie et lié à l’enregistrement source.",
+  "success-desc": "Le protocole de réception a été finalisé avec la signature recueillie. Utilisez « Télécharger PDF » pour générer le document correspondant.",
   "btn-download": "Télécharger PDF",
   "btn-new": "Nouvelle Réception",
   "dashboard-download-success": "Le PDF a été téléchargé.",
@@ -1634,7 +1634,7 @@ export const it = {
   "how-step2-title": "Calcola automaticamente le scadenze",
   "how-step2-desc": "Tutte le scadenze legali vengono calcolate automaticamente. Scarica i promemoria in formato .ics e importali nel tuo calendario.",
   "how-step3-title": "Proteggere le prove",
-  "how-step3-desc": "Foto geolocalizzate e PDF finalizzati con la firma acquisita e il collegamento al record di protocollo di origine.",
+  "how-step3-desc": "Foto geolocalizzate e PDF generati dai dati finalizzati del protocollo, con la firma acquisita.",
 
   // Final CTA
   "cta-title": "Pronti per la revisione CO 2026?",
@@ -1643,7 +1643,7 @@ export const it = {
 
   // Features
   "feat-handover-title": "Protocolli di collaudo digitali",
-  "feat-handover-desc": "Genera protocolli SIA 118 direttamente in cantiere, con la firma acquisita e un PDF finalizzato collegato al record di origine.",
+  "feat-handover-desc": "Genera protocolli SIA 118 direttamente in cantiere. Il PDF scaricato contiene la firma acquisita e i dati finalizzati del protocollo.",
   "feat-warranty-title": "Calcolo automatico dei termini",
   "feat-warranty-desc": "La prescrizione di 5 anni e il termine di notifica di 60 giorni vengono calcolati per progetto. Scarica i file calendario .ics e importali nel tuo calendario.",
   "feat-evidence-title": "Archivio Protocolli",
@@ -1820,7 +1820,7 @@ export const it = {
 
   // Success Step
   "success-title": "Protocollo generato!",
-  "success-desc": "Il protocollo di collaudo è stato finalizzato con la firma acquisita e collegato al record di origine.",
+  "success-desc": "Il protocollo di collaudo è stato finalizzato con la firma acquisita. Usa «Scarica PDF» per generare il documento corrispondente.",
   "btn-download": "Scarica PDF",
   "btn-new": "Nuovo Collaudo",
   "dashboard-download-success": "Il PDF è stato scaricato.",
@@ -2436,7 +2436,7 @@ export const en = {
   "how-step2-title": "Calculate deadlines automatically",
   "how-step2-desc": "All legal deadlines are calculated automatically. Download calendar reminders as an .ics file and import them into your calendar.",
   "how-step3-title": "Secure evidence",
-  "how-step3-desc": "Geo-tagged photos and finalized PDFs with the captured signature tied to the source protocol record.",
+  "how-step3-desc": "Geo-tagged photos and PDFs generated from finalized protocol data, including the captured signature.",
 
   // Final CTA
   "cta-title": "Ready for the CO Revision 2026?",
@@ -2445,7 +2445,7 @@ export const en = {
 
   // Features
   "feat-handover-title": "Digital Handover Protocols",
-  "feat-handover-desc": "Generate SIA 118 protocols on-site with a captured signature and a finalized PDF tied to the source record.",
+  "feat-handover-desc": "Generate SIA 118 protocols on-site. The downloaded PDF contains the captured signature and finalized protocol details.",
   "feat-warranty-title": "Automatic Deadline Calculation",
   "feat-warranty-desc": "The new 5-year limitation period and 60-day notice deadline are calculated per project — with downloadable .ics calendar files to import.",
   "feat-evidence-title": "Protocol Archive",
@@ -2622,7 +2622,7 @@ export const en = {
 
   // Success Step
   "success-title": "Protocol Generated!",
-  "success-desc": "The handover protocol was finalized with the captured signature and tied to the source record.",
+  "success-desc": "The handover protocol was finalized with the captured signature. Use “Download PDF” to generate the corresponding document.",
   "btn-download": "Download PDF",
   "btn-new": "New Handover",
   "dashboard-download-success": "PDF downloaded successfully.",

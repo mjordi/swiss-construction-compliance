@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, it, expect } from "vitest";
 import { de, fr, it as itLocale, en } from "../locales/index";
 
@@ -522,37 +523,69 @@ describe("locales", () => {
     }
   });
 
-  it("describes captured signatures in source-bound finalized records without unsupported guarantees", () => {
+  it("describes PDFs generated from finalized protocol data without unsupported guarantees", () => {
     const signatureClaimKeys = [
       "how-step3-desc",
       "feat-handover-desc",
       "success-desc",
     ] as const;
-    const requiredTerms = {
-      de: [/erfasste[nr]? unterschrift/i, /finalisiert/i, /(?:quell|zugrunde liegenden).*datensatz/i],
-      fr: [/signature recueillie/i, /finalis/i, /enregistrement.*source/i],
-      it: [/firma acquisita/i, /finalizz/i, /record.*origine/i],
-      en: [/captured signature/i, /finalized/i, /source.*record/i],
+    const capturedSignatureTerms = {
+      de: /erfasste[nr]? unterschrift/i,
+      fr: /signature recueillie/i,
+      it: /firma acquisita/i,
+      en: /captured signature/i,
+    } as const;
+    const finalizedDataTerms = {
+      de: /finalisierte[nr]? protokoll(?:daten|angaben)/i,
+      fr: /(?:données|informations) finalisées du protocole/i,
+      it: /dati finalizzati del protocollo/i,
+      en: /finalized protocol (?:data|details)/i,
+    } as const;
+    const successTerms = {
+      de: [/protokoll.*finalisiert/i, /pdf.*erzeugen/i],
+      fr: [/protocole.*finalisé/i, /générer.*document/i],
+      it: [/protocollo.*finalizzato/i, /generare.*documento/i],
+      en: [/protocol.*finalized/i, /generate.*document/i],
     } as const;
     const prohibitedClaims = {
-      de: /kryptograf|qualifiziert|rechtsgültig|rechtssicher|rechtliche gültigkeit|rechtsverbindlich|bindende wirkung|(?:identität|unterschrift|signatur).*?(?:verifiz|geprüft)|(?:verifiz|geprüft).*?identität|sicher (?:gespeichert|aufbewahrt)|externe aufbewahrung/i,
-      fr: /cryptograph|qualifi|juridiquement valable|validité juridique|valeur juridique|juridiquement contraignant|force obligatoire|effet contraignant|(?:identité|signature).*?vérifi|vérifi.*?identité|(?:stocké|conservé).*manière sécurisée|conservation externe/i,
-      it: /crittograf|qualificat|giuridicamente valida|validità giuridica|valore legale|vincolant|(?:identità|firma).*?verificat|verificat.*?identità|(?:archiviat|conservat).*modo sicuro|conservazione esterna/i,
-      en: /cryptograph|qualified signature|legally valid|legal validity|legally binding|binding effect|(?:identity|signature).*?verif|verif.*?identity|securely (?:stored|retained)|secure external retention|external retention/i,
+      de: /kryptograf|qualifiziert|rechtsgültig|rechtssicher|rechtliche gültigkeit|rechtsverbindlich|bindende wirkung|gerichtsfest|beweissicher|fälschungssicher|manipulationssicher|authentifiziert|(?:identität|unterschrift|signatur).*?(?:verifiz|geprüft)|(?:verifiz|geprüft).*?identität|sicher (?:gespeichert|aufbewahrt)|externe aufbewahrung|(?:zugeordnet|verknüpft|bezug).*(?:quell|zugrunde liegenden).*datensatz/i,
+      fr: /cryptograph|qualifi|juridiquement valable|validité juridique|valeur juridique|juridiquement contraignant|force obligatoire|effet contraignant|opposable|force probante|infalsifiable|inviolable|authentifi|(?:identité|signature).*?vérifi|vérifi.*?identité|(?:stocké|conservé).*manière sécurisée|conservation externe|(?:lié|rattaché|associé).*enregistrement.*source/i,
+      it: /crittograf|qualificat|giuridicamente valida|validità giuridica|valore legale|valore probatorio|vincolant|opponibile|antimanomissione|a prova di manomissione|autenticat|(?:identità|firma).*?verificat|verificat.*?identità|(?:archiviat|conservat).*modo sicuro|conservazione esterna|(?:collegat|associat|assegnat).*record.*origine/i,
+      en: /cryptograph|qualified signature|legally valid|legal validity|legally binding|binding effect|court-admissible|evidentiary value|tamper[- ](?:proof|evident)|authenticated|(?:identity|signature).*?verif|verif.*?identity|securely (?:stored|retained)|secure external retention|external retention|(?:tied|linked|assigned) to (?:the )?source.*record/i,
     } as const;
 
     for (const [lang, translations] of Object.entries(locales)) {
-      const locale = lang as keyof typeof requiredTerms;
+      const locale = lang as keyof typeof capturedSignatureTerms;
       for (const key of signatureClaimKeys) {
         const copy = translations[key];
-        for (const term of requiredTerms[locale]) {
-          expect(copy, `Locale '${lang}' signature claim '${key}' is missing ${term}`).toMatch(term);
-        }
+        expect(copy, `Locale '${lang}' signature claim '${key}' omits the captured signature`).toMatch(
+          capturedSignatureTerms[locale]
+        );
         expect(copy, `Locale '${lang}' signature claim '${key}' makes an unsupported guarantee`).not.toMatch(
           prohibitedClaims[locale]
         );
       }
+
+      const pdfCopy = `${translations["how-step3-desc"]} ${translations["feat-handover-desc"]}`;
+      expect(pdfCopy, `Locale '${lang}' PDF copy omits finalized protocol data`).toMatch(finalizedDataTerms[locale]);
+      expect(pdfCopy, `Locale '${lang}' PDF copy does not describe a PDF`).toMatch(/pdf/i);
+      for (const term of successTerms[locale]) {
+        expect(translations["success-desc"], `Locale '${lang}' success copy is missing ${term}`).toMatch(term);
+      }
     }
+  });
+
+  it("keeps README handover and PDF claims within the implemented trust boundary", () => {
+    const readme = readFileSync("README.md", "utf8");
+    const trustCopy = readme.split("## Tech Stack")[0];
+
+    expect(trustCopy).toMatch(/capture handover protocol data and signatures/i);
+    expect(trustCopy).toMatch(/organize supporting evidence/i);
+    expect(trustCopy).toMatch(/(?:generated? from finalized protocol data|contain(?:s)? the captured signature and finalized protocol details)/i);
+    expect(trustCopy).not.toMatch(
+      /legally compliant digital handover|legally binding|legally valid|cryptograph|qualified signature|court-admissible|evidentiary value|tamper[- ](?:proof|evident)|authenticated|securely (?:store|stored|retain|retained)|(?:tied|linked|assigned) to (?:their |the )?source.*records?/i
+    );
+    expect(trustCopy).not.toMatch(/source records?.*@react-pdf|@react-pdf.*source records?/i);
   });
 
   it("includes calculator share-link localization keys in every locale", () => {
