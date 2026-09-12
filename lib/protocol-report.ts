@@ -1,4 +1,7 @@
 import { NO_VISIBLE_DEFECTS_CONFIRMED_MARKER } from "@/lib/dashboard-protocol";
+import { unzlibSync } from "fflate";
+import { decode as decodePng } from "fast-png";
+import { decode as decodeJpeg } from "jpeg-js";
 
 export const MAX_SIGNATURE_IMAGE_BYTES = 256 * 1024;
 // SignaturePad canvases are small, but high-DPI devices can multiply their backing size.
@@ -23,6 +26,46 @@ const JPEG_SOF_MARKERS = new Set([
   0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf,
 ]);
 const SUPPORTED_JPEG_SOF_MARKERS = new Set([0xc0, 0xc2]);
+const MAX_JPEG_DECODE_MEMORY_MB = 128;
+
+interface ImageDimensions {
+  width: number;
+  height: number;
+  pngCompressedData?: Uint8Array;
+  pngInflatedByteLength?: number;
+}
+
+const PNG_CHANNELS_BY_COLOR_TYPE = new Map([
+  [0, 1],
+  [2, 3],
+  [3, 1],
+  [4, 2],
+  [6, 4],
+]);
+
+function getPngInflatedByteLength(
+  width: number,
+  height: number,
+  bitDepth: number,
+  colorType: number,
+  interlaceMethod: number
+): number {
+  const bitsPerPixel = bitDepth * (PNG_CHANNELS_BY_COLOR_TYPE.get(colorType) ?? 0);
+  const passStarts = interlaceMethod === 0
+    ? [[0, 0, 1, 1]]
+    : [
+      [0, 0, 8, 8], [4, 0, 8, 8], [0, 4, 4, 8], [2, 0, 4, 4],
+      [0, 2, 2, 4], [1, 0, 2, 2], [0, 1, 1, 2],
+    ];
+
+  return passStarts.reduce((total, [startX, startY, stepX, stepY]) => {
+    const passWidth = width > startX ? Math.ceil((width - startX) / stepX) : 0;
+    const passHeight = height > startY ? Math.ceil((height - startY) / stepY) : 0;
+    return passWidth === 0 || passHeight === 0
+      ? total
+      : total + passHeight * (1 + Math.ceil((passWidth * bitsPerPixel) / 8));
+  }, 0);
+}
 
 function readUint32(bytes: Uint8Array, offset: number): number {
   return (
@@ -74,7 +117,7 @@ function pngCrc32(bytes: Uint8Array, start: number, end: number): number {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
-function isValidPng(bytes: Uint8Array): boolean {
+function isValidPng(bytes: Uint8Array, dimensions: ImageDimensions): boolean {
   if (
     bytes.length < 45 ||
     PNG_SIGNATURE.some((byte, index) => bytes[index] !== byte)
@@ -88,6 +131,7 @@ function isValidPng(bytes: Uint8Array): boolean {
   let hasPalette = false;
   let colorType = -1;
   let bitDepth = -1;
+  let interlaceMethod = -1;
   const compressedData: number[] = [];
 
   while (offset + 12 <= bytes.length) {
@@ -105,6 +149,8 @@ function isValidPng(bytes: Uint8Array): boolean {
     if ((typeBytes[0] & 0x20) === 0 && !["IHDR", "PLTE", "IDAT", "IEND"].includes(type)) {
       return false;
     }
+    // fast-png inflates embedded ICC profiles without an output-size limit.
+    if (type === "iCCP") return false;
     if (pngCrc32(bytes, offset + 4, dataEnd) !== readUint32(bytes, dataEnd)) return false;
 
     if (chunkIndex === 0) {
@@ -113,14 +159,17 @@ function isValidPng(bytes: Uint8Array): boolean {
       const height = readUint32(bytes, dataStart + 4);
       bitDepth = bytes[dataStart + 8];
       colorType = bytes[dataStart + 9];
+      interlaceMethod = bytes[dataStart + 12];
       const validBitDepth = PNG_BIT_DEPTHS.get(colorType)?.includes(bitDepth);
       if (
         !hasSafeDimensions(width, height) ||
         !validBitDepth ||
         bytes[dataStart + 10] !== 0 ||
         bytes[dataStart + 11] !== 0 ||
-        bytes[dataStart + 12] > 1
+        interlaceMethod > 1
       ) return false;
+      dimensions.width = width;
+      dimensions.height = height;
     } else if (type === "IHDR") {
       return false;
     }
@@ -151,8 +200,19 @@ function isValidPng(bytes: Uint8Array): boolean {
       const compressionMethod = compressedData[0] & 0x0f;
       const compressionInfo = compressedData[0] >>> 4;
       const header = compressedData[0] * 0x100 + compressedData[1];
-      return compressionMethod === 8 && compressionInfo <= 7 && header % 31 === 0 &&
-        (compressedData[1] & 0x20) === 0;
+      const hasValidZlibHeader = compressionMethod === 8 && compressionInfo <= 7 &&
+        header % 31 === 0 && (compressedData[1] & 0x20) === 0;
+      if (!hasValidZlibHeader) return false;
+
+      dimensions.pngCompressedData = Uint8Array.from(compressedData);
+      dimensions.pngInflatedByteLength = getPngInflatedByteLength(
+        dimensions.width,
+        dimensions.height,
+        bitDepth,
+        colorType,
+        interlaceMethod
+      );
+      return true;
     }
 
     offset = chunkEnd;
@@ -162,7 +222,7 @@ function isValidPng(bytes: Uint8Array): boolean {
   return false;
 }
 
-function isValidJpeg(bytes: Uint8Array): boolean {
+function isValidJpeg(bytes: Uint8Array, dimensions: ImageDimensions): boolean {
   if (bytes.length < 14 || bytes[0] !== 0xff || bytes[1] !== 0xd8) return false;
 
   let offset = 2;
@@ -202,6 +262,8 @@ function isValidJpeg(bytes: Uint8Array): boolean {
         segmentLength !== 8 + 3 * components) {
         return false;
       }
+      dimensions.width = width;
+      dimensions.height = height;
 
       frameComponents = new Set<number>();
       for (let index = 0; index < components; index += 1) {
@@ -304,6 +366,36 @@ function isValidJpeg(bytes: Uint8Array): boolean {
   return false;
 }
 
+function hasMatchingDecodedDimensions(
+  bytes: Uint8Array,
+  format: "png" | "jpeg",
+  expected: ImageDimensions
+): boolean {
+  try {
+    if (format === "png") {
+      if (!expected.pngCompressedData || expected.pngInflatedByteLength === undefined) return false;
+      const inflated = unzlibSync(expected.pngCompressedData, {
+        // One extra byte makes oversized deflate streams observable without unbounded output.
+        out: new Uint8Array(expected.pngInflatedByteLength + 1),
+      });
+      if (inflated.length !== expected.pngInflatedByteLength) return false;
+    }
+
+    const decoded = format === "png"
+      ? decodePng(bytes, { checkCrc: true })
+      : decodeJpeg(bytes, {
+        useTArray: true,
+        formatAsRGBA: false,
+        tolerantDecoding: false,
+        maxResolutionInMP: MAX_SIGNATURE_IMAGE_PIXELS / 1_000_000,
+        maxMemoryUsageInMB: MAX_JPEG_DECODE_MEMORY_MB,
+      });
+    return decoded.width === expected.width && decoded.height === expected.height;
+  } catch {
+    return false;
+  }
+}
+
 export function normalizeSignatureImageData(
   value: string | null | undefined
 ): string | null {
@@ -337,12 +429,20 @@ export function normalizeSignatureImageData(
   if (!bytes) return null;
 
   const detectedFormat = PNG_SIGNATURE.every((byte, index) => bytes[index] === byte)
-    ? (isValidPng(bytes) ? "png" : null)
+    ? "png"
     : bytes[0] === 0xff && bytes[1] === 0xd8
-      ? (isValidJpeg(bytes) ? "jpeg" : null)
+      ? "jpeg"
       : null;
+  if (!detectedFormat || detectedFormat !== declaredFormat) return null;
 
-  return detectedFormat === declaredFormat ? value : null;
+  const dimensions = { width: 0, height: 0 };
+  const isStructurallyValid = detectedFormat === "png"
+    ? isValidPng(bytes, dimensions)
+    : isValidJpeg(bytes, dimensions);
+
+  return isStructurallyValid && hasMatchingDecodedDimensions(bytes, detectedFormat, dimensions)
+    ? value
+    : null;
 }
 
 export type ProtocolDefectEvidence =

@@ -32,22 +32,48 @@ function truncateDataUri(source: string, bytesToRemove: number): string {
   return encodeDataUri(prefix, bytes.slice(0, -bytesToRemove));
 }
 
+function pngCrc32(bytes: Uint8Array, start: number, end: number): number {
+  let crc = 0xffffffff;
+  for (let offset = start; offset < end; offset += 1) {
+    crc ^= bytes[offset];
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+    }
+  }
+  return (crc ^ 0xffffffff) >>> 0;
+}
+
 function pngWithDimensions(source: string, width: number, height: number): string {
   const [prefix, bytes] = decodeDataUri(source);
   const view = new DataView(bytes.buffer);
   view.setUint32(16, width);
   view.setUint32(20, height);
 
-  let crc = 0xffffffff;
-  for (let offset = 12; offset < 29; offset += 1) {
-    crc ^= bytes[offset];
-    for (let bit = 0; bit < 8; bit += 1) {
-      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
-    }
-  }
-  view.setUint32(29, (crc ^ 0xffffffff) >>> 0);
+  view.setUint32(29, pngCrc32(bytes, 12, 29));
 
   return encodeDataUri(prefix, bytes);
+}
+
+function pngWithCorruptImageData(source: string): string {
+  const [prefix, bytes] = decodeDataUri(source);
+  const view = new DataView(bytes.buffer);
+  let offset = 8;
+
+  while (offset + 12 <= bytes.length) {
+    const dataLength = view.getUint32(offset);
+    const type = String.fromCharCode(...bytes.slice(offset + 4, offset + 8));
+    const dataStart = offset + 8;
+    const dataEnd = dataStart + dataLength;
+    if (type === "IDAT") {
+      // Retain the zlib header so this still passes the cheap structural checks.
+      bytes[dataStart + 2] ^= 0xff;
+      view.setUint32(dataEnd, pngCrc32(bytes, offset + 4, dataEnd));
+      return encodeDataUri(prefix, bytes);
+    }
+    offset = dataEnd + 4;
+  }
+
+  throw new Error("PNG fixture has no IDAT chunk");
 }
 
 function jpegWithDimensions(source: string, width: number, height: number): string {
@@ -67,6 +93,17 @@ function jpegWithoutScanData(source: string): string {
   const scanLength = bytes[scanOffset + 2] * 0x100 + bytes[scanOffset + 3];
   const headerEnd = scanOffset + 2 + scanLength;
   return encodeDataUri(prefix, new Uint8Array([...bytes.slice(0, headerEnd), 0xff, 0xd9]));
+}
+
+function jpegWithTruncatedEntropy(source: string): string {
+  const [prefix, bytes] = decodeDataUri(source);
+  const scanOffset = bytes.findIndex((byte, index) => byte === 0xff && bytes[index + 1] === 0xda);
+  const scanLength = bytes[scanOffset + 2] * 0x100 + bytes[scanOffset + 3];
+  const entropyStart = scanOffset + 2 + scanLength;
+  return encodeDataUri(
+    prefix,
+    new Uint8Array([...bytes.slice(0, entropyStart + 1), 0xff, 0xd9])
+  );
 }
 
 describe("buildFinalizedProtocolReport", () => {
@@ -167,6 +204,14 @@ describe("normalizeSignatureImageData", () => {
 
   it("rejects a JPEG with a structurally valid header but no scan data", () => {
     expect(normalizeSignatureImageData(jpegWithoutScanData(jpegSignature))).toBeNull();
+  });
+
+  it("rejects PNG data with corrupt IDAT deflate and a recomputed chunk CRC", () => {
+    expect(normalizeSignatureImageData(pngWithCorruptImageData(pngSignature))).toBeNull();
+  });
+
+  it("rejects JPEG data whose entropy stream is structurally present but truncated", () => {
+    expect(normalizeSignatureImageData(jpegWithTruncatedEntropy(jpegSignature))).toBeNull();
   });
 
   it("rejects data whose detected format does not match its declared MIME", () => {
@@ -290,6 +335,19 @@ describe("buildFinalizedProtocolReportFromRecord", () => {
       status: "finalized",
       defect_description: null,
       signature_data: "https://example.com/historical-signature.png",
+      case_id: null,
+      finalized_at: finalizedAt,
+    })).toMatchObject({
+      signatureCaptured: true,
+      signatureImageData: null,
+    });
+  });
+
+  it("keeps historical capture evidence when compressed image data is corrupt", () => {
+    expect(buildFinalizedProtocolReportFromRecord({
+      status: "finalized",
+      defect_description: null,
+      signature_data: pngWithCorruptImageData(pngSignature),
       case_id: null,
       finalized_at: finalizedAt,
     })).toMatchObject({
