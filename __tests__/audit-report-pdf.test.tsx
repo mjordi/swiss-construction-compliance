@@ -1,8 +1,14 @@
 import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
-import { Image } from "@react-pdf/renderer";
+import { Image, pdf } from "@react-pdf/renderer";
 import { describe, expect, it } from "vitest";
 
 import { AuditReportPDF } from "@/components/dashboard/AuditReportPDF";
+import { buildFinalizedProtocolReport } from "@/lib/protocol-report";
+
+const validSignatureImages = [
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAAABAAAAAQBPJcTWAAAADklEQVR4nGP4DwYMEAoAU7oL9ZisIGcAAAAASUVORK5CYII=",
+  "data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAAQABAAD//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgEBAQEBAUFBQUFBQYGBgYGBgYGBgYGBgYHBwcICAgHBwcGBgcHCAgICAkJCQgICAgJCQoKCgwMCwsODg4RERT/xABLAAEBAAAAAAAAAAAAAAAAAAAABwEBAAAAAAAAAAAAAAAAAAAAABABAAAAAAAAAAAAAAAAAAAAABEBAAAAAAAAAAAAAAAAAAAAAP/AABEIAAIAAgMBIgACEQADEQD/2gAMAwEAAhEDEQA/AL+AD//Z",
+] as const;
 
 function collectText(node: ReactNode): string {
   if (typeof node === "string" || typeof node === "number") {
@@ -77,7 +83,7 @@ describe("AuditReportPDF", () => {
   });
 
   it("renders one bounded PDF image for normalized signature evidence", () => {
-    const signatureImageData = "data:image/png;base64,iVBORw0KGgo=";
+    const signatureImageData = validSignatureImages[0];
     const report = AuditReportPDF({
       fileName: "Alpine Tower",
       report: {
@@ -93,6 +99,24 @@ describe("AuditReportPDF", () => {
     const images = collectElementsByType(report, Image) as ReactElement<{ src?: string }>[];
     expect(images).toHaveLength(1);
     expect(images[0].props.src).toBe(signatureImageData);
+  });
+
+  it.each(validSignatureImages)("renders a PDF blob with a valid signature image", async (signatureData) => {
+    const report = buildFinalizedProtocolReport({
+      defectDescription: "",
+      noDefectsConfirmed: true,
+      signatureCaptured: true,
+      signatureData,
+      linkedCaseId: null,
+      finalizedAt: "2026-07-29T21:30:00.000Z",
+    });
+
+    const blob = await pdf(
+      <AuditReportPDF fileName="Alpine Tower" report={report} />
+    ).toBlob();
+
+    expect(blob.type).toBe("application/pdf");
+    expect(blob.size).toBeGreaterThan(0);
   });
 
   it("states when a captured signature image is unavailable without rendering an image", () => {

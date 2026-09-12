@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 
 import {
   MAX_SIGNATURE_IMAGE_BYTES,
+  MAX_SIGNATURE_IMAGE_DIMENSION,
+  MAX_SIGNATURE_IMAGE_PIXELS,
   buildFinalizedProtocolReport,
   buildFinalizedProtocolReportFromRecord,
   normalizeSignatureImageData,
@@ -9,8 +11,63 @@ import {
 import { NO_VISIBLE_DEFECTS_CONFIRMED_MARKER } from "@/lib/dashboard-protocol";
 
 const finalizedAt = "2026-07-29T21:30:00.000Z";
-const pngSignature = "data:image/png;base64,iVBORw0KGgo=";
-const jpegSignature = "data:image/jpeg;base64,/9j/2Q==";
+const pngSignature =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAAABAAAAAQBPJcTWAAAADklEQVR4nGP4DwYMEAoAU7oL9ZisIGcAAAAASUVORK5CYII=";
+const jpegSignature =
+  "data:image/jpeg;base64,/9j/4AAQSkZJRgABAgAAAQABAAD//gAQTGF2YzYwLjMxLjEwMgD/2wBDAAgEBAQEBAUFBQUFBQYGBgYGBgYGBgYGBgYHBwcICAgHBwcGBgcHCAgICAkJCQgICAgJCQoKCgwMCwsODg4RERT/xABLAAEBAAAAAAAAAAAAAAAAAAAABwEBAAAAAAAAAAAAAAAAAAAAABABAAAAAAAAAAAAAAAAAAAAABEBAAAAAAAAAAAAAAAAAAAAAP/AABEIAAIAAgMBIgACEQADEQD/2gAMAwEAAhEDEQA/AL+AD//Z";
+const progressiveJpegSignature =
+  "data:image/jpeg;base64,/9j/2wBDAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRT/2wBDAQMEBAUEBQkFBQkUDQsNFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBT/wgARCAACAAIDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAVAQEBAAAAAAAAAAAAAAAAAAAFB//aAAwDAQACEAMQAAABtQEp/wD/xAAWEAEBAQAAAAAAAAAAAAAAAAAEBgX/2gAIAQEAAQUCncoTZ/8A/8QAGBEAAgMAAAAAAAAAAAAAAAAAAAIDM3H/2gAIAQMBAT8BirXD/8QAFhEAAwAAAAAAAAAAAAAAAAAAAAIx/9oACAECAQE/AWp//8QAGxAAAwEAAwEAAAAAAAAAAAAAAQIDBAAFEUH/2gAIAQEABj8C6zRoxwveuWT0rSQZnYqPST9PP//EABcQAQADAAAAAAAAAAAAAAAAAAEAETH/2gAIAQEAAT8hex5KiWLRVV2f/9oADAMBAAIAAwAAABAH/8QAFxEAAwEAAAAAAAAAAAAAAAAAAAGhsf/aAAgBAwEBPxCRiP/EABYRAAMAAAAAAAAAAAAAAAAAAAAxcf/aAAgBAgEBPxBtP//EABUQAQEAAAAAAAAAAAAAAAAAAAEA/9oACAEBAAE/EHP0en8yMJUqqt//2Q==";
+
+function decodeDataUri(source: string): [string, Uint8Array] {
+  const [prefix, payload] = source.split(",");
+  return [prefix, Uint8Array.from(atob(payload), (character) => character.charCodeAt(0))];
+}
+
+function encodeDataUri(prefix: string, bytes: Uint8Array): string {
+  return `${prefix},${btoa(String.fromCharCode(...bytes))}`;
+}
+
+function truncateDataUri(source: string, bytesToRemove: number): string {
+  const [prefix, bytes] = decodeDataUri(source);
+  return encodeDataUri(prefix, bytes.slice(0, -bytesToRemove));
+}
+
+function pngWithDimensions(source: string, width: number, height: number): string {
+  const [prefix, bytes] = decodeDataUri(source);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(16, width);
+  view.setUint32(20, height);
+
+  let crc = 0xffffffff;
+  for (let offset = 12; offset < 29; offset += 1) {
+    crc ^= bytes[offset];
+    for (let bit = 0; bit < 8; bit += 1) {
+      crc = (crc >>> 1) ^ (crc & 1 ? 0xedb88320 : 0);
+    }
+  }
+  view.setUint32(29, (crc ^ 0xffffffff) >>> 0);
+
+  return encodeDataUri(prefix, bytes);
+}
+
+function jpegWithDimensions(source: string, width: number, height: number): string {
+  const [prefix, bytes] = decodeDataUri(source);
+  const frameOffset = bytes.findIndex((byte, index) =>
+    byte === 0xff && (bytes[index + 1] === 0xc0 || bytes[index + 1] === 0xc2)
+  );
+  const view = new DataView(bytes.buffer);
+  view.setUint16(frameOffset + 5, height);
+  view.setUint16(frameOffset + 7, width);
+  return encodeDataUri(prefix, bytes);
+}
+
+function jpegWithoutScanData(source: string): string {
+  const [prefix, bytes] = decodeDataUri(source);
+  const scanOffset = bytes.findIndex((byte, index) => byte === 0xff && bytes[index + 1] === 0xda);
+  const scanLength = bytes[scanOffset + 2] * 0x100 + bytes[scanOffset + 3];
+  const headerEnd = scanOffset + 2 + scanLength;
+  return encodeDataUri(prefix, new Uint8Array([...bytes.slice(0, headerEnd), 0xff, 0xd9]));
+}
 
 describe("buildFinalizedProtocolReport", () => {
   it("preserves source-bound finalized protocol evidence", () => {
@@ -66,12 +123,29 @@ describe("buildFinalizedProtocolReport", () => {
       finalizedAt,
     });
   });
+
+  it("derives captured state when a valid signature image is present", () => {
+    expect(
+      buildFinalizedProtocolReport({
+        defectDescription: "",
+        noDefectsConfirmed: false,
+        signatureCaptured: false,
+        signatureData: pngSignature,
+        linkedCaseId: null,
+        finalizedAt,
+      })
+    ).toMatchObject({
+      signatureCaptured: true,
+      signatureImageData: pngSignature,
+    });
+  });
 });
 
 describe("normalizeSignatureImageData", () => {
-  it("preserves exact PNG and JPEG base64 data URIs", () => {
+  it("preserves exact PNG and baseline/progressive JPEG base64 data URIs", () => {
     expect(normalizeSignatureImageData(pngSignature)).toBe(pngSignature);
     expect(normalizeSignatureImageData(jpegSignature)).toBe(jpegSignature);
+    expect(normalizeSignatureImageData(progressiveJpegSignature)).toBe(progressiveJpegSignature);
   });
 
   it.each([
@@ -81,8 +155,60 @@ describe("normalizeSignatureImageData", () => {
     "data:image/png;base64,AAA=AAAA",
     "data:image/png;base64,AB==",
     "data:image/png;base64,",
+    "data:image/png;base64,QUJDRA==",
   ])("rejects an unsafe or non-canonical source: %s", (source) => {
     expect(normalizeSignatureImageData(source)).toBeNull();
+  });
+
+  it("rejects truncated PNG and JPEG data", () => {
+    expect(normalizeSignatureImageData(truncateDataUri(pngSignature, 8))).toBeNull();
+    expect(normalizeSignatureImageData(truncateDataUri(jpegSignature, 2))).toBeNull();
+  });
+
+  it("rejects a JPEG with a structurally valid header but no scan data", () => {
+    expect(normalizeSignatureImageData(jpegWithoutScanData(jpegSignature))).toBeNull();
+  });
+
+  it("rejects data whose detected format does not match its declared MIME", () => {
+    expect(normalizeSignatureImageData(pngSignature.replace("image/png", "image/jpeg"))).toBeNull();
+    expect(normalizeSignatureImageData(jpegSignature.replace("image/jpeg", "image/png"))).toBeNull();
+  });
+
+  it("rejects zero, over-dimension, and over-pixel PNG canvases", () => {
+    expect(normalizeSignatureImageData(pngWithDimensions(pngSignature, 0, 1))).toBeNull();
+    expect(
+      normalizeSignatureImageData(
+        pngWithDimensions(pngSignature, MAX_SIGNATURE_IMAGE_DIMENSION + 1, 1)
+      )
+    ).toBeNull();
+    expect(MAX_SIGNATURE_IMAGE_DIMENSION ** 2).toBeGreaterThan(MAX_SIGNATURE_IMAGE_PIXELS);
+    expect(
+      normalizeSignatureImageData(
+        pngWithDimensions(
+          pngSignature,
+          MAX_SIGNATURE_IMAGE_DIMENSION,
+          MAX_SIGNATURE_IMAGE_DIMENSION
+        )
+      )
+    ).toBeNull();
+  });
+
+  it("applies the same canvas bounds to JPEG images", () => {
+    expect(normalizeSignatureImageData(jpegWithDimensions(jpegSignature, 1, 0))).toBeNull();
+    expect(
+      normalizeSignatureImageData(
+        jpegWithDimensions(jpegSignature, MAX_SIGNATURE_IMAGE_DIMENSION + 1, 1)
+      )
+    ).toBeNull();
+    expect(
+      normalizeSignatureImageData(
+        jpegWithDimensions(
+          jpegSignature,
+          MAX_SIGNATURE_IMAGE_DIMENSION,
+          MAX_SIGNATURE_IMAGE_DIMENSION
+        )
+      )
+    ).toBeNull();
   });
 
   it("rejects payloads above the exported decoded-byte limit", () => {
