@@ -1,4 +1,5 @@
-import { Children, isValidElement, type ReactNode } from "react";
+import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
+import { Image } from "@react-pdf/renderer";
 import { describe, expect, it } from "vitest";
 
 import { AuditReportPDF } from "@/components/dashboard/AuditReportPDF";
@@ -12,6 +13,17 @@ function collectText(node: ReactNode): string {
   }
 
   return Children.toArray(node.props.children).map(collectText).join(" ");
+}
+
+function collectElementsByType(
+  node: ReactNode,
+  type: unknown,
+  matches: ReactElement[] = []
+): ReactElement[] {
+  if (!isValidElement<{ children?: ReactNode }>(node)) return matches;
+  if (node.type === type) matches.push(node);
+  Children.forEach(node.props.children, (child) => collectElementsByType(child, type, matches));
+  return matches;
 }
 
 describe("AuditReportPDF", () => {
@@ -28,6 +40,7 @@ describe("AuditReportPDF", () => {
           description: "Cracked balcony edge",
         },
         signatureCaptured: true,
+        signatureImageData: null,
         linkedCaseId: "case-1",
         finalizedAt: "2026-07-29T21:30:00.000Z",
       },
@@ -54,11 +67,66 @@ describe("AuditReportPDF", () => {
         status: "finalized",
         defectEvidence: { kind: "none-visible-confirmed" },
         signatureCaptured: true,
+        signatureImageData: null,
         linkedCaseId: null,
         finalizedAt: "2026-07-29T21:30:00.000Z",
       },
     });
 
     expect(collectText(report)).toContain("No visible defects confirmed");
+  });
+
+  it("renders one bounded PDF image for normalized signature evidence", () => {
+    const signatureImageData = "data:image/png;base64,iVBORw0KGgo=";
+    const report = AuditReportPDF({
+      fileName: "Alpine Tower",
+      report: {
+        status: "finalized",
+        defectEvidence: { kind: "not-recorded" },
+        signatureCaptured: true,
+        signatureImageData,
+        linkedCaseId: null,
+        finalizedAt: "2026-07-29T21:30:00.000Z",
+      },
+    });
+
+    const images = collectElementsByType(report, Image) as ReactElement<{ src?: string }>[];
+    expect(images).toHaveLength(1);
+    expect(images[0].props.src).toBe(signatureImageData);
+  });
+
+  it("states when a captured signature image is unavailable without rendering an image", () => {
+    const report = AuditReportPDF({
+      fileName: "Alpine Tower",
+      report: {
+        status: "finalized",
+        defectEvidence: { kind: "not-recorded" },
+        signatureCaptured: true,
+        signatureImageData: null,
+        linkedCaseId: null,
+        finalizedAt: "2026-07-29T21:30:00.000Z",
+      },
+    });
+
+    expect(collectText(report)).toContain("CAPTURED — IMAGE UNAVAILABLE");
+    expect(collectElementsByType(report, Image)).toHaveLength(0);
+  });
+
+  it("keeps the missing-signature state distinct and renders no image", () => {
+    const report = AuditReportPDF({
+      fileName: "Alpine Tower",
+      report: {
+        status: "finalized",
+        defectEvidence: { kind: "not-recorded" },
+        signatureCaptured: false,
+        signatureImageData: null,
+        linkedCaseId: null,
+        finalizedAt: "2026-07-29T21:30:00.000Z",
+      },
+    });
+
+    expect(collectText(report)).toContain("NOT CAPTURED");
+    expect(collectText(report)).not.toContain("IMAGE UNAVAILABLE");
+    expect(collectElementsByType(report, Image)).toHaveLength(0);
   });
 });
