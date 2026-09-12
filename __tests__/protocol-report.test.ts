@@ -76,6 +76,26 @@ function pngWithCorruptImageData(source: string): string {
   throw new Error("PNG fixture has no IDAT chunk");
 }
 
+function pngWithCorruptAdlerTrailer(source: string): string {
+  const [prefix, bytes] = decodeDataUri(source);
+  const view = new DataView(bytes.buffer);
+  let offset = 8;
+
+  while (offset + 12 <= bytes.length) {
+    const dataLength = view.getUint32(offset);
+    const type = String.fromCharCode(...bytes.slice(offset + 4, offset + 8));
+    const dataEnd = offset + 8 + dataLength;
+    if (type === "IDAT") {
+      bytes[dataEnd - 1] ^= 0xff;
+      view.setUint32(dataEnd, pngCrc32(bytes, offset + 4, dataEnd));
+      return encodeDataUri(prefix, bytes);
+    }
+    offset = dataEnd + 4;
+  }
+
+  throw new Error("PNG fixture has no IDAT chunk");
+}
+
 function jpegWithDimensions(source: string, width: number, height: number): string {
   const [prefix, bytes] = decodeDataUri(source);
   const frameOffset = bytes.findIndex((byte, index) =>
@@ -208,6 +228,10 @@ describe("normalizeSignatureImageData", () => {
 
   it("rejects PNG data with corrupt IDAT deflate and a recomputed chunk CRC", () => {
     expect(normalizeSignatureImageData(pngWithCorruptImageData(pngSignature))).toBeNull();
+  });
+
+  it("rejects PNG data with a corrupt zlib Adler trailer and recomputed chunk CRC", () => {
+    expect(normalizeSignatureImageData(pngWithCorruptAdlerTrailer(pngSignature))).toBeNull();
   });
 
   it("rejects JPEG data whose entropy stream is structurally present but truncated", () => {

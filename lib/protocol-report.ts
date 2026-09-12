@@ -117,6 +117,25 @@ function pngCrc32(bytes: Uint8Array, start: number, end: number): number {
   return (crc ^ 0xffffffff) >>> 0;
 }
 
+function adler32(bytes: Uint8Array): number {
+  const modulus = 65521;
+  let first = 1;
+  let second = 0;
+
+  // Reduce periodically to keep the running sums within exact integer range.
+  for (let start = 0; start < bytes.length; start += 5552) {
+    const end = Math.min(start + 5552, bytes.length);
+    for (let offset = start; offset < end; offset += 1) {
+      first += bytes[offset];
+      second += first;
+    }
+    first %= modulus;
+    second %= modulus;
+  }
+
+  return (second * 0x10000 + first) >>> 0;
+}
+
 function isValidPng(bytes: Uint8Array, dimensions: ImageDimensions): boolean {
   if (
     bytes.length < 45 ||
@@ -379,6 +398,11 @@ function hasMatchingDecodedDimensions(
         out: new Uint8Array(expected.pngInflatedByteLength + 1),
       });
       if (inflated.length !== expected.pngInflatedByteLength) return false;
+      const expectedAdler = readUint32(
+        expected.pngCompressedData,
+        expected.pngCompressedData.length - 4
+      );
+      if (adler32(inflated) !== expectedAdler) return false;
     }
 
     const decoded = format === "png"
