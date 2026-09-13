@@ -3,6 +3,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Protocol } from "@/lib/database.types";
 import type { ProtocolRegisterRecord } from "@/lib/protocol-register";
 
+const pngSignature =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAAABAAAAAQBPJcTWAAAADklEQVR4nGP4DwYMEAoAU7oL9ZisIGcAAAAASUVORK5CYII=";
+
 const mocks = vi.hoisted(() => ({
   currentUser: { id: "owner-1", email: "owner@example.ch", name: "Owner" } as { id: string; email: string; name: string } | null,
   fromMock: vi.fn(),
@@ -43,7 +46,7 @@ function protocolRow(overrides: Partial<Protocol>): Protocol {
     contractor: "Contractor AG",
     client: "Client GmbH",
     defect_description: "Crack recorded",
-    signature_data: "data:image/png;base64,signed",
+    signature_data: pngSignature,
     status: "finalized",
     created_at: "2026-08-13T08:00:00.000Z",
     finalized_at: "2026-08-13T08:30:00.000Z",
@@ -410,6 +413,7 @@ describe("ProtocolRegisterPage", () => {
       client: "Client GmbH",
     });
     expect(pdfElement.props.report).toMatchObject({ status: "finalized", linkedCaseId: null, signatureCaptured: true, finalizedAt: "2026-08-13T08:30:00.000Z" });
+    expect(pdfElement.props.report.signatureImageData).toBe(pngSignature);
     await waitFor(() => expect(clickMock).toHaveBeenCalledTimes(1));
     expect(createObjectURLMock).toHaveBeenCalledTimes(1);
     expect(revokeObjectURLMock).toHaveBeenCalledWith("blob:protocol");

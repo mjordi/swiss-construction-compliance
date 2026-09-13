@@ -1,4 +1,4 @@
-import { Document, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
+import { Document, Image, Page, Text, View, StyleSheet, Font } from '@react-pdf/renderer';
 import type { FinalizedProtocolReport } from '@/lib/protocol-report';
 
 // Register a standard font
@@ -65,6 +65,15 @@ const styles = StyleSheet.create({
   detailValue: {
     fontSize: 12,
     width: '60%',
+  },
+  signatureEvidence: {
+    width: '60%',
+  },
+  signatureImage: {
+    width: 180,
+    height: 72,
+    objectFit: 'contain',
+    marginTop: 6,
   },
   footer: {
     position: 'absolute',
@@ -169,9 +178,18 @@ export const AuditReportPDF = ({ fileName, caseId, contractor, client, report }:
 
         <View style={styles.item}>
           <Text style={styles.itemTitle}>Signature Capture</Text>
-          <Text style={report.signatureCaptured ? styles.statusValue : styles.detailValue}>
-            {report.signatureCaptured ? 'CAPTURED' : 'NOT CAPTURED'}
-          </Text>
+          {report.signatureImageData ? (
+            <View style={styles.signatureEvidence}>
+              <Text style={styles.statusValue}>CAPTURED</Text>
+              {/* PDF Image does not expose an HTML alt attribute. */}
+              {/* eslint-disable-next-line jsx-a11y/alt-text */}
+              <Image src={report.signatureImageData} style={styles.signatureImage} />
+            </View>
+          ) : (
+            <Text style={report.signatureCaptured ? styles.statusValue : styles.detailValue}>
+              {report.signatureCaptured ? 'CAPTURED — IMAGE UNAVAILABLE' : 'NOT CAPTURED'}
+            </Text>
+          )}
         </View>
       </View>
 

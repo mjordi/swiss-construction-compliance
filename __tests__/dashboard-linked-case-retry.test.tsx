@@ -819,6 +819,7 @@ describe("dashboard linked-case loading retry", () => {
           description: "Cracked balcony edge",
         },
         signatureCaptured: true,
+        signatureImageData: null,
         linkedCaseId: "case-1",
         finalizedAt: expect.any(String),
       });

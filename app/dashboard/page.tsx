@@ -495,9 +495,10 @@ export default function Dashboard() {
     setIsGenerating(true);
 
     try {
+      const signatureData = sigPad ? sigPad.toDataURL() : null;
+
       // Save protocol to Supabase
       if (user) {
-        const signatureData = sigPad ? sigPad.toDataURL() : null;
         const protocolDefectDescription = buildProtocolDefectDescription(
           defectDescription,
           noDefectsConfirmed
@@ -538,7 +539,8 @@ export default function Dashboard() {
         buildFinalizedProtocolReport({
           defectDescription,
           noDefectsConfirmed,
-          signatureCaptured: hasSignature,
+          signatureCaptured: signatureData !== null,
+          signatureData,
           linkedCaseId: effectiveSelectedCaseId,
           finalizedAt: new Date().toISOString(),
         })

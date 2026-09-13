@@ -26,11 +26,11 @@ export const de = {
   "how-title": "So funktioniert's",
   "how-heading": "In drei Schritten geschützt",
   "how-step1-title": "Abnahme erstellen",
-  "how-step1-desc": "Erstellen Sie SIA-118-konforme Protokolle direkt auf der Baustelle mit digitaler Unterschrift.",
+  "how-step1-desc": "Erfassen Sie SIA-118-Protokolldaten und eine Unterschriftszeichnung direkt auf der Baustelle.",
   "how-step2-title": "Fristen automatisch berechnen",
   "how-step2-desc": "Alle gesetzlichen Fristen werden automatisch berechnet. Laden Sie Kalendererinnerungen als .ics-Datei herunter und importieren Sie sie in Ihren Kalender.",
   "how-step3-title": "Beweise sichern",
-  "how-step3-desc": "Geo-getaggte Fotos und kryptografisch signierte PDFs als rechtssichere Beweismittel.",
+  "how-step3-desc": "Georeferenzierte Fotos und PDF-Exporte aus finalisierten Protokolldaten; die erfasste Unterschriftszeichnung wird aufgenommen, wenn sie sicher darstellbar ist.",
 
   // Final CTA
   "cta-title": "Bereit für die OR-Revision 2026?",
@@ -39,7 +39,7 @@ export const de = {
 
   // Features
   "feat-handover-title": "Digitale Abnahmeprotokolle",
-  "feat-handover-desc": "Erstellen Sie SIA-118-konforme Abnahmeprotokolle direkt auf der Baustelle — mit digitaler Unterschrift und kryptografisch signiertem PDF.",
+  "feat-handover-desc": "Erfassen Sie SIA-118-Protokolldaten direkt auf der Baustelle. Der PDF-Export enthält die finalisierten Protokollangaben und, wenn sicher darstellbar, die erfasste Unterschriftszeichnung.",
   "feat-warranty-title": "Automatische Fristberechnung",
   "feat-warranty-desc": "Die neue 5-Jahres-Verjährungsfrist und 60-Tage-Rügefrist werden pro Projekt berechnet — mit .ics-Kalenderdateien zum Herunterladen und Importieren.",
   "feat-evidence-title": "Protokoll-Archiv",
@@ -85,7 +85,7 @@ export const de = {
   "plan-team-desc": "Für kleine Baufirmen mit mehreren Projekten.",
   "plan-team-f1": "5 Projekte",
   "plan-team-f2": "Fristberechnung und .ics-Export zum Importieren",
-  "plan-team-f3": "PDF-Signatur",
+  "plan-team-f3": "PDF-Export",
   "plan-team-f4": "E-Mail-Support",
   "plan-team-cta": "Team starten",
 
@@ -187,7 +187,7 @@ export const de = {
 
   // Handover Wizard
   "wizard-title": "Digitales Abnahmeprotokoll",
-  "wizard-subtitle": "Rechtssichere Berichte erstellen (SIA 118).",
+  "wizard-subtitle": "Finalisierte Protokolldaten für PDF-Berichte erfassen.",
   "wizard-case-selector": "Mit Fall verknüpfen (optional)",
   "wizard-no-case": "Kein Fall (eigenständiges Protokoll)",
   "step": "Schritt",
@@ -207,7 +207,7 @@ export const de = {
   "defect-detected": "Festgestellte Mängel",
   "btn-photo": "Foto hinzufügen",
   "defect-placeholder": "Mängel hier beschreiben (z.B. 'Kratzer im Parkett Wohnzimmer')...",
-  "label-signature": "Digitale Unterschrift (Bauherr)",
+  "label-signature": "Erfasste Unterschriftszeichnung",
   "sign-here": "Hier unterschreiben",
   "btn-clear": "Löschen",
   "btn-back": "Zurück",
@@ -216,10 +216,10 @@ export const de = {
 
   // Success Step
   "success-title": "Protokoll generiert!",
-  "success-desc": "Das Abnahmeprotokoll wurde kryptografisch signiert und sicher gespeichert.",
+  "success-desc": "Die Protokolldaten wurden mit der erfassten Unterschriftszeichnung finalisiert. Der PDF-Download enthält die Zeichnung, wenn sie sicher darstellbar ist.",
   "btn-download": "PDF Herunterladen",
   "btn-new": "Neue Abnahme",
-  "dashboard-download-success": "PDF wurde heruntergeladen.",
+  "dashboard-download-success": "PDF wurde heruntergeladen; eine sicher darstellbare Unterschriftszeichnung ist enthalten.",
   "dashboard-download-failed": "PDF konnte nicht erstellt werden. Bitte erneut versuchen.",
 
   // Legal Context Sidebar
@@ -316,7 +316,7 @@ export const de = {
   "plan-pro-desc": "Für wachsende Baufirmen.",
   "plan-pro-f1": "Unbegrenzte Projekte",
   "plan-pro-f2": "Automatische Fristberechnung mit .ics-Download zum Kalenderimport",
-  "plan-pro-f3": "PDF-Signatur & Archiv",
+  "plan-pro-f3": "PDF-Export & Register finalisierter Protokolle",
   "plan-pro-f4": "Priority Support",
   "plan-pro-cta": "Jetzt starten",
   "plan-enterprise": "Enterprise",
@@ -828,11 +828,11 @@ export const fr = {
   "how-title": "Comment ça marche",
   "how-heading": "Protégé en trois étapes",
   "how-step1-title": "Créer le protocole",
-  "how-step1-desc": "Générez des protocoles conformes SIA 118 directement sur le chantier avec signature numérique.",
+  "how-step1-desc": "Saisissez les données du protocole SIA 118 et un dessin de signature directement sur le chantier.",
   "how-step2-title": "Calculer les délais automatiquement",
   "how-step2-desc": "Tous les délais légaux sont calculés automatiquement. Téléchargez les rappels au format .ics et importez-les dans votre calendrier.",
   "how-step3-title": "Sécuriser les preuves",
-  "how-step3-desc": "Photos géolocalisées et PDF signés cryptographiquement comme preuves juridiquement valables.",
+  "how-step3-desc": "Photos géolocalisées et exports PDF issus des données finalisées du protocole ; le dessin de signature recueilli est inclus lorsqu’il peut être affiché en toute sécurité.",
 
   // Final CTA
   "cta-title": "Prêt pour la révision CO 2026 ?",
@@ -841,7 +841,7 @@ export const fr = {
 
   // Features
   "feat-handover-title": "Protocoles de réception numériques",
-  "feat-handover-desc": "Générez des protocoles conformes SIA 118 directement sur le chantier — avec signature numérique et PDF signé cryptographiquement.",
+  "feat-handover-desc": "Saisissez les données du protocole SIA 118 sur le chantier. L’export PDF contient les informations finalisées du protocole et, lorsqu’il peut être affiché en toute sécurité, le dessin de signature recueilli.",
   "feat-warranty-title": "Calcul automatique des délais",
   "feat-warranty-desc": "La prescription de 5 ans et le délai de notification de 60 jours sont calculés par projet — avec fichiers calendrier .ics à télécharger et à importer.",
   "feat-evidence-title": "Archive de Protocoles",
@@ -887,7 +887,7 @@ export const fr = {
   "plan-team-desc": "Pour les petites entreprises avec plusieurs projets.",
   "plan-team-f1": "5 projets",
   "plan-team-f2": "Calcul des délais et export .ics à importer",
-  "plan-team-f3": "Signature PDF",
+  "plan-team-f3": "Export PDF",
   "plan-team-f4": "Support par e-mail",
   "plan-team-cta": "Démarrer Team",
 
@@ -989,7 +989,7 @@ export const fr = {
 
   // Handover Wizard
   "wizard-title": "Protocole de Réception Numérique",
-  "wizard-subtitle": "Générer des rapports conformes (SIA 118).",
+  "wizard-subtitle": "Saisir les données finalisées du protocole pour les rapports PDF.",
   "wizard-case-selector": "Lier à un cas (optionnel)",
   "wizard-no-case": "Aucun cas (protocole autonome)",
   "step": "Étape",
@@ -1009,7 +1009,7 @@ export const fr = {
   "defect-detected": "Défauts Constatés",
   "btn-photo": "Ajouter Photo",
   "defect-placeholder": "Décrire les défauts ici (ex : 'Rayure sur parquet salon')...",
-  "label-signature": "Signature Numérique (Maître d'ouvrage)",
+  "label-signature": "Dessin de signature recueilli",
   "sign-here": "Signer ici",
   "btn-clear": "Effacer",
   "btn-back": "Retour",
@@ -1018,10 +1018,10 @@ export const fr = {
 
   // Success Step
   "success-title": "Protocole généré !",
-  "success-desc": "Le protocole de réception a été signé cryptographiquement et stocké de manière sécurisée.",
+  "success-desc": "Les données du protocole ont été finalisées avec le dessin de signature recueilli. Le PDF téléchargé l’inclut lorsqu’il peut être affiché en toute sécurité.",
   "btn-download": "Télécharger PDF",
   "btn-new": "Nouvelle Réception",
-  "dashboard-download-success": "Le PDF a été téléchargé.",
+  "dashboard-download-success": "Le PDF a été téléchargé ; tout dessin de signature pouvant être affiché en toute sécurité y est inclus.",
   "dashboard-download-failed": "Le PDF n'a pas pu être créé. Veuillez réessayer.",
 
   // Legal Context Sidebar
@@ -1118,7 +1118,7 @@ export const fr = {
   "plan-pro-desc": "Pour les entreprises en croissance.",
   "plan-pro-f1": "Projets illimités",
   "plan-pro-f2": "Calcul automatique des délais avec fichier .ics à télécharger et importer",
-  "plan-pro-f3": "Signature PDF & Archive",
+  "plan-pro-f3": "Export PDF et registre des protocoles finalisés",
   "plan-pro-f4": "Support prioritaire",
   "plan-pro-cta": "Démarrer maintenant",
   "plan-enterprise": "Enterprise",
@@ -1630,11 +1630,11 @@ export const it = {
   "how-title": "Come funziona",
   "how-heading": "Protetto in tre passi",
   "how-step1-title": "Creare il protocollo",
-  "how-step1-desc": "Genera protocolli conformi SIA 118 direttamente in cantiere con firma digitale.",
+  "how-step1-desc": "Inserisci i dati del protocollo SIA 118 e un disegno della firma direttamente in cantiere.",
   "how-step2-title": "Calcola automaticamente le scadenze",
   "how-step2-desc": "Tutte le scadenze legali vengono calcolate automaticamente. Scarica i promemoria in formato .ics e importali nel tuo calendario.",
   "how-step3-title": "Proteggere le prove",
-  "how-step3-desc": "Foto geo-taggate e PDF firmati crittograficamente come prove giuridicamente valide.",
+  "how-step3-desc": "Foto geolocalizzate ed esportazioni PDF dai dati finalizzati del protocollo; il disegno della firma acquisito viene incluso quando può essere visualizzato in sicurezza.",
 
   // Final CTA
   "cta-title": "Pronti per la revisione CO 2026?",
@@ -1643,7 +1643,7 @@ export const it = {
 
   // Features
   "feat-handover-title": "Protocolli di collaudo digitali",
-  "feat-handover-desc": "Genera protocolli conformi SIA 118 direttamente in cantiere — con firma digitale e PDF firmato crittograficamente.",
+  "feat-handover-desc": "Inserisci i dati del protocollo SIA 118 direttamente in cantiere. L’esportazione PDF contiene i dati finalizzati del protocollo e, quando può essere visualizzato in sicurezza, il disegno della firma acquisito.",
   "feat-warranty-title": "Calcolo automatico dei termini",
   "feat-warranty-desc": "La prescrizione di 5 anni e il termine di notifica di 60 giorni vengono calcolati per progetto. Scarica i file calendario .ics e importali nel tuo calendario.",
   "feat-evidence-title": "Archivio Protocolli",
@@ -1689,7 +1689,7 @@ export const it = {
   "plan-team-desc": "Per piccole imprese con più progetti.",
   "plan-team-f1": "5 progetti",
   "plan-team-f2": "Calcolo delle scadenze: scarica il file .ics e importalo nel calendario",
-  "plan-team-f3": "Firma PDF",
+  "plan-team-f3": "Esportazione PDF",
   "plan-team-f4": "Supporto e-mail",
   "plan-team-cta": "Inizia Team",
 
@@ -1791,7 +1791,7 @@ export const it = {
 
   // Handover Wizard
   "wizard-title": "Protocollo di Collaudo Digitale",
-  "wizard-subtitle": "Genera rapporti conformi (SIA 118).",
+  "wizard-subtitle": "Inserisci i dati finalizzati del protocollo per i rapporti PDF.",
   "wizard-case-selector": "Collega a un caso (opzionale)",
   "wizard-no-case": "Nessun caso (protocollo autonomo)",
   "step": "Passo",
@@ -1811,7 +1811,7 @@ export const it = {
   "defect-detected": "Difetti Rilevati",
   "btn-photo": "Aggiungi Foto",
   "defect-placeholder": "Descrivi i difetti qui (es. 'Graffio sul parquet soggiorno')...",
-  "label-signature": "Firma Digitale (Committente)",
+  "label-signature": "Disegno della firma acquisito",
   "sign-here": "Firma qui",
   "btn-clear": "Cancella",
   "btn-back": "Indietro",
@@ -1820,10 +1820,10 @@ export const it = {
 
   // Success Step
   "success-title": "Protocollo generato!",
-  "success-desc": "Il protocollo di collaudo è stato firmato crittograficamente e archiviato in modo sicuro.",
+  "success-desc": "I dati del protocollo sono stati finalizzati con il disegno della firma acquisito. Il PDF scaricato lo include quando può essere visualizzato in sicurezza.",
   "btn-download": "Scarica PDF",
   "btn-new": "Nuovo Collaudo",
-  "dashboard-download-success": "Il PDF è stato scaricato.",
+  "dashboard-download-success": "Il PDF è stato scaricato; include il disegno della firma quando può essere visualizzato in sicurezza.",
   "dashboard-download-failed": "Non è stato possibile creare il PDF. Riprova.",
 
   // Legal Context Sidebar
@@ -1920,7 +1920,7 @@ export const it = {
   "plan-pro-desc": "Per imprese in crescita.",
   "plan-pro-f1": "Progetti illimitati",
   "plan-pro-f2": "Calcolo automatico delle scadenze: scarica il file .ics e importalo nel calendario",
-  "plan-pro-f3": "Firma PDF & Archivio",
+  "plan-pro-f3": "Esportazione PDF e registro dei protocolli finalizzati",
   "plan-pro-f4": "Supporto prioritario",
   "plan-pro-cta": "Inizia ora",
   "plan-enterprise": "Enterprise",
@@ -2432,11 +2432,11 @@ export const en = {
   "how-title": "How It Works",
   "how-heading": "Protected in three steps",
   "how-step1-title": "Create the protocol",
-  "how-step1-desc": "Generate SIA 118-compliant acceptance protocols on-site with digital signatures.",
+  "how-step1-desc": "Capture SIA 118 protocol data and a signature drawing on-site.",
   "how-step2-title": "Calculate deadlines automatically",
   "how-step2-desc": "All legal deadlines are calculated automatically. Download calendar reminders as an .ics file and import them into your calendar.",
   "how-step3-title": "Secure evidence",
-  "how-step3-desc": "Geo-tagged photos and cryptographically signed PDFs as legally valid evidence.",
+  "how-step3-desc": "Geo-tagged photos and PDF exports from finalized protocol data, including the captured signature drawing when safely renderable.",
 
   // Final CTA
   "cta-title": "Ready for the CO Revision 2026?",
@@ -2445,7 +2445,7 @@ export const en = {
 
   // Features
   "feat-handover-title": "Digital Handover Protocols",
-  "feat-handover-desc": "Generate SIA 118-compliant acceptance protocols on-site — with digital signatures and cryptographically signed PDFs.",
+  "feat-handover-desc": "Capture SIA 118 protocol data on-site. The PDF export contains finalized protocol details and the captured signature drawing when safely renderable.",
   "feat-warranty-title": "Automatic Deadline Calculation",
   "feat-warranty-desc": "The new 5-year limitation period and 60-day notice deadline are calculated per project — with downloadable .ics calendar files to import.",
   "feat-evidence-title": "Protocol Archive",
@@ -2491,7 +2491,7 @@ export const en = {
   "plan-team-desc": "For small firms with multiple projects.",
   "plan-team-f1": "5 projects",
   "plan-team-f2": "Deadline calculation and .ics export to import",
-  "plan-team-f3": "PDF signing",
+  "plan-team-f3": "PDF export",
   "plan-team-f4": "Email support",
   "plan-team-cta": "Start Team",
 
@@ -2593,7 +2593,7 @@ export const en = {
 
   // Handover Wizard
   "wizard-title": "Digital Handover Protocol",
-  "wizard-subtitle": "Generate legally compliant acceptance reports (SIA 118).",
+  "wizard-subtitle": "Capture finalized protocol data for PDF reports.",
   "wizard-case-selector": "Link to case (optional)",
   "wizard-no-case": "No case (standalone protocol)",
   "step": "Step",
@@ -2613,19 +2613,19 @@ export const en = {
   "defect-detected": "Detected Defects",
   "btn-photo": "Add Photo Evidence",
   "defect-placeholder": "Describe defects here (e.g., 'Scratch on parquet floor in living room')...",
-  "label-signature": "Digital Signature (Client)",
+  "label-signature": "Captured signature drawing",
   "sign-here": "Sign Here",
   "btn-clear": "Clear",
   "btn-back": "Back",
   "btn-finalize": "Finalize Protocol",
-  "btn-generating": "Generating Legal PDF...",
+  "btn-generating": "Generating PDF...",
 
   // Success Step
   "success-title": "Protocol Generated!",
-  "success-desc": "The handover protocol has been cryptographically signed and securely stored.",
+  "success-desc": "The protocol data was finalized with the captured signature drawing. The PDF download includes the drawing when safely renderable.",
   "btn-download": "Download PDF",
   "btn-new": "New Handover",
-  "dashboard-download-success": "PDF downloaded successfully.",
+  "dashboard-download-success": "PDF downloaded; it includes the signature drawing when safely renderable.",
   "dashboard-download-failed": "PDF could not be generated. Please try again.",
 
   // Legal Context Sidebar
@@ -2722,7 +2722,7 @@ export const en = {
   "plan-pro-desc": "For growing construction firms.",
   "plan-pro-f1": "Unlimited projects",
   "plan-pro-f2": "Automatic deadline calculation with downloadable .ics calendar import",
-  "plan-pro-f3": "PDF signing & archive",
+  "plan-pro-f3": "PDF export & finalized protocol register",
   "plan-pro-f4": "Priority support",
   "plan-pro-cta": "Get started",
   "plan-enterprise": "Enterprise",

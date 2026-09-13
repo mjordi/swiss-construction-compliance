@@ -1,6 +1,9 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
+const pngSignature =
+  "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAACXBIWXMAAAABAAAAAQBPJcTWAAAADklEQVR4nGP4DwYMEAoAU7oL9ZisIGcAAAAASUVORK5CYII=";
+
 const {
   buildCaseAuditRegisterCsvMock,
   buildCaseLegalChronologyCsvMock,
@@ -532,7 +535,7 @@ describe("cases checklist persistence", () => {
         contractor: "Alpine Build AG",
         client: "Owner AG",
         defect_description: "Cracked balcony edge",
-        signature_data: "data:image/png;base64,signature",
+        signature_data: pngSignature,
       },
       {
         id: "protocol-draft-1",
@@ -575,6 +578,7 @@ describe("cases checklist persistence", () => {
           report: {
             defectEvidence: { kind: string; description?: string };
             signatureCaptured: boolean;
+            signatureImageData: string | null;
             linkedCaseId: string;
             finalizedAt: string;
           };
@@ -588,6 +592,7 @@ describe("cases checklist persistence", () => {
         report: {
           defectEvidence: { kind: "documented", description: "Cracked balcony edge" },
           signatureCaptured: true,
+          signatureImageData: pngSignature,
           linkedCaseId: "case-1",
           finalizedAt: "2026-03-25T10:00:00.000Z",
         },
