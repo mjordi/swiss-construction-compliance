@@ -117,9 +117,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event: string, session: Session | null) => {
+    } = supabase.auth.onAuthStateChange((_event: string, session: Session | null) => {
       authEventVersionRef.current += 1;
-      await syncSession(session);
+      void syncSession(session);
     });
 
     return () => {
@@ -134,14 +134,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async (email: string, password: string) => {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (!error && data.session) {
-        void syncSession(data.session);
         // Full page reload ensures dashboard gets a clean auth state —
         // router.push can hang during client-side transitions.
         window.location.href = getPostLoginRedirect(window.location.search);
       }
       return { error };
     },
-    [supabase, syncSession]
+    [supabase]
   );
 
   const signUp = useCallback(

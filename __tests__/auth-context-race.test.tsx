@@ -1,5 +1,6 @@
 import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { StrictMode } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 
 const mocks = vi.hoisted(() => ({
@@ -35,12 +36,13 @@ function makeSession(user: User): Session {
 }
 
 function Consumer() {
-  const { user, isLoading, logout } = useAuth();
+  const { user, isLoading, login, logout } = useAuth();
   return (
     <>
       <output data-testid="user-id">{user?.id ?? "none"}</output>
       <output data-testid="user-name">{user?.name ?? "none"}</output>
       <output data-testid="loading">{String(isLoading)}</output>
+      <button onClick={() => void login("a@example.test", "password")}>login</button>
       <button onClick={() => void logout()}>logout</button>
     </>
   );
@@ -48,13 +50,16 @@ function Consumer() {
 
 type AuthCallback = (event: string, session: Session | null) => Promise<void> | void;
 type SessionResult = { data: { session: Session | null } };
+type SignInResult = { data: { session: Session | null }; error: null };
 type SignOutResult = { error: null };
 
 type Harness = {
   authCallback: () => AuthCallback;
+  activeSubscriptions: () => number;
   getSession: ReturnType<typeof vi.fn>;
   onAuthStateChange: ReturnType<typeof vi.fn>;
   profileSingle: ReturnType<typeof vi.fn>;
+  signInWithPassword: ReturnType<typeof vi.fn>;
   signOut: ReturnType<typeof vi.fn>;
   unsubscribe: ReturnType<typeof vi.fn>;
 };
@@ -62,24 +67,32 @@ type Harness = {
 function createHarness(
   getSessionPromise: Promise<SessionResult>,
   options: {
+    signInPromise?: Promise<SignInResult>;
     signOutPromise?: Promise<SignOutResult>;
     freshClientOnEveryFactoryCall?: boolean;
   } = {}
 ): Harness {
   let callback: AuthCallback | undefined;
+  let activeSubscriptions = 0;
   const profileSingle = vi.fn();
-  const unsubscribe = vi.fn();
+  const unsubscribe = vi.fn(() => {
+    activeSubscriptions -= 1;
+  });
   const getSession = vi.fn(() => getSessionPromise);
   const onAuthStateChange = vi.fn((nextCallback: AuthCallback) => {
     callback = nextCallback;
+    activeSubscriptions += 1;
     return { data: { subscription: { unsubscribe } } };
   });
+  const signInWithPassword = vi.fn(() =>
+    options.signInPromise ?? Promise.resolve({ data: { session: null }, error: null })
+  );
   const signOut = vi.fn(() => options.signOutPromise ?? Promise.resolve({ error: null }));
   const makeClient = () => ({
     auth: {
       getSession,
       onAuthStateChange,
-      signInWithPassword: vi.fn(),
+      signInWithPassword,
       signUp: vi.fn(),
       signOut,
     },
@@ -101,9 +114,11 @@ function createHarness(
       if (!callback) throw new Error("Auth callback was not registered");
       return callback;
     },
+    activeSubscriptions: () => activeSubscriptions,
     getSession,
     onAuthStateChange,
     profileSingle,
+    signInWithPassword,
     signOut,
     unsubscribe,
   };
@@ -128,6 +143,34 @@ beforeEach(() => {
 });
 
 describe("AuthProvider async session consistency", () => {
+  it("returns from the auth callback before profile enrichment settles", async () => {
+    const profile = deferred<{ data: { full_name: string } }>();
+    const harness = createHarness(Promise.resolve({ data: { session: null } }));
+    harness.profileSingle.mockReturnValueOnce(profile.promise);
+
+    renderProvider();
+    await waitFor(() => expect(screen.getByTestId("loading").textContent).toBe("false"));
+
+    let callbackResult: ReturnType<AuthCallback> = Promise.resolve();
+    act(() => {
+      callbackResult = harness.authCallback()(
+        "SIGNED_IN",
+        makeSession(makeUser("user-a", "a@example.test"))
+      );
+    });
+
+    expect(callbackResult).toBeUndefined();
+    expect(harness.profileSingle).toHaveBeenCalledTimes(1);
+    expect(screen.getByTestId("user-id").textContent).toBe("user-a");
+    expect(screen.getByTestId("user-name").textContent).toBe("a");
+
+    await act(async () => {
+      profile.resolve({ data: { full_name: "User A" } });
+      await profile.promise;
+    });
+    expect(screen.getByTestId("user-name").textContent).toBe("User A");
+  });
+
   it("keeps the newest account when an older profile lookup resolves last", async () => {
     const userAProfile = deferred<{ data: { full_name: string } }>();
     const userBProfile = deferred<{ data: { full_name: string } }>();
@@ -211,6 +254,47 @@ describe("AuthProvider async session consistency", () => {
     expect(screen.getByTestId("user-name").textContent).toBe("User B");
   });
 
+  it("does not republish a delayed login response after a newer auth event", async () => {
+    const loginResponse = deferred<SignInResult>();
+    const userBProfile = deferred<{ data: { full_name: string } }>();
+    const harness = createHarness(Promise.resolve({ data: { session: null } }), {
+      signInPromise: loginResponse.promise,
+    });
+    harness.profileSingle.mockReturnValueOnce(userBProfile.promise);
+
+    renderProvider();
+    await waitFor(() => expect(screen.getByTestId("loading").textContent).toBe("false"));
+
+    fireEvent.click(screen.getByRole("button", { name: "login" }));
+    expect(harness.signInWithPassword).toHaveBeenCalledWith({
+      email: "a@example.test",
+      password: "password",
+    });
+
+    await emitAuth(harness, makeSession(makeUser("user-b", "b@example.test")));
+    await act(async () => {
+      userBProfile.resolve({ data: { full_name: "User B" } });
+      await userBProfile.promise;
+    });
+
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => undefined);
+    await act(async () => {
+      loginResponse.resolve({
+        data: { session: makeSession(makeUser("user-a", "a@example.test")) },
+        error: null,
+      });
+      await loginResponse.promise;
+    });
+
+    for (const [message] of consoleError.mock.calls) {
+      expect(String(message)).toContain("Not implemented: navigation");
+    }
+    consoleError.mockRestore();
+    expect(screen.getByTestId("user-id").textContent).toBe("user-b");
+    expect(screen.getByTestId("user-name").textContent).toBe("User B");
+    expect(harness.profileSingle).toHaveBeenCalledTimes(1);
+  });
+
   it("invalidates pending profile work as soon as logout starts", async () => {
     const profile = deferred<{ data: { full_name: string } }>();
     const signOut = deferred<SignOutResult>();
@@ -278,5 +362,25 @@ describe("AuthProvider async session consistency", () => {
     expect(mocks.getSupabase).toHaveBeenCalledTimes(1);
     expect(harness.getSession).toHaveBeenCalledTimes(1);
     expect(harness.onAuthStateChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps exactly one active auth subscription during StrictMode replay", async () => {
+    const harness = createHarness(Promise.resolve({ data: { session: null } }));
+
+    const { unmount } = render(
+      <StrictMode>
+        <AuthProvider>
+          <Consumer />
+        </AuthProvider>
+      </StrictMode>
+    );
+
+    await waitFor(() => expect(harness.onAuthStateChange).toHaveBeenCalledTimes(2));
+    expect(harness.unsubscribe).toHaveBeenCalledTimes(1);
+    expect(harness.activeSubscriptions()).toBe(1);
+
+    unmount();
+    expect(harness.unsubscribe).toHaveBeenCalledTimes(2);
+    expect(harness.activeSubscriptions()).toBe(0);
   });
 });

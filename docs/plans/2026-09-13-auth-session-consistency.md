@@ -56,7 +56,7 @@ Expected: FAIL because the late user A profile completion currently calls `setUs
 
 ### Task 2: Guard auth and profile publication by request generation
 
-**Objective:** Make the newest auth state authoritative across initial hydration, callbacks, login enrichment, logout, and unmount.
+**Objective:** Make the newest auth state authoritative across initial hydration, auth-event enrichment, logout, and unmount.
 
 **Files:**
 - Modify: `context/AuthContext.tsx:3-122`
@@ -117,9 +117,9 @@ const syncSession = useCallback(async (session: Session | null) => {
 
 Capture `authEventVersionRef.current` before calling `getSession()`. Apply either its success or failure only if the provider remains mounted and no auth callback has incremented that version. In `onAuthStateChange`, increment the auth-event version before calling `syncSession(session)`.
 
-**Step 4: Reuse guarded synchronization for login and invalidate on logout**
+**Step 4: Rely on authoritative auth events after login and invalidate on logout**
 
-After successful login, call `void syncSession(data.session)` instead of starting an unguarded profile callback. Increment `profileRequestVersionRef.current` when logout begins. Preserve the existing full-page redirect destinations and public method return types.
+After successful login, do not synchronize the session from the `signInWithPassword()` response. Supabase emits the authoritative `SIGNED_IN` event, and its synchronous `onAuthStateChange` callback starts guarded synchronization without returning the profile-enrichment promise to Supabase. This prevents a delayed login response from republishing an older identity after a newer cross-tab auth event. Increment `profileRequestVersionRef.current` when logout begins. Preserve the existing full-page redirect destinations and public method return types.
 
 **Step 5: Invalidate work on cleanup**
 
