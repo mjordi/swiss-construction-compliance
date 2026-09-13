@@ -1,6 +1,15 @@
 "use client";
 
-import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from "react";
+import {
+  createContext,
+  useContext,
+  useState,
+  useEffect,
+  useCallback,
+  useMemo,
+  useRef,
+  ReactNode,
+} from "react";
 import { getSupabase } from "@/lib/supabase";
 import { getPostLoginRedirect } from "@/lib/auth-redirect";
 import type { User, AuthError, Session } from "@supabase/supabase-js";
@@ -49,50 +58,82 @@ async function resolveProfileName(
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<AuthContextType["user"]>(null);
   const [isLoading, setIsLoading] = useState(true);
-  const supabase = getSupabase();
+  const supabase = useMemo(() => getSupabase(), []);
+  const mountedRef = useRef(true);
+  const authEventVersionRef = useRef(0);
+  const profileRequestVersionRef = useRef(0);
 
-  useEffect(() => {
-    const syncSession = async (session: Session | null) => {
+  const syncSession = useCallback(
+    async (session: Session | null) => {
+      const profileRequestVersion = ++profileRequestVersionRef.current;
+
       if (!session?.user) {
-        setUser(null);
-        setIsLoading(false);
+        if (mountedRef.current) {
+          setUser(null);
+          setIsLoading(false);
+        }
         return;
       }
 
-      // Set a usable auth state immediately so the UI does not appear stuck
-      setUser(mapUser(session.user));
-      setIsLoading(false);
+      // Set a usable auth state immediately so the UI does not appear stuck.
+      if (mountedRef.current) {
+        setUser(mapUser(session.user));
+        setIsLoading(false);
+      }
 
       const fullName = await resolveProfileName(supabase, session.user.id);
-      setUser(mapUser(session.user, fullName));
-    };
+      if (
+        mountedRef.current &&
+        profileRequestVersion === profileRequestVersionRef.current
+      ) {
+        setUser(mapUser(session.user, fullName));
+      }
+    },
+    [supabase]
+  );
+
+  useEffect(() => {
+    mountedRef.current = true;
+    const initialAuthEventVersion = authEventVersionRef.current;
 
     supabase.auth
       .getSession()
-      .then((result: { data: { session: Session | null } }) => syncSession(result.data.session))
+      .then((result: { data: { session: Session | null } }) => {
+        if (
+          mountedRef.current &&
+          initialAuthEventVersion === authEventVersionRef.current
+        ) {
+          void syncSession(result.data.session);
+        }
+      })
       .catch(() => {
-        setUser(null);
-        setIsLoading(false);
+        if (
+          mountedRef.current &&
+          initialAuthEventVersion === authEventVersionRef.current
+        ) {
+          void syncSession(null);
+        }
       });
 
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event: string, session: Session | null) => {
-      await syncSession(session);
+    } = supabase.auth.onAuthStateChange((_event: string, session: Session | null) => {
+      authEventVersionRef.current += 1;
+      void syncSession(session);
     });
 
-    return () => subscription.unsubscribe();
-  }, [supabase]);
+    return () => {
+      mountedRef.current = false;
+      authEventVersionRef.current += 1;
+      profileRequestVersionRef.current += 1;
+      subscription.unsubscribe();
+    };
+  }, [supabase, syncSession]);
 
   const login = useCallback(
     async (email: string, password: string) => {
       const { data, error } = await supabase.auth.signInWithPassword({ email, password });
       if (!error && data.session) {
-        setUser(mapUser(data.session.user));
-        // Resolve profile name in the background (fire-and-forget)
-        resolveProfileName(supabase, data.session.user.id).then((fullName) => {
-          setUser(mapUser(data.session.user, fullName));
-        });
         // Full page reload ensures dashboard gets a clean auth state —
         // router.push can hang during client-side transitions.
         window.location.href = getPostLoginRedirect(window.location.search);
@@ -115,8 +156,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   const logout = useCallback(async () => {
+    profileRequestVersionRef.current += 1;
     await supabase.auth.signOut();
-    setUser(null);
+    if (mountedRef.current) {
+      setUser(null);
+    }
     // Full reload to clear all client state and Supabase session
     window.location.href = "/login";
   }, [supabase]);
