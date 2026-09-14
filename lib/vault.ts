@@ -31,16 +31,31 @@ export function buildVaultCreateProjectHref(): string {
   return "/dashboard/cases?create=1";
 }
 
-export function buildCaseVaultHref(projectName: string): string {
-  const normalizedProjectName = projectName.trim();
+export interface VaultEvidenceHandoff {
+  caseId: string;
+}
 
-  if (!normalizedProjectName) {
-    return "/dashboard/vault";
+export function parseVaultEvidenceHandoff(
+  caseValue: string | null,
+  evidenceValue: string | null
+): VaultEvidenceHandoff | null {
+  const caseId = caseValue?.trim();
+  return caseId && evidenceValue === "1" ? { caseId } : null;
+}
+
+export function buildCaseVaultHref(projectName: string, caseId?: string): string {
+  const normalizedProjectName = projectName.trim();
+  const params = new URLSearchParams();
+  if (normalizedProjectName) params.set("q", normalizedProjectName);
+
+  const normalizedCaseId = caseId?.trim();
+  if (normalizedCaseId) {
+    params.set("case", normalizedCaseId);
+    params.set("evidence", "1");
   }
 
-  const params = new URLSearchParams();
-  params.set("q", normalizedProjectName);
-  return `/dashboard/vault?${params.toString()}`;
+  const query = params.toString();
+  return query ? `/dashboard/vault?${query}` : "/dashboard/vault";
 }
 
 export function buildVaultProjectCasesHref({

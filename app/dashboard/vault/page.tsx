@@ -21,6 +21,7 @@ import {
 import {
   buildVaultCreateProjectHref,
   getVaultEmptyState,
+  parseVaultEvidenceHandoff,
   parseVaultTab,
   type VaultEmptyStateAction,
   type VaultTab,
@@ -136,7 +137,8 @@ function getLocalizedCountdownLabel(
 }
 
 export default function TechVault() {
-  const { user } = useAuth();
+  const { user, isLoading: authLoading } = useAuth();
+  const userId = user?.id ?? null;
   const { lang, t } = useLanguage();
   const supabase = useMemo(() => getSupabase(), []);
   const router = useRouter();
@@ -154,6 +156,16 @@ export default function TechVault() {
   } | null>(null);
   const [statusMutationProjectIds, setStatusMutationProjectIds] = useState<string[]>([]);
   const [projects, setProjects] = useState<VaultProjectCard[]>([]);
+  const initialEvidenceHandoff = parseVaultEvidenceHandoff(searchParams.get("case"), searchParams.get("evidence"));
+  const [pendingEvidenceHandoff, setPendingEvidenceHandoff] = useState<{
+    caseId: string;
+    userId: string;
+  } | null>(() => initialEvidenceHandoff && userId ? { ...initialEvidenceHandoff, userId } : null);
+  const [evidenceHandoff, setEvidenceHandoff] = useState<{
+    caseId: string;
+    userId: string;
+    activate: boolean;
+  } | null>(null);
   const [mutationRefreshPending, setMutationRefreshPending] = useState(false);
   const [auditExportPending, setAuditExportPending] = useState(false);
   const [auditExportFeedback, setAuditExportFeedback] = useState<TranslationKey | null>(null);
@@ -165,6 +177,7 @@ export default function TechVault() {
   const hasLoadedProjectsRef = useRef(false);
   const lastSuccessfulUserIdRef = useRef<string | null>(null);
   const currentUserIdRef = useRef<string | null>(user?.id ?? null);
+  const evidenceHandoffUserIdRef = useRef<string | null>(user?.id ?? null);
   const activeTabRef = useRef(activeTab);
   const queryRef = useRef(query);
   const skipNextUrlWriteRef = useRef(false);
@@ -172,6 +185,12 @@ export default function TechVault() {
   const auditExportRequestIdRef = useRef(0);
   const auditExportFeedbackTimerRef = useRef<number | null>(null);
   const mountedRef = useRef(false);
+  const evidenceIntentUrlRef = useRef<{ search: string; userId: string | null } | null>(
+    initialEvidenceHandoff
+      ? { search: searchParams.toString(), userId }
+      : null
+  );
+  const evidenceHandoffCleanSearchRef = useRef<string | null>(null);
 
   currentUserIdRef.current = user?.id ?? null;
 
@@ -199,11 +218,17 @@ export default function TechVault() {
     setMutationRefreshPending(false);
     setAuditExportPending(false);
     setAuditExportFeedback(null);
+    if (evidenceHandoffUserIdRef.current !== userId) {
+      evidenceHandoffUserIdRef.current = userId;
+      evidenceHandoffCleanSearchRef.current = null;
+      setPendingEvidenceHandoff(null);
+      setEvidenceHandoff(null);
+    }
     if (auditExportFeedbackTimerRef.current) {
       window.clearTimeout(auditExportFeedbackTimerRef.current);
       auditExportFeedbackTimerRef.current = null;
     }
-  }, [user?.id]);
+  }, [userId]);
 
   const runRefresh = useCallback(async function refreshVault(fetchId: number) {
     if (!user) {
@@ -420,12 +445,51 @@ export default function TechVault() {
     const nextActiveTab = parseVaultTab(params.get("tab"));
     const nextQuery = params.get("q") ?? "";
     const sanitizedParams = new URLSearchParams(params);
+    const evidenceHandoff = parseVaultEvidenceHandoff(params.get("case"), params.get("evidence"));
+    const hasOwnedEvidenceParams = params.has("case") || params.has("evidence");
+
+    if (authLoading && hasOwnedEvidenceParams) return;
+
+    if (hasOwnedEvidenceParams) {
+      sanitizedParams.delete("case");
+      sanitizedParams.delete("evidence");
+      if (
+        evidenceHandoff
+        && userId
+        && (
+          evidenceIntentUrlRef.current?.search !== searchParamString
+          || evidenceIntentUrlRef.current.userId === null
+        )
+      ) {
+        evidenceIntentUrlRef.current = { search: searchParamString, userId };
+        setPendingEvidenceHandoff({ caseId: evidenceHandoff.caseId, userId });
+        setEvidenceHandoff(null);
+      } else if (!evidenceHandoff) {
+        evidenceIntentUrlRef.current = null;
+        evidenceHandoffCleanSearchRef.current = null;
+        setPendingEvidenceHandoff(null);
+        setEvidenceHandoff(null);
+      }
+    } else {
+      evidenceIntentUrlRef.current = null;
+      if (
+        evidenceHandoffCleanSearchRef.current !== null
+        && evidenceHandoffCleanSearchRef.current !== searchParamString
+      ) {
+        evidenceHandoffCleanSearchRef.current = null;
+        setPendingEvidenceHandoff(null);
+        setEvidenceHandoff(null);
+      }
+    }
 
     if (params.has("tab") && nextActiveTab === "projects") {
       sanitizedParams.delete("tab");
     }
 
     const sanitizedSearch = sanitizedParams.toString();
+    if (evidenceHandoff && userId) {
+      evidenceHandoffCleanSearchRef.current = sanitizedSearch;
+    }
     if (sanitizedSearch !== searchParamString) {
       router.replace(sanitizedSearch ? `${pathname}?${sanitizedSearch}` : pathname, { scroll: false });
     }
@@ -441,16 +505,21 @@ export default function TechVault() {
     });
 
     return () => window.cancelAnimationFrame(frame);
-  }, [pathname, router, searchParamString]);
+  }, [authLoading, pathname, router, searchParamString, userId]);
 
   useEffect(() => {
+    const params = new URLSearchParams(searchParams.toString());
+    if (authLoading && (params.has("case") || params.has("evidence"))) return;
+
     if (skipNextUrlWriteRef.current) {
       skipNextUrlWriteRef.current = false;
       return;
     }
 
-    const params = new URLSearchParams(searchParams.toString());
     const normalizedQuery = query.trim();
+
+    params.delete("case");
+    params.delete("evidence");
 
     if (activeTab === "projects") params.delete("tab");
     else params.set("tab", activeTab);
@@ -464,19 +533,70 @@ export default function TechVault() {
     if (next !== current) {
       router.replace(next ? `${pathname}?${next}` : pathname, { scroll: false });
     }
-  }, [activeTab, pathname, query, router, searchParams]);
+  }, [activeTab, authLoading, pathname, query, router, searchParams]);
+
+  useEffect(() => {
+    if (
+      !pendingEvidenceHandoff
+      || !userId
+      || pendingEvidenceHandoff.userId !== userId
+      || lastSuccessfulUserIdRef.current !== userId
+      || loading
+      || error
+    ) return;
+
+    const exactProject = projects.find((project) => project.id === pendingEvidenceHandoff.caseId);
+    setPendingEvidenceHandoff(null);
+    if (!exactProject) {
+      setEvidenceHandoff(null);
+      return;
+    }
+
+    setEvidenceHandoff({ caseId: exactProject.id, userId, activate: true });
+    setActiveTab(exactProject.archived ? "archived" : "projects");
+  }, [error, loading, pendingEvidenceHandoff, projects, userId]);
+
+  useEffect(() => {
+    if (!evidenceHandoff?.activate) return;
+    setEvidenceHandoff((current) => current ? { ...current, activate: false } : null);
+  }, [evidenceHandoff?.activate]);
+
+  const currentUserId = userId;
+  const activeEvidenceHandoffCaseId =
+    currentUserId
+    && evidenceHandoff
+    && evidenceHandoff.userId === currentUserId
+    && lastSuccessfulUserIdRef.current === currentUserId
+      ? evidenceHandoff.caseId
+      : null;
+  const activateEvidenceHandoffCaseId =
+    evidenceHandoff?.activate
+      ? activeEvidenceHandoffCaseId
+      : null;
+
+  const clearEvidenceHandoff = useCallback(() => {
+    evidenceIntentUrlRef.current = null;
+    evidenceHandoffCleanSearchRef.current = null;
+    setPendingEvidenceHandoff(null);
+    setEvidenceHandoff(null);
+  }, []);
 
   const filteredProjects = useMemo(
-    () =>
-      projects
+    () => {
+      if (activeEvidenceHandoffCaseId) {
+        return projects.filter((project) => project.id === activeEvidenceHandoffCaseId);
+      }
+
+      return projects
         .filter((project) => (activeTab === "projects" ? !project.archived : project.archived))
         .filter((project) => {
           const q = query.trim().toLowerCase();
           if (!q) return true;
           return project.name.toLowerCase().includes(q) || t(statusLabelKey[project.status]).toLowerCase().includes(q);
         })
-        .sort((a, b) => b.updatedAt - a.updatedAt),
-    [projects, activeTab, query, t]
+        .sort((a, b) => b.updatedAt - a.updatedAt);
+    },
+    [projects, activeTab, activeEvidenceHandoffCaseId, query, t]
   );
 
   const emptyState = useMemo(
@@ -509,17 +629,20 @@ export default function TechVault() {
 
   const handleEmptyStateAction = useCallback((action: VaultEmptyStateAction) => {
     if (action === "clear-search") {
+      clearEvidenceHandoff();
       setQuery("");
       return;
     }
     if (action === "show-projects") {
+      clearEvidenceHandoff();
       setActiveTab("projects");
       return;
     }
     if (action === "show-archived") {
+      clearEvidenceHandoff();
       setActiveTab("archived");
     }
-  }, []);
+  }, [clearEvidenceHandoff]);
 
   const navigateToCase = useCallback((href: string) => {
     router.push(href);
@@ -818,7 +941,10 @@ export default function TechVault() {
               type="button"
               role="tab"
               aria-selected={activeTab === "projects"}
-              onClick={() => setActiveTab("projects")}
+              onClick={() => {
+                clearEvidenceHandoff();
+                setActiveTab("projects");
+              }}
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${activeTab === "projects" ? "bg-accent text-white shadow-lg" : "text-slate-400 hover:text-white"}`}
             >
               {t("vault-tab-projects")}
@@ -827,7 +953,10 @@ export default function TechVault() {
               type="button"
               role="tab"
               aria-selected={activeTab === "archived"}
-              onClick={() => setActiveTab("archived")}
+              onClick={() => {
+                clearEvidenceHandoff();
+                setActiveTab("archived");
+              }}
               className={`px-4 py-1.5 rounded-md text-sm font-medium transition ${activeTab === "archived" ? "bg-accent text-white shadow-lg" : "text-slate-400 hover:text-white"}`}
             >
               {t("vault-tab-archived")}
@@ -841,7 +970,10 @@ export default function TechVault() {
               placeholder={t("vault-search-placeholder")}
               className="bg-black/20 border border-white/5 rounded-lg pl-10 pr-4 py-2 text-sm focus:outline-none focus:border-accent/50 w-64 transition"
               value={query}
-              onChange={(e) => setQuery(e.target.value)}
+              onChange={(e) => {
+                clearEvidenceHandoff();
+                setQuery(e.target.value);
+              }}
             />
           </div>
         </div>
@@ -1056,6 +1188,7 @@ export default function TechVault() {
                             caseId={project.id}
                             caseName={project.name}
                             readOnly={project.archived}
+                            activateOnce={project.id === activateEvidenceHandoffCaseId}
                             onChecklistUpdated={triggerMutationRefresh}
                           />
                         ) : null}

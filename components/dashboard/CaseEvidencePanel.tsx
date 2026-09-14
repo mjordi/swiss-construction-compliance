@@ -20,6 +20,7 @@ interface CaseEvidencePanelProps {
   caseId: string;
   caseName: string;
   readOnly?: boolean;
+  activateOnce?: boolean;
   onChecklistUpdated?: () => void;
 }
 
@@ -48,6 +49,7 @@ export default function CaseEvidencePanel({
   caseId,
   caseName,
   readOnly = false,
+  activateOnce = false,
   onChecklistUpdated,
 }: CaseEvidencePanelProps) {
   const { lang, t } = useLanguage();
@@ -67,6 +69,10 @@ export default function CaseEvidencePanel({
   const loadPendingRef = useRef(false);
   const uploadPendingRef = useRef(false);
   const downloadPendingRef = useRef<Set<string>>(new Set());
+  const activationConsumedRef = useRef(false);
+  const activationFocusPendingRef = useRef(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const evidenceRegionRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     mountedRef.current = true;
@@ -82,6 +88,8 @@ export default function CaseEvidencePanel({
     loadPendingRef.current = false;
     uploadPendingRef.current = false;
     downloadPendingRef.current.clear();
+    activationConsumedRef.current = false;
+    activationFocusPendingRef.current = false;
     setExpanded(false);
     setEvidence([]);
     setActivity([]);
@@ -175,6 +183,24 @@ export default function CaseEvidencePanel({
     setExpanded(true);
     void loadEvidence();
   }, [expanded, loadEvidence]);
+
+  useEffect(() => {
+    if (!activateOnce || activationConsumedRef.current) return;
+    activationConsumedRef.current = true;
+    activationFocusPendingRef.current = true;
+    setExpanded(true);
+    void loadEvidence();
+  }, [activateOnce, caseId, loadEvidence, userId]);
+
+  useEffect(() => {
+    if (!expanded || !activationFocusPendingRef.current) return;
+    if (!readOnly && loading) return;
+
+    const target = readOnly ? evidenceRegionRef.current : fileInputRef.current;
+    if (!target) return;
+    target.focus();
+    activationFocusPendingRef.current = false;
+  }, [expanded, loading, readOnly]);
 
   const handleUpload = useCallback(async (file: File | undefined) => {
     if (!file || readOnly || loadPendingRef.current || uploadPendingRef.current) return;
@@ -429,7 +455,14 @@ export default function CaseEvidencePanel({
       </button>
 
       {expanded ? (
-        <div className="mt-3 space-y-3 rounded-xl bg-black/20 p-3" onClick={(event) => event.stopPropagation()}>
+        <div
+          ref={evidenceRegionRef}
+          role="region"
+          aria-label={t("vault-evidence-title")}
+          tabIndex={-1}
+          className="mt-3 space-y-3 rounded-xl bg-black/20 p-3"
+          onClick={(event) => event.stopPropagation()}
+        >
           <div className="flex items-center justify-between gap-3">
             <h4 className="text-sm font-semibold text-white">{t("vault-evidence-title")}</h4>
             {readOnly ? <span className="text-xs text-slate-400">{t("vault-evidence-read-only")}</span> : null}
@@ -439,6 +472,7 @@ export default function CaseEvidencePanel({
             <label className="block text-xs text-slate-300">
               <span>{t("vault-evidence-file-label")}</span>
               <input
+                ref={fileInputRef}
                 type="file"
                 aria-label={t("vault-evidence-file-label")}
                 accept={CASE_EVIDENCE_MIME_TYPES.join(",")}
