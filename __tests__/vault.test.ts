@@ -4,6 +4,7 @@ import {
   buildVaultCreateProjectHref,
   buildVaultProjectCasesHref,
   getVaultEmptyState,
+  parseVaultEvidenceHandoff,
 } from "../lib/vault";
 
 describe("buildVaultCreateProjectHref", () => {
@@ -123,5 +124,33 @@ describe("buildCaseVaultHref", () => {
 
   it("falls back to the base vault route when the project name is blank", () => {
     expect(buildCaseVaultHref("   ")).toBe("/dashboard/vault");
+  });
+
+  it("adds a trimmed exact Case evidence handoff while retaining project fallback context", () => {
+    expect(buildCaseVaultHref("  Alpine Tower  ", "  case/1  ")).toBe(
+      "/dashboard/vault?q=Alpine+Tower&case=case%2F1&evidence=1"
+    );
+  });
+
+  it("does not emit an incomplete evidence handoff for a blank Case id", () => {
+    expect(buildCaseVaultHref("Alpine Tower", "   ")).toBe("/dashboard/vault?q=Alpine+Tower");
+  });
+});
+
+describe("parseVaultEvidenceHandoff", () => {
+  it("accepts only a trimmed non-empty Case id paired with evidence=1", () => {
+    expect(parseVaultEvidenceHandoff("  case-1  ", "1")).toEqual({ caseId: "case-1" });
+  });
+
+  it.each([
+    [null, "1"],
+    ["", "1"],
+    ["   ", "1"],
+    ["case-1", null],
+    ["case-1", ""],
+    ["case-1", "true"],
+    ["case-1", " 1 "],
+  ])("discards malformed or incomplete intent (%s, %s)", (caseId, evidence) => {
+    expect(parseVaultEvidenceHandoff(caseId, evidence)).toBeNull();
   });
 });

@@ -3,10 +3,14 @@ import { fireEvent, render, screen, waitFor, within } from "@testing-library/rea
 import type { HTMLAttributes, ReactNode } from "react";
 
 const pushMock = vi.fn();
-const authUser = { id: "user-1" };
+const replaceMock = vi.fn();
+const routerMock = { replace: replaceMock, push: pushMock };
+let currentSearch = "";
+let authUser: { id: string } | null = { id: "user-1" };
 const caseLoadMock = vi.fn();
 const protocolLoadMock = vi.fn();
 const statusUpdateMock = vi.fn();
+const evidenceActivationMock = vi.fn();
 
 function deferred<T>() {
   let resolve!: (value: T) => void;
@@ -17,8 +21,11 @@ function deferred<T>() {
 }
 vi.mock("next/navigation", () => ({
   usePathname: () => "/dashboard/vault",
-  useRouter: () => ({ replace: vi.fn(), push: pushMock }),
-  useSearchParams: () => ({ get: () => null, toString: () => "" }),
+  useRouter: () => routerMock,
+  useSearchParams: () => {
+    const params = new URLSearchParams(currentSearch);
+    return { get: (key: string) => params.get(key), toString: () => params.toString() };
+  },
 }));
 vi.mock("@/context/AuthContext", () => ({ useAuth: () => ({ user: authUser }) }));
 vi.mock("@/context/LanguageContext", () => ({
@@ -41,14 +48,19 @@ vi.mock("@/lib/case-timeline", () => ({
   }),
 }));
 vi.mock("@/components/dashboard/CaseEvidencePanel", () => ({
-  default: ({ caseId, readOnly, onChecklistUpdated }: {
+  default: ({ userId, caseId, readOnly, activateOnce, onChecklistUpdated }: {
+    userId: string;
     caseId: string;
     readOnly?: boolean;
+    activateOnce?: boolean;
     onChecklistUpdated?: () => void;
-  }) => (
-    <button
+  }) => {
+    if (activateOnce) evidenceActivationMock({ userId, caseId });
+    return <button
       type="button"
       data-testid={`evidence-${caseId}`}
+      data-user-id={userId}
+      data-activate-once={activateOnce ? "true" : "false"}
       onClick={(event) => {
         event.stopPropagation();
         if (!readOnly) {
@@ -58,8 +70,8 @@ vi.mock("@/components/dashboard/CaseEvidencePanel", () => ({
       }}
     >
       {readOnly ? "read-only evidence" : "manage evidence"}
-    </button>
-  ),
+    </button>;
+  },
 }));
 
 const cases = [
@@ -108,6 +120,10 @@ import TechVault from "@/app/dashboard/vault/page";
 
 describe("case evidence Vault integration", () => {
   beforeEach(() => {
+    currentSearch = "";
+    authUser = { id: "user-1" };
+    replaceMock.mockReset();
+    evidenceActivationMock.mockReset();
     cases[0].checklist = {};
     cases[0].status = "active";
     pushMock.mockClear();
@@ -117,6 +133,188 @@ describe("case evidence Vault integration", () => {
       data: [{ id: "p1", case_id: "active", project_name: "Active Case" }],
       error: null,
     });
+  });
+
+  it("uses exact Case identity when duplicate project names exist and cleans only owned params", async () => {
+    const duplicateCases = [
+      { ...cases[0], id: "same-name-other", project_name: "Shared Project", updated_at: "2026-08-03" },
+      { ...cases[0], id: "same-name-target", project_name: "Shared Project", updated_at: "2026-08-02" },
+    ];
+    caseLoadMock.mockResolvedValue({ data: duplicateCases, error: null });
+    currentSearch = "q=Shared+Project&case=same-name-target&evidence=1&source=notice";
+
+    render(<TechVault />);
+
+    const target = await screen.findByTestId("evidence-same-name-target");
+    await waitFor(() => expect(target.getAttribute("data-activate-once")).toBe("true"));
+    expect(screen.queryByTestId("evidence-same-name-other")).toBeNull();
+    expect(screen.getAllByText("Shared Project")).toHaveLength(1);
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith(
+      "/dashboard/vault?q=Shared+Project&source=notice",
+      { scroll: false }
+    ));
+  });
+
+  it("does not replay activation after the router applies the cleaned URL", async () => {
+    currentSearch = "q=Active+Case&case=active&evidence=1&source=notice";
+    const { rerender } = render(<TechVault />);
+
+    const activated = await screen.findByTestId("evidence-active");
+    await waitFor(() => expect(activated.getAttribute("data-activate-once")).toBe("true"));
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith(
+      "/dashboard/vault?q=Active+Case&source=notice",
+      { scroll: false }
+    ));
+
+    currentSearch = "q=Active+Case&source=notice";
+    rerender(<TechVault />);
+
+    expect(screen.getByTestId("evidence-active").getAttribute("data-activate-once")).toBe("false");
+    expect(caseLoadMock).toHaveBeenCalledTimes(1);
+    expect(evidenceActivationMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("still activates once when URL cleanup lands before the owner snapshot", async () => {
+    const pendingCases = deferred<{ data: typeof cases; error: null }>();
+    caseLoadMock.mockReturnValueOnce(pendingCases.promise);
+    currentSearch = "q=Active+Case&case=active&evidence=1&source=notice";
+    const { rerender } = render(<TechVault />);
+
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith(
+      "/dashboard/vault?q=Active+Case&source=notice",
+      { scroll: false }
+    ));
+    currentSearch = "q=Active+Case&source=notice";
+    rerender(<TechVault />);
+    expect(evidenceActivationMock).not.toHaveBeenCalled();
+
+    pendingCases.resolve({ data: cases, error: null });
+    await screen.findByTestId("evidence-active");
+    await waitFor(() => expect(evidenceActivationMock).toHaveBeenCalledTimes(1));
+
+    rerender(<TechVault />);
+    expect(evidenceActivationMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("invalidates a handoff synchronously when the account changes", async () => {
+    currentSearch = "q=Active+Case&case=active&evidence=1";
+    const { rerender } = render(<TechVault />);
+    const activated = await screen.findByTestId("evidence-active");
+    await waitFor(() => expect(activated.getAttribute("data-activate-once")).toBe("true"));
+
+    const nextAccountLoad = deferred<{ data: typeof cases; error: null }>();
+    caseLoadMock.mockReturnValueOnce(nextAccountLoad.promise);
+    authUser = { id: "user-2" };
+    rerender(<TechVault />);
+
+    const staleControl = screen.queryByTestId("evidence-active");
+    if (staleControl) {
+      expect(staleControl.getAttribute("data-user-id")).toBe("user-2");
+      expect(staleControl.getAttribute("data-activate-once")).toBe("false");
+    }
+
+    nextAccountLoad.resolve({
+      data: [{ ...cases[0], id: "user-2-case", user_id: "user-2", project_name: "Active Case" }],
+      error: null,
+    });
+    const nextAccountControl = await screen.findByTestId("evidence-user-2-case");
+    expect(nextAccountControl.getAttribute("data-user-id")).toBe("user-2");
+    expect(nextAccountControl.getAttribute("data-activate-once")).toBe("false");
+    expect(screen.queryByTestId("evidence-active")).toBeNull();
+  });
+
+  it("releases exact handoff scoping when the user changes the search", async () => {
+    const searchableCases = [
+      { ...cases[0], id: "target", project_name: "Shared Project" },
+      { ...cases[0], id: "other", project_name: "Different Project" },
+    ];
+    caseLoadMock.mockResolvedValue({ data: searchableCases, error: null });
+    currentSearch = "q=Shared+Project&case=target&evidence=1";
+    render(<TechVault />);
+
+    const target = await screen.findByTestId("evidence-target");
+    await waitFor(() => expect(target.getAttribute("data-activate-once")).toBe("true"));
+    expect(screen.queryByTestId("evidence-other")).toBeNull();
+
+    fireEvent.change(screen.getByLabelText("vault-search-placeholder"), {
+      target: { value: "Different" },
+    });
+
+    const other = await screen.findByTestId("evidence-other");
+    expect(other.getAttribute("data-activate-once")).toBe("false");
+    expect(screen.queryByTestId("evidence-target")).toBeNull();
+  });
+
+  it("releases exact handoff scoping when external URL state later diverges", async () => {
+    const searchableCases = [
+      { ...cases[0], id: "target", project_name: "Shared Project" },
+      { ...cases[0], id: "other", project_name: "Different Project" },
+    ];
+    caseLoadMock.mockResolvedValue({ data: searchableCases, error: null });
+    currentSearch = "q=Shared+Project&case=target&evidence=1&source=notice";
+    const { rerender } = render(<TechVault />);
+
+    await screen.findByTestId("evidence-target");
+    await waitFor(() => expect(evidenceActivationMock).toHaveBeenCalledTimes(1));
+
+    currentSearch = "q=Shared+Project&source=notice";
+    rerender(<TechVault />);
+    expect(screen.queryByTestId("evidence-other")).toBeNull();
+
+    currentSearch = "q=Different+Project&source=history";
+    rerender(<TechVault />);
+
+    await screen.findByTestId("evidence-other");
+    expect(screen.queryByTestId("evidence-target")).toBeNull();
+    expect(evidenceActivationMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("releases exact handoff scoping when the user changes tabs", async () => {
+    currentSearch = "case=active&evidence=1";
+    render(<TechVault />);
+
+    const activated = await screen.findByTestId("evidence-active");
+    await waitFor(() => expect(activated.getAttribute("data-activate-once")).toBe("true"));
+
+    fireEvent.click(screen.getByRole("tab", { name: "vault-tab-archived" }));
+
+    const archived = await screen.findByTestId("evidence-archived");
+    expect(archived.getAttribute("data-activate-once")).toBe("false");
+    expect(screen.queryByTestId("evidence-active")).toBeNull();
+  });
+
+  it("selects and activates an exact archived Case read-only", async () => {
+    currentSearch = "tab=archived&q=Archived+Case&case=archived&evidence=1&source=notice";
+
+    render(<TechVault />);
+
+    const evidenceControl = await screen.findByTestId("evidence-archived");
+    expect(evidenceControl.textContent).toBe("read-only evidence");
+    await waitFor(() => expect(evidenceControl.getAttribute("data-activate-once")).toBe("true"));
+    expect(screen.getByRole("tab", { name: "vault-tab-archived" }).className).toContain("bg-accent");
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith(
+      "/dashboard/vault?tab=archived&q=Archived+Case&source=notice",
+      { scroll: false }
+    ));
+  });
+
+  it.each([
+    "q=Active+Case&case=missing&evidence=1&source=notice",
+    "q=Active+Case&case=active&source=notice",
+    "q=Active+Case&evidence=1&source=notice",
+    "q=Active+Case&case=active&evidence=true&source=notice",
+  ])("discards missing or malformed handoff without implying access: %s", async (search) => {
+    currentSearch = search;
+
+    render(<TechVault />);
+
+    const normalControl = await screen.findByTestId("evidence-active");
+    expect(normalControl.getAttribute("data-activate-once")).toBe("false");
+    expect(screen.queryByTestId("evidence-archived")).toBeNull();
+    await waitFor(() => expect(replaceMock).toHaveBeenCalledWith(
+      "/dashboard/vault?q=Active+Case&source=notice",
+      { scroll: false }
+    ));
   });
 
   it("mounts evidence controls on active cards without activating card navigation and labels counts as linked protocols", async () => {

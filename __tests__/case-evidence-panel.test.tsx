@@ -104,6 +104,59 @@ describe("CaseEvidencePanel", () => {
     signedUrlMock.mockReset().mockResolvedValue({ data: { signedUrl: "https://signed.test/file" }, error: null });
   });
 
+  it("activates, loads, and focuses the writable upload input exactly once", async () => {
+    const { rerender } = render(
+      <CaseEvidencePanel
+        userId="user-1"
+        caseId="case-1"
+        caseName="Alpine"
+        activateOnce
+      />
+    );
+
+    const input = await screen.findByLabelText("vault-evidence-file-label");
+    await waitFor(() => expect(document.activeElement).toBe(input));
+    expect(listMock).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "vault-evidence-hide" }));
+    rerender(
+      <CaseEvidencePanel
+        userId="user-1"
+        caseId="case-1"
+        caseName="Alpine"
+        activateOnce={false}
+      />
+    );
+    rerender(
+      <CaseEvidencePanel
+        userId="user-1"
+        caseId="case-1"
+        caseName="Alpine"
+        activateOnce
+      />
+    );
+
+    expect(screen.getByRole("button", { name: "vault-evidence-show" })).toBeTruthy();
+    expect(listMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("activates archived evidence read-only and focuses its region instead of an upload input", async () => {
+    render(
+      <CaseEvidencePanel
+        userId="user-1"
+        caseId="case-1"
+        caseName="Alpine"
+        readOnly
+        activateOnce
+      />
+    );
+
+    const region = await screen.findByRole("region", { name: "vault-evidence-title" });
+    await waitFor(() => expect(document.activeElement).toBe(region));
+    expect(screen.queryByLabelText("vault-evidence-file-label")).toBeNull();
+    expect(listMock).toHaveBeenCalledTimes(1);
+  });
+
   it("lists lazily and renders the empty state", async () => {
     render(<CaseEvidencePanel userId="user-1" caseId="case-1" caseName="Alpine" />);
     expect(listMock).not.toHaveBeenCalled();

@@ -352,6 +352,27 @@ describe("Cases notice dispatch recording", () => {
     deriveCaseLegalMilestonesMock.mockReset().mockReturnValue([]);
   });
 
+  it("links the latest notice-dispatch evidence-empty CTA to the exact Case evidence control", async () => {
+    noticeDispatches = [savedDispatch({
+      user_id: "user-1",
+      case_id: "case-1",
+      notice_draft_id: "draft-latest",
+      dispatched_at: "2026-08-15T09:00:00.000Z",
+      channel: "courier",
+      reference: null,
+    })];
+    caseEvidence = [];
+    render(<CasesPage />);
+
+    const evidenceEmptyCta = (await screen.findByText("cases-notice-dispatch-evidence-open-vault")).closest("a");
+    expect(evidenceEmptyCta?.getAttribute("href")).toBe(
+      "/dashboard/vault?q=Alpine+Tower&case=case-1&evidence=1"
+    );
+    expect(screen.getByRole("link", { name: "cases-open-in-vault" }).getAttribute("href")).toBe(
+      "/dashboard/vault?q=Alpine+Tower"
+    );
+  });
+
   it("inserts a dispatch bound to the exact latest saved draft", async () => {
     noticeDrafts = [
       draft("draft-older", "2026-08-09T10:00:00.000Z"),

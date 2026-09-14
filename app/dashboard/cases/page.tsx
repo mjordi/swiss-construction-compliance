@@ -3573,7 +3573,7 @@ export default function CasesPage() {
                               {isCaseBusy ? (
                                 <span aria-disabled="true" className="cursor-not-allowed opacity-60">{t("cases-notice-dispatch-evidence-open-vault")}</span>
                               ) : (
-                                <Link href={buildCaseVaultHref(item.projectName)} onClick={(event) => guardCaseNavigation(event, item.id)}>
+                                <Link href={buildCaseVaultHref(item.projectName, item.id)} onClick={(event) => guardCaseNavigation(event, item.id)}>
                                   {t("cases-notice-dispatch-evidence-open-vault")}
                                 </Link>
                               )}
