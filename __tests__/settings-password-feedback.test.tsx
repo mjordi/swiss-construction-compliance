@@ -64,7 +64,7 @@ vi.mock("@/context/LanguageContext", () => ({
 
 vi.mock("@/context/AuthContext", () => ({
   useAuth: () => ({
-    user: null,
+    user: { id: "user-1", name: "Max Muster", email: "max@example.test" },
     logout: logoutMock,
   }),
 }));

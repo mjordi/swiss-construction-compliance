@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useLayoutEffect, useMemo, useRef } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { Shield, LogOut, Loader2, Check, User, AlertCircle } from "lucide-react";
 import PageHeader from "@/components/dashboard/PageHeader";
@@ -17,6 +17,7 @@ type PasswordFeedback =
 export default function Settings() {
   const { t } = useLanguage();
   const { user, logout } = useAuth();
+  const accountId = user?.id ?? null;
   const supabase = useMemo(() => getSupabase(), []);
   const router = useRouter();
   const pathname = usePathname();
@@ -25,10 +26,19 @@ export default function Settings() {
   const isPasswordRecovery = new URLSearchParams(searchParamString).get("recovery") === "1";
   const latestSearchParamStringRef = useRef(searchParamString);
   latestSearchParamStringRef.current = searchParamString;
+  const mountedRef = useRef(false);
+  const currentAccountIdRef = useRef<string | null>(null);
+  const loadGenerationRef = useRef(0);
+  const saveGenerationRef = useRef(0);
+  const passwordGenerationRef = useRef(0);
+  const profileSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const passwordSuccessTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const [fullName, setFullName] = useState("");
   const [company, setCompany] = useState("");
   const [loadedProfile, setLoadedProfile] = useState<{ fullName: string; company: string } | null>(null);
+  const [stateOwnerAccountId, setStateOwnerAccountId] = useState<string | null>(null);
+  const [profileReady, setProfileReady] = useState(false);
   const [profileError, setProfileError] = useState<TranslationKey | null>(null);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -41,6 +51,15 @@ export default function Settings() {
   const latestPasswordRef = useRef("");
   const passwordInputRef = useRef<HTMLInputElement>(null);
 
+  useLayoutEffect(() => {
+    if (currentAccountIdRef.current === accountId) return;
+
+    currentAccountIdRef.current = accountId;
+    loadGenerationRef.current += 1;
+    saveGenerationRef.current += 1;
+    passwordGenerationRef.current += 1;
+  }, [accountId]);
+
   useEffect(() => {
     latestProfileFormRef.current = { fullName, company };
   }, [company, fullName]);
@@ -50,23 +69,65 @@ export default function Settings() {
   }, [newPassword]);
 
   useEffect(() => {
-    if (isPasswordRecovery) {
+    if (isPasswordRecovery && accountId !== null && stateOwnerAccountId === accountId) {
       passwordInputRef.current?.focus();
     }
-  }, [isPasswordRecovery]);
+  }, [accountId, isPasswordRecovery, stateOwnerAccountId]);
 
   useEffect(() => {
-    if (!user) return;
+    mountedRef.current = true;
 
-    let cancelled = false;
+    return () => {
+      mountedRef.current = false;
+      loadGenerationRef.current += 1;
+      saveGenerationRef.current += 1;
+      passwordGenerationRef.current += 1;
+      if (profileSuccessTimerRef.current) clearTimeout(profileSuccessTimerRef.current);
+      if (passwordSuccessTimerRef.current) clearTimeout(passwordSuccessTimerRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    const loadGeneration = ++loadGenerationRef.current;
+
+    if (profileSuccessTimerRef.current) {
+      clearTimeout(profileSuccessTimerRef.current);
+      profileSuccessTimerRef.current = null;
+    }
+    if (passwordSuccessTimerRef.current) {
+      clearTimeout(passwordSuccessTimerRef.current);
+      passwordSuccessTimerRef.current = null;
+    }
+
+    latestProfileFormRef.current = { fullName: "", company: "" };
+    latestPasswordRef.current = "";
+    setStateOwnerAccountId(accountId);
+    setFullName("");
+    setCompany("");
+    setLoadedProfile(null);
+    setProfileReady(false);
+    setProfileError(null);
+    setSaving(false);
+    setSaved(false);
+    setNewPassword("");
+    setUpdatingPassword(false);
+    setPasswordUpdated(false);
+    setPasswordFeedback(null);
+
+    if (!accountId) return;
+
+    const isCurrentLoad = () =>
+      mountedRef.current &&
+      currentAccountIdRef.current === accountId &&
+      loadGenerationRef.current === loadGeneration;
 
     void supabase
       .from("profiles")
       .select("full_name, company")
-      .eq("id", user.id)
+      .eq("id", accountId)
       .maybeSingle()
       .then(({ data, error }: { data: { full_name: string | null; company: string | null } | null; error: { message: string } | null }) => {
-        if (cancelled) return;
+        if (!isCurrentLoad()) return;
 
         if (error) {
           setProfileError("settings-profile-load-error");
@@ -83,28 +144,49 @@ export default function Settings() {
         setFullName(nextProfile.fullName);
         setCompany(nextProfile.company);
         setProfileError(null);
+        setProfileReady(true);
       })
       .catch(() => {
-        if (cancelled) return;
+        if (!isCurrentLoad()) return;
         setProfileError("settings-profile-load-error");
       });
+  }, [accountId, supabase]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [user, supabase]);
-
+  const ownsVisibleState = accountId !== null && stateOwnerAccountId === accountId;
+  const visibleFullName = ownsVisibleState ? fullName : "";
+  const visibleCompany = ownsVisibleState ? company : "";
+  const visibleProfileReady = ownsVisibleState && profileReady;
+  const visibleNewPassword = ownsVisibleState ? newPassword : "";
+  const visibleSaving = ownsVisibleState && saving;
+  const visibleSaved = ownsVisibleState && saved;
+  const visibleUpdatingPassword = ownsVisibleState && updatingPassword;
+  const visiblePasswordUpdated = ownsVisibleState && passwordUpdated;
+  const visibleProfileError = ownsVisibleState ? profileError : null;
+  const visiblePasswordFeedback = ownsVisibleState ? passwordFeedback : null;
   const hasUnsavedProfileChanges = useMemo(
-    () => hasSettingsProfileChanges({ fullName, company }, loadedProfile),
-    [company, fullName, loadedProfile]
+    () => ownsVisibleState && hasSettingsProfileChanges({ fullName, company }, loadedProfile),
+    [company, fullName, loadedProfile, ownsVisibleState]
   );
-  const passwordErrorMessage = passwordFeedback?.kind === "translation" ? t(passwordFeedback.key) : passwordFeedback?.message ?? null;
+  const passwordErrorMessage =
+    visiblePasswordFeedback?.kind === "translation"
+      ? t(visiblePasswordFeedback.key)
+      : visiblePasswordFeedback?.message ?? null;
 
   const handleSaveProfile = async () => {
-    if (!user || !hasUnsavedProfileChanges) return;
+    if (!accountId || stateOwnerAccountId !== accountId || !profileReady || !hasUnsavedProfileChanges) return;
 
+    const submittedAccountId = accountId;
+    const saveGeneration = ++saveGenerationRef.current;
     const normalizedProfile = normalizeSettingsProfileSnapshot({ fullName, company });
+    const isCurrentSave = () =>
+      mountedRef.current &&
+      currentAccountIdRef.current === submittedAccountId &&
+      saveGenerationRef.current === saveGeneration;
 
+    if (profileSuccessTimerRef.current) {
+      clearTimeout(profileSuccessTimerRef.current);
+      profileSuccessTimerRef.current = null;
+    }
     setSaving(true);
     setSaved(false);
     setProfileError(null);
@@ -113,7 +195,9 @@ export default function Settings() {
       const { error } = await supabase
         .from("profiles")
         .update({ full_name: normalizedProfile.fullName, company: normalizedProfile.company })
-        .eq("id", user.id);
+        .eq("id", submittedAccountId);
+
+      if (!isCurrentSave()) return;
 
       if (error) {
         setProfileError("settings-profile-save-error");
@@ -130,18 +214,23 @@ export default function Settings() {
         setFullName(normalizedProfile.fullName);
         setCompany(normalizedProfile.company);
         setSaved(true);
-        setTimeout(() => setSaved(false), 2000);
+        profileSuccessTimerRef.current = setTimeout(() => {
+          if (isCurrentSave()) setSaved(false);
+          profileSuccessTimerRef.current = null;
+        }, 2000);
       } else {
         setSaved(false);
       }
     } catch {
-      setProfileError("settings-profile-save-error");
+      if (isCurrentSave()) setProfileError("settings-profile-save-error");
     } finally {
-      setSaving(false);
+      if (isCurrentSave()) setSaving(false);
     }
   };
 
   const handleUpdatePassword = async () => {
+    if (!accountId || stateOwnerAccountId !== accountId) return;
+
     const submittedPassword = newPassword;
 
     if (submittedPassword.length < 6) {
@@ -149,6 +238,17 @@ export default function Settings() {
       return;
     }
 
+    const submittedAccountId = accountId;
+    const passwordGeneration = ++passwordGenerationRef.current;
+    const isCurrentPasswordUpdate = () =>
+      mountedRef.current &&
+      currentAccountIdRef.current === submittedAccountId &&
+      passwordGenerationRef.current === passwordGeneration;
+
+    if (passwordSuccessTimerRef.current) {
+      clearTimeout(passwordSuccessTimerRef.current);
+      passwordSuccessTimerRef.current = null;
+    }
     latestPasswordRef.current = submittedPassword;
     setUpdatingPassword(true);
     setPasswordFeedback(null);
@@ -156,6 +256,8 @@ export default function Settings() {
 
     try {
       const { error } = await supabase.auth.updateUser({ password: submittedPassword });
+      if (!isCurrentPasswordUpdate()) return;
+
       if (error) {
         setPasswordFeedback({ kind: "message", message: error.message });
         return;
@@ -165,7 +267,10 @@ export default function Settings() {
         latestPasswordRef.current = "";
         setPasswordUpdated(true);
         setNewPassword("");
-        setTimeout(() => setPasswordUpdated(false), 2000);
+        passwordSuccessTimerRef.current = setTimeout(() => {
+          if (isCurrentPasswordUpdate()) setPasswordUpdated(false);
+          passwordSuccessTimerRef.current = null;
+        }, 2000);
         if (isPasswordRecovery) {
           const params = new URLSearchParams(latestSearchParamStringRef.current);
           params.delete("recovery");
@@ -174,12 +279,13 @@ export default function Settings() {
         }
       }
     } catch (error) {
+      if (!isCurrentPasswordUpdate()) return;
       setPasswordFeedback({
         kind: "message",
         message: error instanceof Error && error.message ? error.message : "Unable to update password. Please try again.",
       });
     } finally {
-      setUpdatingPassword(false);
+      if (isCurrentPasswordUpdate()) setUpdatingPassword(false);
     }
   };
 
@@ -222,13 +328,19 @@ export default function Settings() {
               <input
                 id="settings-full-name"
                 type="text"
-                value={fullName}
+                value={visibleFullName}
+                disabled={!visibleProfileReady}
                 onChange={(e) => {
+                  if (!visibleProfileReady) return;
                   const nextFullName = e.target.value;
                   latestProfileFormRef.current = {
                     ...latestProfileFormRef.current,
                     fullName: nextFullName,
                   };
+                  if (profileSuccessTimerRef.current) {
+                    clearTimeout(profileSuccessTimerRef.current);
+                    profileSuccessTimerRef.current = null;
+                  }
                   setFullName(nextFullName);
                   setSaved(false);
                   setProfileError(null);
@@ -243,13 +355,19 @@ export default function Settings() {
               <input
                 id="settings-company"
                 type="text"
-                value={company}
+                value={visibleCompany}
+                disabled={!visibleProfileReady}
                 onChange={(e) => {
+                  if (!visibleProfileReady) return;
                   const nextCompany = e.target.value;
                   latestProfileFormRef.current = {
                     ...latestProfileFormRef.current,
                     company: nextCompany,
                   };
+                  if (profileSuccessTimerRef.current) {
+                    clearTimeout(profileSuccessTimerRef.current);
+                    profileSuccessTimerRef.current = null;
+                  }
                   setCompany(nextCompany);
                   setSaved(false);
                   setProfileError(null);
@@ -259,24 +377,25 @@ export default function Settings() {
             </div>
           </div>
 
-          {profileError && (
-            <div className="mb-4 flex items-start gap-2 rounded-lg border border-red-400/15 bg-red-400/[0.06] px-4 py-3 text-[13px] text-red-300">
+          {visibleProfileError && (
+            <div role="alert" className="mb-4 flex items-start gap-2 rounded-lg border border-red-400/15 bg-red-400/[0.06] px-4 py-3 text-[13px] text-red-300">
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{t(profileError)}</span>
+              <span>{t(visibleProfileError)}</span>
             </div>
           )}
 
           <button
+            aria-live="polite"
             onClick={handleSaveProfile}
-            disabled={saving || !hasUnsavedProfileChanges}
+            disabled={!visibleProfileReady || visibleSaving || !hasUnsavedProfileChanges}
             className="px-5 py-2.5 bg-accent hover:bg-accent/90 disabled:opacity-50 text-white font-semibold rounded-lg transition-colors duration-200 flex items-center gap-2 text-sm"
           >
-            {saving ? (
+            {visibleSaving ? (
               <Loader2 className="w-4 h-4 animate-spin" />
-            ) : saved ? (
+            ) : visibleSaved ? (
               <Check className="w-4 h-4" />
             ) : null}
-            {saved ? t("settings-saved") : t("settings-save")}
+            {visibleSaved ? t("settings-saved") : t("settings-save")}
           </button>
         </div>
 
@@ -301,9 +420,14 @@ export default function Settings() {
                 ref={passwordInputRef}
                 id="settings-new-password"
                 type="password"
-                value={newPassword}
+                value={visibleNewPassword}
+                disabled={!ownsVisibleState}
                 onChange={(e) => {
                   const nextPassword = e.target.value;
+                  if (passwordSuccessTimerRef.current) {
+                    clearTimeout(passwordSuccessTimerRef.current);
+                    passwordSuccessTimerRef.current = null;
+                  }
                   latestPasswordRef.current = nextPassword;
                   setNewPassword(nextPassword);
                   setPasswordFeedback(null);
@@ -316,22 +440,23 @@ export default function Settings() {
             </div>
 
             {passwordErrorMessage && (
-              <div className="text-red-400 text-[13px] bg-red-400/[0.06] border border-red-400/15 rounded-lg px-4 py-2.5">
+              <div role="alert" className="text-red-400 text-[13px] bg-red-400/[0.06] border border-red-400/15 rounded-lg px-4 py-2.5">
                 {passwordErrorMessage}
               </div>
             )}
 
             <button
+              aria-live="polite"
               onClick={handleUpdatePassword}
-              disabled={updatingPassword || !newPassword}
+              disabled={!ownsVisibleState || visibleUpdatingPassword || !visibleNewPassword}
               className="px-5 py-2.5 bg-white/[0.04] border border-white/[0.06] hover:bg-white/[0.06] disabled:opacity-40 text-cream font-semibold rounded-lg transition-all duration-200 flex items-center gap-2 text-sm"
             >
-              {updatingPassword ? (
+              {visibleUpdatingPassword ? (
                 <Loader2 className="w-4 h-4 animate-spin" />
-              ) : passwordUpdated ? (
+              ) : visiblePasswordUpdated ? (
                 <Check className="w-4 h-4 text-emerald-400" />
               ) : null}
-              {passwordUpdated ? t("settings-password-updated") : t("settings-update-password")}
+              {visiblePasswordUpdated ? t("settings-password-updated") : t("settings-update-password")}
             </button>
           </div>
         </div>
