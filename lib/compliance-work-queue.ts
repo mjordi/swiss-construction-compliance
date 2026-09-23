@@ -7,6 +7,11 @@ import {
 } from "@/lib/case-timeline";
 import { normalizeFollowUpChecklistState } from "@/lib/cases-checklist";
 import { buildCaseHandoffHref } from "@/lib/case-handoff";
+import {
+  buildCaseDeadlinePortfolio,
+  type CaseAcceptanceDeadlineMilestoneKind,
+} from "@/lib/case-deadline-portfolio";
+import { getDaysRemaining } from "@/lib/legal-utils";
 
 export type ComplianceWorkQueuePriority =
   | "expired"
@@ -34,6 +39,7 @@ export interface ComplianceWorkQueueRow {
   canton: string;
   lifecycleStatus: Exclude<Case["status"], "archived">;
   priority: ComplianceWorkQueuePriority;
+  primarySignal: "notice" | "acceptance";
   timeline: ComplianceCaseViewModel;
   checklist: FollowUpChecklistState;
   checklistProgress: {
@@ -41,6 +47,11 @@ export interface ComplianceWorkQueueRow {
     total: number;
   };
   readinessReasons: ComplianceWorkQueueReadinessReason[];
+  acceptanceMilestone?: {
+    kind: CaseAcceptanceDeadlineMilestoneKind;
+    deadlineDay: string;
+    daysRemaining: number;
+  };
   linkedProtocolCount: number;
   casesHref: string;
 }
@@ -79,6 +90,7 @@ function isEvaluableCase(value: unknown): value is Case {
     !isNonEmptyString(value.canton) ||
     !isNonEmptyString(value.contract_date) ||
     !isNonEmptyString(value.discovery_date) ||
+    (value.acceptance_date !== undefined && value.acceptance_date !== null && !isNonEmptyString(value.acceptance_date)) ||
     (value.status !== "active" && value.status !== "review" && value.status !== "archived") ||
     !hasValidChecklist(value.checklist)
   ) {
@@ -142,16 +154,67 @@ function readinessReasons(
   ];
 }
 
-function getPriority(
+function noticePriority(
   item: ComplianceCaseViewModel,
   lifecycleStatus: Exclude<Case["status"], "archived">
 ): ComplianceWorkQueuePriority {
-  if (item.status === "expired") return "expired";
-  if (item.status === "immediate-notice") return "immediate-notice";
-  if (item.status === "urgent") return "urgent";
-  if (item.status === "warning") return "warning";
-  if (lifecycleStatus === "review") return "lifecycle-review";
-  return "incomplete-readiness";
+  return item.status === "expired"
+    ? "expired"
+    : item.status === "immediate-notice"
+      ? "immediate-notice"
+      : item.status === "urgent"
+        ? "urgent"
+        : item.status === "warning"
+          ? "warning"
+          : lifecycleStatus === "review"
+            ? "lifecycle-review"
+            : "incomplete-readiness";
+}
+
+function acceptancePriority(
+  milestone: ComplianceWorkQueueRow["acceptanceMilestone"]
+): ComplianceWorkQueuePriority | null {
+  if (!milestone) return null;
+  return milestone.daysRemaining <= 14 ? "urgent" : "warning";
+}
+
+function selectPrimarySignal(
+  item: ComplianceCaseViewModel,
+  lifecycleStatus: Exclude<Case["status"], "archived">,
+  milestone?: ComplianceWorkQueueRow["acceptanceMilestone"]
+): Pick<ComplianceWorkQueueRow, "priority" | "primarySignal"> {
+  const notice = noticePriority(item, lifecycleStatus);
+  const acceptance = acceptancePriority(milestone);
+
+  if (notice === "expired" || notice === "immediate-notice" || !acceptance || !milestone) {
+    return { priority: notice, primarySignal: "notice" };
+  }
+
+  const rankDifference = priorityRank[acceptance] - priorityRank[notice];
+  if (rankDifference < 0) return { priority: acceptance, primarySignal: "acceptance" };
+  if (rankDifference > 0) return { priority: notice, primarySignal: "notice" };
+
+  const noticeDeadline = item.noticeDeadline?.getTime() ?? Number.POSITIVE_INFINITY;
+  const acceptanceDeadline = Date.parse(`${milestone.deadlineDay}T00:00:00.000Z`);
+  return acceptanceDeadline < noticeDeadline
+    ? { priority: acceptance, primarySignal: "acceptance" }
+    : { priority: notice, primarySignal: "notice" };
+}
+
+function relevantLegalDate(row: ComplianceWorkQueueRow): number {
+  if (row.priority === "immediate-notice") return Number.POSITIVE_INFINITY;
+  if (row.priority === "expired") {
+    return row.timeline.noticeDeadline?.getTime() ?? Number.POSITIVE_INFINITY;
+  }
+
+  const candidates: number[] = [];
+  if (row.timeline.status === row.priority && row.timeline.noticeDeadline) {
+    candidates.push(row.timeline.noticeDeadline.getTime());
+  }
+  if (acceptancePriority(row.acceptanceMilestone) === row.priority && row.acceptanceMilestone) {
+    candidates.push(Date.parse(`${row.acceptanceMilestone.deadlineDay}T00:00:00.000Z`));
+  }
+  return candidates.length > 0 ? Math.min(...candidates) : Number.POSITIVE_INFINITY;
 }
 
 export function buildComplianceWorkQueue(
@@ -172,6 +235,24 @@ export function buildComplianceWorkQueue(
     }))
   );
   const caseById = new Map(activeCases.map((item) => [item.id, item]));
+  const acceptanceMilestoneByCase = new Map<string, ComplianceWorkQueueRow["acceptanceMilestone"]>();
+  for (const milestone of buildCaseDeadlinePortfolio(activeCases.map((item) => ({
+    id: item.id,
+    project_name: item.project_name,
+    contract_date: item.contract_date,
+    discovery_date: item.discovery_date,
+    acceptance_date: item.acceptance_date ?? null,
+    status: item.status,
+  })))) {
+    if (milestone.kind === "notice" || acceptanceMilestoneByCase.has(milestone.caseId)) continue;
+    const daysRemaining = getDaysRemaining(milestone.deadline);
+    if (daysRemaining < 0 || daysRemaining > 30) continue;
+    acceptanceMilestoneByCase.set(milestone.caseId, {
+      kind: milestone.kind,
+      deadlineDay: milestone.deadlineDay,
+      daysRemaining,
+    });
+  }
   const protocolCountByCase = new Map<string, number>();
 
   for (const protocol of protocols) {
@@ -193,8 +274,10 @@ export function buildComplianceWorkQueue(
       });
       const linkedProtocolCount = protocolCountByCase.get(item.id) ?? 0;
       const reasons = readinessReasons(item, checklist, linkedProtocolCount);
+      const acceptanceMilestone = acceptanceMilestoneByCase.get(item.id);
+      const primary = selectPrimarySignal(item, source.status, acceptanceMilestone);
 
-      if (item.status === "ok" && source.status === "active" && reasons.length === 0) {
+      if (item.status === "ok" && source.status === "active" && reasons.length === 0 && !acceptanceMilestone) {
         return [];
       }
 
@@ -203,7 +286,7 @@ export function buildComplianceWorkQueue(
         projectName: item.projectName,
         canton: item.canton,
         lifecycleStatus: source.status,
-        priority: getPriority(item, source.status),
+        ...primary,
         timeline: item,
         checklist,
         checklistProgress: {
@@ -211,6 +294,7 @@ export function buildComplianceWorkQueue(
           total: Object.keys(checklist).length,
         },
         readinessReasons: reasons,
+        acceptanceMilestone,
         linkedProtocolCount,
         casesHref: buildCaseHandoffHref(item.id),
       }];
@@ -219,8 +303,8 @@ export function buildComplianceWorkQueue(
       const priorityDifference = priorityRank[left.priority] - priorityRank[right.priority];
       if (priorityDifference !== 0) return priorityDifference;
 
-      const leftDeadline = left.timeline.noticeDeadline?.getTime() ?? Number.POSITIVE_INFINITY;
-      const rightDeadline = right.timeline.noticeDeadline?.getTime() ?? Number.POSITIVE_INFINITY;
+      const leftDeadline = relevantLegalDate(left);
+      const rightDeadline = relevantLegalDate(right);
       if (leftDeadline !== rightDeadline) return leftDeadline - rightDeadline;
 
       const leftDays = left.timeline.daysToDeadline ?? Number.POSITIVE_INFINITY;

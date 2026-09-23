@@ -23,6 +23,7 @@ import type {
   ComplianceQueueSharedOwner,
 } from "@/lib/database.types";
 import type { CaseDeadlineStatus } from "@/lib/case-timeline";
+import type { CaseAcceptanceDeadlineMilestoneKind } from "@/lib/case-deadline-portfolio";
 import { getMillisecondsUntilNextSwissCalendarDay } from "@/lib/legal-utils";
 import type { TranslationKey } from "@/locales";
 
@@ -59,6 +60,16 @@ const nextActionKey: Record<CaseDeadlineStatus, TranslationKey> = {
   "immediate-notice": "cases-next-action-immediate-notice",
 };
 
+const acceptanceMilestoneLabelKey: Record<CaseAcceptanceDeadlineMilestoneKind, TranslationKey> = {
+  "warranty-2y": "work-acceptance-milestone-warranty-2y",
+  "limitation-5y": "work-acceptance-milestone-limitation-5y",
+};
+
+const acceptanceNextActionKey: Record<CaseAcceptanceDeadlineMilestoneKind, TranslationKey> = {
+  "warranty-2y": "work-acceptance-next-action-warranty-2y",
+  "limitation-5y": "work-acceptance-next-action-limitation-5y",
+};
+
 type LoadError = "work-error" | "work-malformed";
 type SharingFeedback = "work-sharing-grant-success" | "work-sharing-revoke-success" | "work-sharing-grant-error";
 type RpcResponse = { data: unknown; error: unknown };
@@ -76,9 +87,25 @@ function localizedCountdown(row: ComplianceWorkQueueRow, t: (key: TranslationKey
   return `${days} ${t("cases-countdown-days-left-suffix")}`;
 }
 
+function localizedDaysRemaining(days: number, t: (key: TranslationKey) => string): string {
+  if (days === 0) return t("cases-countdown-due-today");
+  if (days === 1) return t("cases-countdown-one-day-left");
+  return `${days} ${t("cases-countdown-days-left-suffix")}`;
+}
+
+function localizedDeadlineDay(deadlineDay: string, lang: string): string {
+  const locale = lang === "fr" ? "fr-CH" : lang === "it" ? "it-CH" : lang === "en" ? "en-CH" : "de-CH";
+  return new Date(`${deadlineDay}T00:00:00.000Z`).toLocaleDateString(locale, {
+    timeZone: "UTC",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
 export default function ComplianceWorkQueuePage() {
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const supabase = useMemo(() => getSupabase(), []);
   const ownerId = user?.id ?? null;
 
@@ -456,7 +483,9 @@ export default function ComplianceWorkQueuePage() {
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-wider text-accent">{t(priorityLabelKey[row.priority])}</div>
                   <h2 className="mt-1 text-lg font-semibold text-cream">{row.projectName}</h2>
-                  <p className="mt-1 text-xs text-muted">{row.canton} · {row.id} · {t(statusLabelKey[row.timeline.status])}</p>
+                  <p className="mt-1 text-xs text-muted">
+                    {row.canton} · {row.id} · <span>{t("work-notice-status")}</span>: <span>{t(statusLabelKey[row.timeline.status])}</span>
+                  </p>
                 </div>
                 {!isSharedView && (
                   <Link href={row.casesHref} className="rounded-lg border border-accent/20 bg-accent/[0.08] px-3 py-2 text-sm font-medium text-accent">
@@ -466,11 +495,60 @@ export default function ComplianceWorkQueuePage() {
               </div>
 
               <dl className="mt-5 grid gap-4 sm:grid-cols-2">
-                <div><dt className="text-xs text-muted">{t("work-next-action")}</dt><dd className="mt-1 text-sm text-cream">{t(nextActionKey[row.timeline.status])}</dd></div>
-                <div><dt className="text-xs text-muted">{t("work-countdown")}</dt><dd className="mt-1 text-sm text-cream">{localizedCountdown(row, t)}</dd></div>
+                <div>
+                  <dt className="text-xs text-muted">
+                    {t(row.acceptanceMilestone ? "work-primary-action" : "work-next-action")}
+                  </dt>
+                  <dd className="mt-1 text-sm text-cream">
+                    {row.primarySignal === "acceptance" && row.acceptanceMilestone
+                      ? t(acceptanceNextActionKey[row.acceptanceMilestone.kind])
+                      : t(nextActionKey[row.timeline.status])}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">
+                    {t(row.acceptanceMilestone ? "work-primary-countdown" : "work-countdown")}
+                  </dt>
+                  <dd className="mt-1 text-sm text-cream">
+                    {row.primarySignal === "acceptance" && row.acceptanceMilestone
+                      ? localizedDaysRemaining(row.acceptanceMilestone.daysRemaining, t)
+                      : localizedCountdown(row, t)}
+                  </dd>
+                </div>
                 <div><dt className="text-xs text-muted">{t("work-progress")}</dt><dd className="mt-1 text-sm text-cream">{row.checklistProgress.completed}/{row.checklistProgress.total}</dd></div>
                 <div><dt className="text-xs text-muted">{t("work-linked-protocols")}</dt><dd className="mt-1 text-sm text-cream">{row.linkedProtocolCount}</dd></div>
               </dl>
+
+              {row.primarySignal === "acceptance" && (
+                <section
+                  aria-label={t("work-notice-signal")}
+                  className="mt-5 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4"
+                >
+                  <div className="text-sm font-medium text-cream">{t("work-notice-signal")}</div>
+                  <dl className="mt-3 grid gap-4 sm:grid-cols-2">
+                    <div><dt className="text-xs text-muted">{t("work-next-action")}</dt><dd className="mt-1 text-sm text-cream">{t(nextActionKey[row.timeline.status])}</dd></div>
+                    <div><dt className="text-xs text-muted">{t("work-countdown")}</dt><dd className="mt-1 text-sm text-cream">{localizedCountdown(row, t)}</dd></div>
+                  </dl>
+                </section>
+              )}
+
+              {row.acceptanceMilestone && (
+                <section
+                  aria-label={t("work-acceptance-milestone")}
+                  className="mt-5 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4"
+                >
+                  <div className="text-sm font-medium text-cream">{t(acceptanceMilestoneLabelKey[row.acceptanceMilestone.kind])}</div>
+                  <dl className="mt-3 grid gap-4 sm:grid-cols-2">
+                    <div><dt className="text-xs text-muted">{t("work-acceptance-deadline")}</dt><dd className="mt-1 text-sm text-cream">{localizedDeadlineDay(row.acceptanceMilestone.deadlineDay, lang)}</dd></div>
+                    {row.primarySignal === "notice" && (
+                      <>
+                        <div><dt className="text-xs text-muted">{t("work-next-action")}</dt><dd className="mt-1 text-sm text-cream">{t(acceptanceNextActionKey[row.acceptanceMilestone.kind])}</dd></div>
+                        <div><dt className="text-xs text-muted">{t("work-countdown")}</dt><dd className="mt-1 text-sm text-cream">{localizedDaysRemaining(row.acceptanceMilestone.daysRemaining, t)}</dd></div>
+                      </>
+                    )}
+                  </dl>
+                </section>
+              )}
 
               {row.readinessReasons.length > 0 && (
                 <div className="mt-5">
