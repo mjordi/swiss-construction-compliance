@@ -260,6 +260,24 @@ describe("buildComplianceWorkQueue", () => {
     ]);
   });
 
+  it("treats a missing pre-migration acceptance_date as null", () => {
+    const preMigrationCase = buildCase({
+      id: "pre-migration",
+      discovery_date: "2026-08-25T00:00:00.000Z",
+      checklist: { ...COMPLETE, noticeDrafted: false },
+    }) as Case & { acceptance_date?: string | null };
+    delete preMigrationCase.acceptance_date;
+
+    const result = buildComplianceWorkQueueResult([preMigrationCase], []);
+
+    expect(result.rejectedCaseCount).toBe(0);
+    expect(result.rows).toHaveLength(1);
+    expect(result.rows[0]).toMatchObject({
+      id: "pre-migration",
+      acceptanceMilestone: undefined,
+    });
+  });
+
   it("overlays persisted checklist values on timeline defaults and reports concrete readiness reasons", () => {
     const oldLaw = buildCase({
       id: "old",

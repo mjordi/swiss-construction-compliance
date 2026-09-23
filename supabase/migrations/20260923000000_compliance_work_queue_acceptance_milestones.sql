@@ -1,5 +1,6 @@
--- Extend the existing narrow work queue snapshot with the owner-entered
--- acceptance date required to derive imminent acceptance milestones.
+-- Extend the existing narrow owner/active-collaborator work queue snapshot
+-- only with the owner-entered acceptance date required by the canonical
+-- client deadline portfolio. Full Case records and evidence remain excluded.
 create or replace function public.get_compliance_work_queue_snapshot(target_owner_id uuid default auth.uid())
 returns jsonb
 language plpgsql

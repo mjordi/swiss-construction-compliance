@@ -28,7 +28,8 @@ describe("locales", () => {
     const keys = [
       "work-title", "work-description", "work-boundary", "work-loading", "work-error",
       "work-malformed", "work-retry", "work-empty-title", "work-empty-body", "work-open-case",
-      "work-next-action", "work-countdown", "work-readiness", "work-progress",
+      "work-next-action", "work-countdown", "work-primary-action", "work-primary-countdown",
+      "work-notice-signal", "work-notice-status", "work-readiness", "work-progress",
       "work-linked-protocols", "work-priority-expired", "work-priority-immediate-notice",
       "work-priority-urgent", "work-priority-warning", "work-priority-lifecycle-review",
       "work-priority-incomplete-readiness", "work-reason-defect-not-documented",
@@ -57,6 +58,22 @@ describe("locales", () => {
     for (const [lang, translations] of Object.entries(locales)) {
       for (const term of expectedTerms[lang as keyof typeof expectedTerms]) {
         expect(translations["work-boundary"], `Locale '${lang}' work boundary missing ${term}`).toMatch(term);
+      }
+    }
+  });
+
+  it("describes the shared boundary as excluding full Case records and evidence", () => {
+    const expectedTerms = {
+      de: [/vollständige falldaten/i, /nachweise/i],
+      fr: [/dossiers? complets?/i, /preuves/i],
+      it: [/dati completi dei casi/i, /prove/i],
+      en: [/full case records/i, /evidence/i],
+    } as const;
+
+    for (const [lang, translations] of Object.entries(locales)) {
+      const copy = translations["work-shared-read-only"];
+      for (const term of expectedTerms[lang as keyof typeof expectedTerms]) {
+        expect(copy, `Locale '${lang}' shared boundary missing ${term}`).toMatch(term);
       }
     }
   });

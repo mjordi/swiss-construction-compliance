@@ -56,5 +56,18 @@ describe("compliance work queue acceptance milestone migration", () => {
     expect(snapshot).not.toMatch(
       /signature_data|defect_description|notice_recipient_name|notice_recipient_address|defect_statement|created_at|updated_at/i
     );
+
+    const projectedCaseFields = [...casesProjection.matchAll(/'([a-z_]+)'\s*,\s*c\.[a-z_]+/gi)]
+      .map((match) => match[1]);
+    expect(projectedCaseFields).toEqual([
+      "id",
+      "project_name",
+      "canton",
+      "contract_date",
+      "discovery_date",
+      "acceptance_date",
+      "checklist",
+      "status",
+    ]);
   });
 });

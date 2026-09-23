@@ -201,7 +201,11 @@ describe("owner compliance work queue page", () => {
     const acceptanceCard = screen.getByText("Acceptance Primary").closest("li") as HTMLElement;
     expect(within(acceptanceCard).getByText("work-acceptance-next-action-warranty-2y")).toBeTruthy();
     expect(within(acceptanceCard).getByText("10 cases-countdown-days-left-suffix")).toBeTruthy();
-    expect(within(acceptanceCard).queryByText("cases-next-action-warning")).toBeNull();
+    expect(within(acceptanceCard).getByText("cases-next-action-warning")).toBeTruthy();
+    expect(within(acceptanceCard).getByText("15 cases-countdown-days-left-suffix")).toBeTruthy();
+    expect(within(acceptanceCard).getByText("work-notice-status")).toBeTruthy();
+    expect(within(acceptanceCard).getByText("cases-status-attention")).toBeTruthy();
+    expect(within(acceptanceCard).getByText("work-primary-action")).toBeTruthy();
   });
 
   it("leaves the page-level main landmark to the dashboard layout", async () => {
@@ -516,6 +520,45 @@ describe("owner compliance work queue page", () => {
     expect(screen.getByText("cases-next-action-expired")).toBeTruthy();
     expect(screen.getByText("work-acceptance-next-action-warranty-2y")).toBeTruthy();
     expect(screen.queryByRole("link", { name: "work-open-case" })).toBeNull();
+  });
+
+  it("keeps a live notice visible when acceptance is primary in a shared read-only view", async () => {
+    vi.setSystemTime(new Date("2028-08-26T10:00:00.000Z"));
+    authState.user = { id: COLLABORATOR_ID, name: "Member", email: "member@example.ch" };
+    sharedOwnersRpcMock.mockResolvedValue({ data: [{
+      owner_id: SHARED_OWNER_ID,
+      owner_name: "Owner One",
+      owner_company: "Alpine AG",
+      granted_at: "2026-08-31T08:00:00.000Z",
+    }], error: null });
+    snapshotRpcMock.mockImplementation(({ target_owner_id }: { target_owner_id: string }) =>
+      Promise.resolve(target_owner_id === SHARED_OWNER_ID
+        ? snapshot([buildCase({
+            user_id: SHARED_OWNER_ID,
+            project_name: "Shared Dual Signal",
+            contract_date: "2026-01-10",
+            discovery_date: "2028-07-12",
+            acceptance_date: "2026-09-05",
+          })])
+        : snapshot([]))
+    );
+
+    render(<ComplianceWorkQueuePage />);
+    const selector = await screen.findByRole("combobox", { name: "work-owner-selector" });
+    await screen.findByRole("option", { name: "Owner One · Alpine AG" });
+    fireEvent.change(selector, { target: { value: SHARED_OWNER_ID } });
+
+    const card = (await screen.findByText("Shared Dual Signal")).closest("li") as HTMLElement;
+    const row = within(card);
+    expect(row.getByText("work-primary-action")).toBeTruthy();
+    expect(row.getByText("work-acceptance-next-action-warranty-2y")).toBeTruthy();
+    expect(row.getByText("10 cases-countdown-days-left-suffix")).toBeTruthy();
+    expect(row.getByRole("region", { name: "work-notice-signal" })).toBeTruthy();
+    expect(row.getByText("cases-next-action-warning")).toBeTruthy();
+    expect(row.getByText("15 cases-countdown-days-left-suffix")).toBeTruthy();
+    expect(row.getByText("work-notice-status")).toBeTruthy();
+    expect(row.getByText("cases-status-attention")).toBeTruthy();
+    expect(row.queryByRole("link", { name: "work-open-case" })).toBeNull();
   });
 
   it("locks conflicting grant and revoke controls while a grant is pending", async () => {

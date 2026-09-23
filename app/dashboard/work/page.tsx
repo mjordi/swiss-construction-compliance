@@ -483,7 +483,9 @@ export default function ComplianceWorkQueuePage() {
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-wider text-accent">{t(priorityLabelKey[row.priority])}</div>
                   <h2 className="mt-1 text-lg font-semibold text-cream">{row.projectName}</h2>
-                  <p className="mt-1 text-xs text-muted">{row.canton} · {row.id} · {t(statusLabelKey[row.timeline.status])}</p>
+                  <p className="mt-1 text-xs text-muted">
+                    {row.canton} · {row.id} · <span>{t("work-notice-status")}</span>: <span>{t(statusLabelKey[row.timeline.status])}</span>
+                  </p>
                 </div>
                 {!isSharedView && (
                   <Link href={row.casesHref} className="rounded-lg border border-accent/20 bg-accent/[0.08] px-3 py-2 text-sm font-medium text-accent">
@@ -494,7 +496,9 @@ export default function ComplianceWorkQueuePage() {
 
               <dl className="mt-5 grid gap-4 sm:grid-cols-2">
                 <div>
-                  <dt className="text-xs text-muted">{t("work-next-action")}</dt>
+                  <dt className="text-xs text-muted">
+                    {t(row.acceptanceMilestone ? "work-primary-action" : "work-next-action")}
+                  </dt>
                   <dd className="mt-1 text-sm text-cream">
                     {row.primarySignal === "acceptance" && row.acceptanceMilestone
                       ? t(acceptanceNextActionKey[row.acceptanceMilestone.kind])
@@ -502,7 +506,9 @@ export default function ComplianceWorkQueuePage() {
                   </dd>
                 </div>
                 <div>
-                  <dt className="text-xs text-muted">{t("work-countdown")}</dt>
+                  <dt className="text-xs text-muted">
+                    {t(row.acceptanceMilestone ? "work-primary-countdown" : "work-countdown")}
+                  </dt>
                   <dd className="mt-1 text-sm text-cream">
                     {row.primarySignal === "acceptance" && row.acceptanceMilestone
                       ? localizedDaysRemaining(row.acceptanceMilestone.daysRemaining, t)
@@ -512,6 +518,19 @@ export default function ComplianceWorkQueuePage() {
                 <div><dt className="text-xs text-muted">{t("work-progress")}</dt><dd className="mt-1 text-sm text-cream">{row.checklistProgress.completed}/{row.checklistProgress.total}</dd></div>
                 <div><dt className="text-xs text-muted">{t("work-linked-protocols")}</dt><dd className="mt-1 text-sm text-cream">{row.linkedProtocolCount}</dd></div>
               </dl>
+
+              {row.primarySignal === "acceptance" && (
+                <section
+                  aria-label={t("work-notice-signal")}
+                  className="mt-5 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4"
+                >
+                  <div className="text-sm font-medium text-cream">{t("work-notice-signal")}</div>
+                  <dl className="mt-3 grid gap-4 sm:grid-cols-2">
+                    <div><dt className="text-xs text-muted">{t("work-next-action")}</dt><dd className="mt-1 text-sm text-cream">{t(nextActionKey[row.timeline.status])}</dd></div>
+                    <div><dt className="text-xs text-muted">{t("work-countdown")}</dt><dd className="mt-1 text-sm text-cream">{localizedCountdown(row, t)}</dd></div>
+                  </dl>
+                </section>
+              )}
 
               {row.acceptanceMilestone && (
                 <section

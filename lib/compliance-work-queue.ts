@@ -90,7 +90,7 @@ function isEvaluableCase(value: unknown): value is Case {
     !isNonEmptyString(value.canton) ||
     !isNonEmptyString(value.contract_date) ||
     !isNonEmptyString(value.discovery_date) ||
-    (value.acceptance_date !== null && !isNonEmptyString(value.acceptance_date)) ||
+    (value.acceptance_date !== undefined && value.acceptance_date !== null && !isNonEmptyString(value.acceptance_date)) ||
     (value.status !== "active" && value.status !== "review" && value.status !== "archived") ||
     !hasValidChecklist(value.checklist)
   ) {
@@ -241,7 +241,7 @@ export function buildComplianceWorkQueue(
     project_name: item.project_name,
     contract_date: item.contract_date,
     discovery_date: item.discovery_date,
-    acceptance_date: item.acceptance_date,
+    acceptance_date: item.acceptance_date ?? null,
     status: item.status,
   })))) {
     if (milestone.kind === "notice" || acceptanceMilestoneByCase.has(milestone.caseId)) continue;
