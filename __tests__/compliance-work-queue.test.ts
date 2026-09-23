@@ -94,6 +94,117 @@ describe("buildComplianceWorkQueue", () => {
     expect(rows).toEqual([]);
   });
 
+  it("keeps an otherwise ready active Case for its nearest acceptance milestone", () => {
+    vi.setSystemTime(new Date("2028-08-26T10:00:00.000Z"));
+    const [row] = buildComplianceWorkQueue([
+      buildCase({
+        id: "acceptance-ready",
+        contract_date: "2026-01-10T00:00:00.000Z",
+        discovery_date: "2028-08-25T00:00:00.000Z",
+        acceptance_date: "2026-09-05",
+      }),
+    ], [protocol("acceptance-ready")]);
+
+    expect(row).toMatchObject({
+      id: "acceptance-ready",
+      priority: "urgent",
+      acceptanceMilestone: {
+        kind: "warranty-2y",
+        deadlineDay: "2028-09-05",
+        daysRemaining: 10,
+      },
+      readinessReasons: [],
+    });
+  });
+
+  it("uses the five-year limitation milestone after the warranty milestone has passed", () => {
+    vi.setSystemTime(new Date("2031-08-26T10:00:00.000Z"));
+    const [row] = buildComplianceWorkQueue([
+      buildCase({
+        id: "limitation-ready",
+        contract_date: "2026-01-10",
+        discovery_date: "2031-08-25",
+        acceptance_date: "2026-09-05",
+      }),
+    ], [protocol("limitation-ready")]);
+
+    expect(row.acceptanceMilestone).toEqual({
+      kind: "limitation-5y",
+      deadlineDay: "2031-09-05",
+      daysRemaining: 10,
+    });
+  });
+
+  it("includes only acceptance milestones 0 to 30 calendar days away with the specified priority bands", () => {
+    vi.setSystemTime(new Date("2028-08-26T10:00:00.000Z"));
+    const cases = [
+      buildCase({ id: "today", contract_date: "2026-01-01", discovery_date: "2028-08-25", acceptance_date: "2026-08-26" }),
+      buildCase({ id: "fourteen", contract_date: "2026-01-01", discovery_date: "2028-08-25", acceptance_date: "2026-09-09" }),
+      buildCase({ id: "fifteen", contract_date: "2026-01-01", discovery_date: "2028-08-25", acceptance_date: "2026-09-10" }),
+      buildCase({ id: "thirty", contract_date: "2026-01-01", discovery_date: "2028-08-25", acceptance_date: "2026-09-25" }),
+      buildCase({ id: "thirty-one", contract_date: "2026-01-01", discovery_date: "2028-08-25", acceptance_date: "2026-09-26" }),
+      buildCase({ id: "past", contract_date: "2026-01-01", discovery_date: "2028-08-25", acceptance_date: "2026-08-25" }),
+    ];
+
+    expect(buildComplianceWorkQueue(cases, cases.map((item) => protocol(item.id))).map((row) => [
+      row.id,
+      row.priority,
+      row.acceptanceMilestone?.daysRemaining,
+    ])).toEqual([
+      ["today", "urgent", 0],
+      ["fourteen", "urgent", 14],
+      ["fifteen", "warning", 15],
+      ["thirty", "warning", 30],
+    ]);
+  });
+
+  it("preserves expired and immediate notice priority while combining other priorities by urgency", () => {
+    vi.setSystemTime(new Date("2028-08-26T10:00:00.000Z"));
+    const cases = [
+      buildCase({ id: "expired-acceptance", contract_date: "2026-01-01", discovery_date: "2028-06-01", acceptance_date: "2026-09-05" }),
+      buildCase({ id: "immediate-acceptance", contract_date: "2025-01-01", discovery_date: "2028-08-25", acceptance_date: "2026-09-05" }),
+      buildCase({ id: "notice-warning-acceptance-urgent", contract_date: "2026-01-01", discovery_date: "2028-07-12", acceptance_date: "2026-09-05" }),
+      buildCase({ id: "notice-urgent-acceptance-warning", contract_date: "2026-01-01", discovery_date: "2028-06-28", acceptance_date: "2026-09-10" }),
+    ];
+
+    expect(buildComplianceWorkQueue(cases, cases.map((item) => protocol(item.id))).map((row) => [row.id, row.priority])).toEqual([
+      ["expired-acceptance", "expired"],
+      ["immediate-acceptance", "immediate-notice"],
+      ["notice-urgent-acceptance-warning", "urgent"],
+      ["notice-warning-acceptance-urgent", "urgent"],
+    ]);
+  });
+
+  it("sorts acceptance-driven peers by their relevant earliest legal date with stable existing ties", () => {
+    vi.setSystemTime(new Date("2028-08-26T10:00:00.000Z"));
+    const cases = [
+      buildCase({ id: "b", contract_date: "2026-01-01", discovery_date: "2028-08-25", acceptance_date: "2026-09-05" }),
+      buildCase({ id: "a", contract_date: "2026-01-01", discovery_date: "2028-08-25", acceptance_date: "2026-09-05" }),
+      buildCase({ id: "earlier", contract_date: "2026-01-01", discovery_date: "2028-08-25", acceptance_date: "2026-09-01" }),
+    ];
+
+    expect(buildComplianceWorkQueue(cases, cases.map((item) => protocol(item.id))).map((row) => row.id)).toEqual([
+      "earlier",
+      "a",
+      "b",
+    ]);
+  });
+
+  it("rejects non-string or empty acceptance_date but tolerates invalid date and chronology as no milestone", () => {
+    const result = buildComplianceWorkQueueResult([
+      buildCase({ id: "non-string", acceptance_date: 123 as unknown as string }),
+      buildCase({ id: "empty", acceptance_date: "  " }),
+      buildCase({ id: "invalid-date", acceptance_date: "2024-02-30", checklist: { ...COMPLETE, noticeDrafted: false } }),
+      buildCase({ id: "invalid-chronology", acceptance_date: "2026-08-26", checklist: { ...COMPLETE, noticeDrafted: false } }),
+    ], []);
+
+    expect(result.rejectedCaseCount).toBe(2);
+    expect(result.rows.map((row) => [row.id, row.acceptanceMilestone])).toEqual([
+      ["invalid-chronology", undefined],
+      ["invalid-date", undefined],
+    ]);
+  });
+
   it("overlays persisted checklist values on timeline defaults and reports concrete readiness reasons", () => {
     const oldLaw = buildCase({
       id: "old",

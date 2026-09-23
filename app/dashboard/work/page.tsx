@@ -23,6 +23,7 @@ import type {
   ComplianceQueueSharedOwner,
 } from "@/lib/database.types";
 import type { CaseDeadlineStatus } from "@/lib/case-timeline";
+import type { CaseAcceptanceDeadlineMilestoneKind } from "@/lib/case-deadline-portfolio";
 import { getMillisecondsUntilNextSwissCalendarDay } from "@/lib/legal-utils";
 import type { TranslationKey } from "@/locales";
 
@@ -59,6 +60,16 @@ const nextActionKey: Record<CaseDeadlineStatus, TranslationKey> = {
   "immediate-notice": "cases-next-action-immediate-notice",
 };
 
+const acceptanceMilestoneLabelKey: Record<CaseAcceptanceDeadlineMilestoneKind, TranslationKey> = {
+  "warranty-2y": "work-acceptance-milestone-warranty-2y",
+  "limitation-5y": "work-acceptance-milestone-limitation-5y",
+};
+
+const acceptanceNextActionKey: Record<CaseAcceptanceDeadlineMilestoneKind, TranslationKey> = {
+  "warranty-2y": "work-acceptance-next-action-warranty-2y",
+  "limitation-5y": "work-acceptance-next-action-limitation-5y",
+};
+
 type LoadError = "work-error" | "work-malformed";
 type SharingFeedback = "work-sharing-grant-success" | "work-sharing-revoke-success" | "work-sharing-grant-error";
 type RpcResponse = { data: unknown; error: unknown };
@@ -76,9 +87,25 @@ function localizedCountdown(row: ComplianceWorkQueueRow, t: (key: TranslationKey
   return `${days} ${t("cases-countdown-days-left-suffix")}`;
 }
 
+function localizedDaysRemaining(days: number, t: (key: TranslationKey) => string): string {
+  if (days === 0) return t("cases-countdown-due-today");
+  if (days === 1) return t("cases-countdown-one-day-left");
+  return `${days} ${t("cases-countdown-days-left-suffix")}`;
+}
+
+function localizedDeadlineDay(deadlineDay: string, lang: string): string {
+  const locale = lang === "fr" ? "fr-CH" : lang === "it" ? "it-CH" : lang === "en" ? "en-CH" : "de-CH";
+  return new Date(`${deadlineDay}T00:00:00.000Z`).toLocaleDateString(locale, {
+    timeZone: "UTC",
+    year: "numeric",
+    month: "long",
+    day: "numeric",
+  });
+}
+
 export default function ComplianceWorkQueuePage() {
   const { user } = useAuth();
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const supabase = useMemo(() => getSupabase(), []);
   const ownerId = user?.id ?? null;
 
@@ -466,8 +493,19 @@ export default function ComplianceWorkQueuePage() {
               </div>
 
               <dl className="mt-5 grid gap-4 sm:grid-cols-2">
-                <div><dt className="text-xs text-muted">{t("work-next-action")}</dt><dd className="mt-1 text-sm text-cream">{t(nextActionKey[row.timeline.status])}</dd></div>
-                <div><dt className="text-xs text-muted">{t("work-countdown")}</dt><dd className="mt-1 text-sm text-cream">{localizedCountdown(row, t)}</dd></div>
+                {row.acceptanceMilestone ? (
+                  <>
+                    <div><dt className="text-xs text-muted">{t("work-acceptance-milestone")}</dt><dd className="mt-1 text-sm text-cream">{t(acceptanceMilestoneLabelKey[row.acceptanceMilestone.kind])}</dd></div>
+                    <div><dt className="text-xs text-muted">{t("work-acceptance-deadline")}</dt><dd className="mt-1 text-sm text-cream">{localizedDeadlineDay(row.acceptanceMilestone.deadlineDay, lang)}</dd></div>
+                    <div><dt className="text-xs text-muted">{t("work-next-action")}</dt><dd className="mt-1 text-sm text-cream">{t(acceptanceNextActionKey[row.acceptanceMilestone.kind])}</dd></div>
+                    <div><dt className="text-xs text-muted">{t("work-countdown")}</dt><dd className="mt-1 text-sm text-cream">{localizedDaysRemaining(row.acceptanceMilestone.daysRemaining, t)}</dd></div>
+                  </>
+                ) : (
+                  <>
+                    <div><dt className="text-xs text-muted">{t("work-next-action")}</dt><dd className="mt-1 text-sm text-cream">{t(nextActionKey[row.timeline.status])}</dd></div>
+                    <div><dt className="text-xs text-muted">{t("work-countdown")}</dt><dd className="mt-1 text-sm text-cream">{localizedCountdown(row, t)}</dd></div>
+                  </>
+                )}
                 <div><dt className="text-xs text-muted">{t("work-progress")}</dt><dd className="mt-1 text-sm text-cream">{row.checklistProgress.completed}/{row.checklistProgress.total}</dd></div>
                 <div><dt className="text-xs text-muted">{t("work-linked-protocols")}</dt><dd className="mt-1 text-sm text-cream">{row.linkedProtocolCount}</dd></div>
               </dl>

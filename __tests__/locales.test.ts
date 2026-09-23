@@ -34,6 +34,9 @@ describe("locales", () => {
       "work-priority-incomplete-readiness", "work-reason-defect-not-documented",
       "work-reason-evidence-not-attached", "work-reason-notice-not-drafted",
       "work-reason-calendar-not-exported", "work-reason-protocol-missing",
+      "work-acceptance-milestone", "work-acceptance-deadline",
+      "work-acceptance-milestone-warranty-2y", "work-acceptance-milestone-limitation-5y",
+      "work-acceptance-next-action-warranty-2y", "work-acceptance-next-action-limitation-5y",
     ] as const;
 
     for (const [lang, translations] of Object.entries(locales)) {

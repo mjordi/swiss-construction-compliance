@@ -131,6 +131,25 @@ describe("owner compliance work queue page", () => {
     expect(screen.getByText("work-reason-notice-not-drafted")).toBeTruthy();
   });
 
+  it("renders localized acceptance milestone details and action in the owner view", async () => {
+    vi.setSystemTime(new Date("2028-08-26T10:00:00.000Z"));
+    snapshotRpcMock.mockResolvedValue(snapshot([buildCase({
+      id: "acceptance-owner",
+      contract_date: "2026-01-10",
+      discovery_date: "2028-08-25",
+      acceptance_date: "2026-09-05",
+    })], [{ id: "p-acceptance", case_id: "acceptance-owner" }]));
+
+    render(<ComplianceWorkQueuePage />);
+
+    expect(await screen.findByText("Alpine Tower")).toBeTruthy();
+    expect(screen.getByText("work-acceptance-milestone-warranty-2y")).toBeTruthy();
+    expect(screen.getByText("5 September 2028")).toBeTruthy();
+    expect(screen.getByText("10 cases-countdown-days-left-suffix")).toBeTruthy();
+    expect(screen.getByText("work-acceptance-next-action-warranty-2y")).toBeTruthy();
+    expect(screen.getByRole("link", { name: "work-open-case" })).toBeTruthy();
+  });
+
   it("leaves the page-level main landmark to the dashboard layout", async () => {
     snapshotRpcMock.mockResolvedValue(snapshot([]));
     render(<ComplianceWorkQueuePage />);
@@ -409,6 +428,39 @@ describe("owner compliance work queue page", () => {
     expect(screen.getByText("work-shared-read-only")).toBeTruthy();
     expect(screen.queryByRole("link", { name: "work-open-case" })).toBeNull();
     expect(snapshotRpcMock).toHaveBeenLastCalledWith({ target_owner_id: SHARED_OWNER_ID });
+  });
+
+  it("renders acceptance milestone details in shared read-only view without a Case link", async () => {
+    vi.setSystemTime(new Date("2028-08-26T10:00:00.000Z"));
+    authState.user = { id: COLLABORATOR_ID, name: "Member", email: "member@example.ch" };
+    sharedOwnersRpcMock.mockResolvedValue({ data: [{
+      owner_id: SHARED_OWNER_ID,
+      owner_name: "Owner One",
+      owner_company: "Alpine AG",
+      granted_at: "2026-08-31T08:00:00.000Z",
+    }], error: null });
+    snapshotRpcMock.mockImplementation(({ target_owner_id }: { target_owner_id: string }) =>
+      Promise.resolve(target_owner_id === SHARED_OWNER_ID
+        ? snapshot([buildCase({
+            user_id: SHARED_OWNER_ID,
+            project_name: "Shared Acceptance",
+            contract_date: "2026-01-10",
+            discovery_date: "2028-08-25",
+            acceptance_date: "2026-09-05",
+          })], [{ id: "p-shared-acceptance", case_id: "case-1" }])
+        : snapshot([]))
+    );
+
+    render(<ComplianceWorkQueuePage />);
+    const selector = await screen.findByRole("combobox", { name: "work-owner-selector" });
+    await screen.findByRole("option", { name: "Owner One · Alpine AG" });
+    fireEvent.change(selector, { target: { value: SHARED_OWNER_ID } });
+
+    expect(await screen.findByText("Shared Acceptance")).toBeTruthy();
+    expect(screen.getByText("work-acceptance-milestone-warranty-2y")).toBeTruthy();
+    expect(screen.getByText("5 September 2028")).toBeTruthy();
+    expect(screen.getByText("work-acceptance-next-action-warranty-2y")).toBeTruthy();
+    expect(screen.queryByRole("link", { name: "work-open-case" })).toBeNull();
   });
 
   it("locks conflicting grant and revoke controls while a grant is pending", async () => {
