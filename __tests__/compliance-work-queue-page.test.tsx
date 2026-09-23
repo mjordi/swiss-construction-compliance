@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { Case } from "@/lib/database.types";
 
@@ -148,6 +148,60 @@ describe("owner compliance work queue page", () => {
     expect(screen.getByText("10 cases-countdown-days-left-suffix")).toBeTruthy();
     expect(screen.getByText("work-acceptance-next-action-warranty-2y")).toBeTruthy();
     expect(screen.getByRole("link", { name: "work-open-case" })).toBeTruthy();
+  });
+
+  it("keeps an expired notice action primary while exposing the future acceptance review", async () => {
+    vi.setSystemTime(new Date("2028-08-26T10:00:00.000Z"));
+    snapshotRpcMock.mockResolvedValue(snapshot([buildCase({
+      id: "expired-with-acceptance",
+      project_name: "Expired Mixed Case",
+      contract_date: "2026-01-10",
+      discovery_date: "2028-06-01",
+      acceptance_date: "2026-09-05",
+    })]));
+
+    render(<ComplianceWorkQueuePage />);
+
+    const card = (await screen.findByText("Expired Mixed Case")).closest("li");
+    expect(card).toBeTruthy();
+    const row = within(card as HTMLElement);
+    expect(row.getByText("cases-next-action-expired")).toBeTruthy();
+    expect(row.getByText("26 cases-countdown-days-overdue-suffix")).toBeTruthy();
+    expect(row.getByText("work-acceptance-milestone-warranty-2y")).toBeTruthy();
+    expect(row.getByText("work-acceptance-next-action-warranty-2y")).toBeTruthy();
+    expect(row.getByText("10 cases-countdown-days-left-suffix")).toBeTruthy();
+  });
+
+  it("renders the selected primary action for mixed urgent and warning signals", async () => {
+    vi.setSystemTime(new Date("2028-08-26T10:00:00.000Z"));
+    snapshotRpcMock.mockResolvedValue(snapshot([
+      buildCase({
+        id: "notice-primary",
+        project_name: "Notice Primary",
+        contract_date: "2026-01-10",
+        discovery_date: "2028-06-28",
+        acceptance_date: "2026-09-10",
+      }),
+      buildCase({
+        id: "acceptance-primary",
+        project_name: "Acceptance Primary",
+        contract_date: "2026-01-10",
+        discovery_date: "2028-07-12",
+        acceptance_date: "2026-09-05",
+      }),
+    ]));
+
+    render(<ComplianceWorkQueuePage />);
+
+    const noticeCard = (await screen.findByText("Notice Primary")).closest("li") as HTMLElement;
+    expect(within(noticeCard).getByText("cases-next-action-urgent")).toBeTruthy();
+    expect(within(noticeCard).getByText("cases-countdown-one-day-left")).toBeTruthy();
+    expect(within(noticeCard).getByText("work-acceptance-next-action-warranty-2y")).toBeTruthy();
+
+    const acceptanceCard = screen.getByText("Acceptance Primary").closest("li") as HTMLElement;
+    expect(within(acceptanceCard).getByText("work-acceptance-next-action-warranty-2y")).toBeTruthy();
+    expect(within(acceptanceCard).getByText("10 cases-countdown-days-left-suffix")).toBeTruthy();
+    expect(within(acceptanceCard).queryByText("cases-next-action-warning")).toBeNull();
   });
 
   it("leaves the page-level main landmark to the dashboard layout", async () => {
@@ -445,7 +499,7 @@ describe("owner compliance work queue page", () => {
             user_id: SHARED_OWNER_ID,
             project_name: "Shared Acceptance",
             contract_date: "2026-01-10",
-            discovery_date: "2028-08-25",
+            discovery_date: "2028-06-01",
             acceptance_date: "2026-09-05",
           })], [{ id: "p-shared-acceptance", case_id: "case-1" }])
         : snapshot([]))
@@ -459,6 +513,7 @@ describe("owner compliance work queue page", () => {
     expect(await screen.findByText("Shared Acceptance")).toBeTruthy();
     expect(screen.getByText("work-acceptance-milestone-warranty-2y")).toBeTruthy();
     expect(screen.getByText("5 September 2028")).toBeTruthy();
+    expect(screen.getByText("cases-next-action-expired")).toBeTruthy();
     expect(screen.getByText("work-acceptance-next-action-warranty-2y")).toBeTruthy();
     expect(screen.queryByRole("link", { name: "work-open-case" })).toBeNull();
   });

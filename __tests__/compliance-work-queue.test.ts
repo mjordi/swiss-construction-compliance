@@ -167,12 +167,67 @@ describe("buildComplianceWorkQueue", () => {
       buildCase({ id: "notice-urgent-acceptance-warning", contract_date: "2026-01-01", discovery_date: "2028-06-28", acceptance_date: "2026-09-10" }),
     ];
 
-    expect(buildComplianceWorkQueue(cases, cases.map((item) => protocol(item.id))).map((row) => [row.id, row.priority])).toEqual([
-      ["expired-acceptance", "expired"],
-      ["immediate-acceptance", "immediate-notice"],
-      ["notice-urgent-acceptance-warning", "urgent"],
-      ["notice-warning-acceptance-urgent", "urgent"],
+    expect(buildComplianceWorkQueue(cases, cases.map((item) => protocol(item.id))).map((row) => [
+      row.id,
+      row.priority,
+      row.primarySignal,
+    ])).toEqual([
+      ["expired-acceptance", "expired", "notice"],
+      ["immediate-acceptance", "immediate-notice", "notice"],
+      ["notice-urgent-acceptance-warning", "urgent", "notice"],
+      ["notice-warning-acceptance-urgent", "urgent", "acceptance"],
     ]);
+  });
+
+  it("selects the earlier legal date for equal priority and preserves notice on an exact tie", () => {
+    vi.setSystemTime(new Date("2028-08-26T10:00:00.000Z"));
+    const cases = [
+      buildCase({
+        id: "acceptance-earlier-warning",
+        contract_date: "2026-01-01",
+        discovery_date: "2028-07-13",
+        acceptance_date: "2026-09-10",
+      }),
+      buildCase({
+        id: "notice-earlier-urgent",
+        contract_date: "2026-01-01",
+        discovery_date: "2028-06-28",
+        acceptance_date: "2026-09-05",
+      }),
+      buildCase({
+        id: "exact-tie",
+        contract_date: "2026-01-01",
+        discovery_date: "2028-06-28",
+        acceptance_date: "2026-08-27",
+      }),
+    ];
+
+    const rows = buildComplianceWorkQueue(cases, cases.map((item) => protocol(item.id)));
+    expect(Object.fromEntries(rows.map((row) => [row.id, [row.priority, row.primarySignal]]))).toEqual({
+      "acceptance-earlier-warning": ["warning", "acceptance"],
+      "notice-earlier-urgent": ["urgent", "notice"],
+      "exact-tie": ["urgent", "notice"],
+    });
+  });
+
+  it("makes an urgent acceptance milestone primary over on-track notice and readiness work", () => {
+    vi.setSystemTime(new Date("2028-08-26T10:00:00.000Z"));
+    const [row] = buildComplianceWorkQueue([
+      buildCase({
+        id: "acceptance-over-readiness",
+        contract_date: "2026-01-01",
+        discovery_date: "2028-08-25",
+        acceptance_date: "2026-09-05",
+        checklist: { ...COMPLETE, noticeDrafted: false },
+      }),
+    ], []);
+
+    expect(row).toMatchObject({
+      priority: "urgent",
+      primarySignal: "acceptance",
+      timeline: { status: "ok" },
+      acceptanceMilestone: { daysRemaining: 10 },
+    });
   });
 
   it("sorts acceptance-driven peers by their relevant earliest legal date with stable existing ties", () => {

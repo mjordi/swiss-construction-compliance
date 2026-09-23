@@ -493,22 +493,43 @@ export default function ComplianceWorkQueuePage() {
               </div>
 
               <dl className="mt-5 grid gap-4 sm:grid-cols-2">
-                {row.acceptanceMilestone ? (
-                  <>
-                    <div><dt className="text-xs text-muted">{t("work-acceptance-milestone")}</dt><dd className="mt-1 text-sm text-cream">{t(acceptanceMilestoneLabelKey[row.acceptanceMilestone.kind])}</dd></div>
-                    <div><dt className="text-xs text-muted">{t("work-acceptance-deadline")}</dt><dd className="mt-1 text-sm text-cream">{localizedDeadlineDay(row.acceptanceMilestone.deadlineDay, lang)}</dd></div>
-                    <div><dt className="text-xs text-muted">{t("work-next-action")}</dt><dd className="mt-1 text-sm text-cream">{t(acceptanceNextActionKey[row.acceptanceMilestone.kind])}</dd></div>
-                    <div><dt className="text-xs text-muted">{t("work-countdown")}</dt><dd className="mt-1 text-sm text-cream">{localizedDaysRemaining(row.acceptanceMilestone.daysRemaining, t)}</dd></div>
-                  </>
-                ) : (
-                  <>
-                    <div><dt className="text-xs text-muted">{t("work-next-action")}</dt><dd className="mt-1 text-sm text-cream">{t(nextActionKey[row.timeline.status])}</dd></div>
-                    <div><dt className="text-xs text-muted">{t("work-countdown")}</dt><dd className="mt-1 text-sm text-cream">{localizedCountdown(row, t)}</dd></div>
-                  </>
-                )}
+                <div>
+                  <dt className="text-xs text-muted">{t("work-next-action")}</dt>
+                  <dd className="mt-1 text-sm text-cream">
+                    {row.primarySignal === "acceptance" && row.acceptanceMilestone
+                      ? t(acceptanceNextActionKey[row.acceptanceMilestone.kind])
+                      : t(nextActionKey[row.timeline.status])}
+                  </dd>
+                </div>
+                <div>
+                  <dt className="text-xs text-muted">{t("work-countdown")}</dt>
+                  <dd className="mt-1 text-sm text-cream">
+                    {row.primarySignal === "acceptance" && row.acceptanceMilestone
+                      ? localizedDaysRemaining(row.acceptanceMilestone.daysRemaining, t)
+                      : localizedCountdown(row, t)}
+                  </dd>
+                </div>
                 <div><dt className="text-xs text-muted">{t("work-progress")}</dt><dd className="mt-1 text-sm text-cream">{row.checklistProgress.completed}/{row.checklistProgress.total}</dd></div>
                 <div><dt className="text-xs text-muted">{t("work-linked-protocols")}</dt><dd className="mt-1 text-sm text-cream">{row.linkedProtocolCount}</dd></div>
               </dl>
+
+              {row.acceptanceMilestone && (
+                <section
+                  aria-label={t("work-acceptance-milestone")}
+                  className="mt-5 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4"
+                >
+                  <div className="text-sm font-medium text-cream">{t(acceptanceMilestoneLabelKey[row.acceptanceMilestone.kind])}</div>
+                  <dl className="mt-3 grid gap-4 sm:grid-cols-2">
+                    <div><dt className="text-xs text-muted">{t("work-acceptance-deadline")}</dt><dd className="mt-1 text-sm text-cream">{localizedDeadlineDay(row.acceptanceMilestone.deadlineDay, lang)}</dd></div>
+                    {row.primarySignal === "notice" && (
+                      <>
+                        <div><dt className="text-xs text-muted">{t("work-next-action")}</dt><dd className="mt-1 text-sm text-cream">{t(acceptanceNextActionKey[row.acceptanceMilestone.kind])}</dd></div>
+                        <div><dt className="text-xs text-muted">{t("work-countdown")}</dt><dd className="mt-1 text-sm text-cream">{localizedDaysRemaining(row.acceptanceMilestone.daysRemaining, t)}</dd></div>
+                      </>
+                    )}
+                  </dl>
+                </section>
+              )}
 
               {row.readinessReasons.length > 0 && (
                 <div className="mt-5">

@@ -39,6 +39,7 @@ export interface ComplianceWorkQueueRow {
   canton: string;
   lifecycleStatus: Exclude<Case["status"], "archived">;
   priority: ComplianceWorkQueuePriority;
+  primarySignal: "notice" | "acceptance";
   timeline: ComplianceCaseViewModel;
   checklist: FollowUpChecklistState;
   checklistProgress: {
@@ -153,12 +154,11 @@ function readinessReasons(
   ];
 }
 
-function getPriority(
+function noticePriority(
   item: ComplianceCaseViewModel,
-  lifecycleStatus: Exclude<Case["status"], "archived">,
-  acceptanceMilestone?: ComplianceWorkQueueRow["acceptanceMilestone"]
+  lifecycleStatus: Exclude<Case["status"], "archived">
 ): ComplianceWorkQueuePriority {
-  const noticePriority = item.status === "expired"
+  return item.status === "expired"
     ? "expired"
     : item.status === "immediate-notice"
       ? "immediate-notice"
@@ -169,13 +169,6 @@ function getPriority(
           : lifecycleStatus === "review"
             ? "lifecycle-review"
             : "incomplete-readiness";
-  const acceptancePriority = acceptanceMilestone
-    ? acceptanceMilestone.daysRemaining <= 14 ? "urgent" : "warning"
-    : null;
-
-  return acceptancePriority && priorityRank[acceptancePriority] < priorityRank[noticePriority]
-    ? acceptancePriority
-    : noticePriority;
 }
 
 function acceptancePriority(
@@ -183,6 +176,29 @@ function acceptancePriority(
 ): ComplianceWorkQueuePriority | null {
   if (!milestone) return null;
   return milestone.daysRemaining <= 14 ? "urgent" : "warning";
+}
+
+function selectPrimarySignal(
+  item: ComplianceCaseViewModel,
+  lifecycleStatus: Exclude<Case["status"], "archived">,
+  milestone?: ComplianceWorkQueueRow["acceptanceMilestone"]
+): Pick<ComplianceWorkQueueRow, "priority" | "primarySignal"> {
+  const notice = noticePriority(item, lifecycleStatus);
+  const acceptance = acceptancePriority(milestone);
+
+  if (notice === "expired" || notice === "immediate-notice" || !acceptance || !milestone) {
+    return { priority: notice, primarySignal: "notice" };
+  }
+
+  const rankDifference = priorityRank[acceptance] - priorityRank[notice];
+  if (rankDifference < 0) return { priority: acceptance, primarySignal: "acceptance" };
+  if (rankDifference > 0) return { priority: notice, primarySignal: "notice" };
+
+  const noticeDeadline = item.noticeDeadline?.getTime() ?? Number.POSITIVE_INFINITY;
+  const acceptanceDeadline = Date.parse(`${milestone.deadlineDay}T00:00:00.000Z`);
+  return acceptanceDeadline < noticeDeadline
+    ? { priority: acceptance, primarySignal: "acceptance" }
+    : { priority: notice, primarySignal: "notice" };
 }
 
 function relevantLegalDate(row: ComplianceWorkQueueRow): number {
@@ -259,6 +275,7 @@ export function buildComplianceWorkQueue(
       const linkedProtocolCount = protocolCountByCase.get(item.id) ?? 0;
       const reasons = readinessReasons(item, checklist, linkedProtocolCount);
       const acceptanceMilestone = acceptanceMilestoneByCase.get(item.id);
+      const primary = selectPrimarySignal(item, source.status, acceptanceMilestone);
 
       if (item.status === "ok" && source.status === "active" && reasons.length === 0 && !acceptanceMilestone) {
         return [];
@@ -269,7 +286,7 @@ export function buildComplianceWorkQueue(
         projectName: item.projectName,
         canton: item.canton,
         lifecycleStatus: source.status,
-        priority: getPriority(item, source.status, acceptanceMilestone),
+        ...primary,
         timeline: item,
         checklist,
         checklistProgress: {
